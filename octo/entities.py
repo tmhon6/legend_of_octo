@@ -654,6 +654,9 @@ class Player(Entity):
             if ch == 'B':
                 game.seal_bump()
                 return
+            if ch == 'U':
+                game.sigil_bump('shrine')
+                return
             if ch == 'L':
                 if self.keys > 0:
                     self.keys -= 1
@@ -1638,6 +1641,411 @@ def world_room(game):
     return world.TRIALS[game.trial['name']]['room'] if game.trial else (0, 0, 1, 1)
 
 
+
+# ---------------------------------------------------------------------------
+# Regional enemies: every part of the sea has its own creature
+# ---------------------------------------------------------------------------
+def _aim(e, game, speed):
+    px, py = game.player.seen_pos()
+    cx, cy = e.rect.center
+    d = math.hypot(px - cx, py - cy) or 1
+    return (px - cx) / d * speed, (py - cy) / d * speed, d
+
+
+def _fire(game, e, vx, vy, kind, life=None):
+    cx, cy = e.rect.center
+    size = 10 if kind in ('bubble', 'ember') else 6
+    game.shots.append(EnemyShot(cx - size // 2, cy - size // 2, vx, vy, kind, life=life))
+
+
+class SandEel(Enemy):
+    """Coral Reef: hides under the sand as a ripple, then bursts up to bite."""
+    max_hp = 3
+    sprite = 'eel'
+    hb = (3, 1, 10, 14)
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.up = 0
+        self.cool = random.randint(40, 100)
+
+    @property
+    def active(self):
+        return self.spawn_t == 0 and not self.dead and self.up > 0
+
+    def ai(self, game):
+        if self.up:
+            self.up -= 1
+            if self.up > 60:
+                vx, vy, _ = _aim(self, game, 0.9)
+                self.move(vx, vy, game.level)
+            if self.up == 0:
+                self.cool = random.randint(60, 120)
+                game.splat(self.rect.center, (220, 200, 150))
+            return
+        vx, vy, d = _aim(self, game, 0.45)
+        if d < 130:
+            self.move(vx, vy, game.level)
+        self.cool -= 1
+        if self.cool <= 0 and d < 40:
+            self.up = 90
+            sound.play('shoot')
+            game.splat(self.rect.center, (220, 200, 150))
+
+    def draw(self, surf, ox=0, oy=0):
+        if self.spawn_t or self.up:
+            return super().draw(surf, ox, oy)
+        cx, cy = self.rect.centerx + ox, self.rect.bottom + oy - 3
+        w = 8 + int(math.sin(self.t * 0.2) * 2)
+        pygame.draw.ellipse(surf, (170, 150, 100), (cx - w // 2, cy - 2, w, 4), 1)
+        surf.set_at((cx, cy - 3), (240, 230, 200))
+
+
+class SnapjawClam(Enemy):
+    """Kelp Woods: shut tight, nothing hurts it. It opens to spit pearls -- strike then!"""
+    max_hp = 4
+    sprite = 'clam'
+    knockback = False
+    hb = (0, 4, 16, 12)
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.phase = random.randint(0, 150)
+
+    def is_open(self):
+        return self.phase % 190 >= 120
+
+    def hit(self, game, dmg, kind, src):
+        if self.active and not self.is_open() and kind != 'bomb':
+            if not self.hurt_t:
+                sound.play('tink')
+                game.spark(self.rect.center)
+                self.hurt_t = 10
+            return False
+        return super().hit(game, dmg, kind, src)
+
+    def ai(self, game):
+        self.phase += 1
+        if self.phase % 190 == 140:
+            vx, vy, d = _aim(self, game, 1.6)
+            if d < 150:
+                for a in (-0.25, 0, 0.25):
+                    c, sn = math.cos(a), math.sin(a)
+                    _fire(game, self, vx * c - vy * sn, vx * sn + vy * c, 'bubble')
+                sound.play('bubble')
+
+    def die(self, game):
+        super().die(game)
+        game.drop_loot(self.rect.center, 2.0)
+
+    def image(self):
+        return gfx.SPR['clam'][1 if self.is_open() else 0]
+
+
+class Lionfish(Enemy):
+    """Coral Gardens: venomous spines -- slaps bounce off, and it fans out spines."""
+    max_hp = 3
+    damage = 2
+    sprite = 'lionfish'
+    immune = ('slap',)
+    hb = (3, 3, 11, 10)
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.vx, self.vy = random.choice((-0.3, 0.3)), 0.0
+        self.shot_t = random.randint(80, 160)
+
+    def ai(self, game):
+        self.shot_t -= 1
+        if self.shot_t <= 0:
+            self.shot_t = 150
+            vx, vy, d = _aim(self, game, 1.5)
+            if d < 140:
+                for a in (-0.5, -0.25, 0, 0.25, 0.5):
+                    c, sn = math.cos(a), math.sin(a)
+                    _fire(game, self, vx * c - vy * sn, vx * sn + vy * c, 'spine')
+                sound.play('shoot')
+            return
+        if self.t % 80 == 0:
+            self.vy = random.choice((-0.25, 0, 0.25))
+        if not self.move(self.vx, 0, game.level):
+            self.vx = -self.vx
+        if not self.move(0, self.vy, game.level):
+            self.vy = -self.vy
+
+    def image(self):
+        img = gfx.SPR['lionfish'][(self.t // 14) % 2]
+        return gfx.flipped(img) if self.vx < 0 else img
+
+
+class Stingray(Enemy):
+    """The Lagoon: glides fast in long straight lines, over trenches too."""
+    max_hp = 3
+    damage = 2
+    sprite = 'ray'
+    who = 'flyer'
+    hb = (2, 3, 12, 9)
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        a = random.choice((0.6, 2.5, 3.8, 5.6))
+        self.vx, self.vy = math.cos(a) * 1.4, math.sin(a) * 1.4
+        self.rest = 0
+
+    def ai(self, game):
+        if self.rest:
+            self.rest -= 1
+            return
+        bounced = False
+        if not self.move(self.vx, 0, game.level):
+            self.vx = -self.vx
+            bounced = True
+        if not self.move(0, self.vy, game.level):
+            self.vy = -self.vy
+            bounced = True
+        if bounced and random.random() < 0.4:
+            self.rest = 24
+            vx, vy, _ = _aim(self, game, 1.5)
+            self.vx, self.vy = vx, vy
+
+    def image(self):
+        return gfx.SPR['ray'][(self.t // 10) % 2]
+
+
+class Anglerfish(Enemy):
+    """The Abyss: creeps after you behind its glowing lure, then lunges with a mouth full of teeth."""
+    max_hp = 5
+    damage = 2
+    sprite = 'angler'
+    who = 'flyer'
+    hb = (2, 5, 12, 10)
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.state, self.state_t = 'creep', 60
+        self.v = (0.0, 0.0)
+
+    def ai(self, game):
+        self.state_t -= 1
+        vx, vy, d = _aim(self, game, 0.3)
+        if self.state == 'creep':
+            if d < 150:
+                self.move(vx, vy, game.level)
+            if d < 52 and self.state_t <= 0:
+                self.state, self.state_t = 'tell', 26
+                self.v = (vx / 0.3 * 2.9, vy / 0.3 * 2.9)
+        elif self.state == 'tell':
+            self.x += random.choice((-1, 1)) * 0.5
+            if self.state_t <= 0:
+                self.state, self.state_t = 'lunge', 18
+                sound.play('shoot')
+        elif self.state == 'lunge':
+            self.move(*self.v, game.level)
+            if self.state_t <= 0:
+                self.state, self.state_t = 'creep', 70
+
+    def draw(self, surf, ox=0, oy=0):
+        if not self.spawn_t:
+            glow = pygame.Surface((24, 24), pygame.SRCALPHA)
+            pygame.draw.circle(glow, (255, 255, 160, 60 + int(math.sin(self.t * 0.15) * 30)), (12, 12), 10)
+            surf.blit(glow, (round(self.x) + ox + 12 - 12, round(self.y) + oy + 2 - 12))
+        super().draw(surf, ox, oy)
+
+    def image(self):
+        img = gfx.SPR['angler'][(self.t // 16) % 2]
+        return gfx.flipped(img) if self.v[0] < 0 else img
+
+
+class BilgeGhost(Enemy):
+    """Ship Graveyard: a drowned sailor's ghost that drifts through walls, fading in and out."""
+    max_hp = 3
+    sprite = 'bilge'
+    who = 'flyer'
+    knockback = False
+    hb = (3, 2, 10, 12)
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.cycle = random.randint(0, 200)
+
+    def solid_now(self):
+        return self.cycle % 220 < 150
+
+    @property
+    def active(self):
+        return self.spawn_t == 0 and not self.dead and self.solid_now()
+
+    def ai(self, game):
+        self.cycle += 1
+        vx, vy, d = _aim(self, game, 0.45 if self.solid_now() else 0.8)
+        if d < 170:
+            nx, ny = self.x + vx, self.y + vy
+            if game.level.bounds.contains(pygame.Rect(nx + 3, ny + 2, 10, 12)):
+                self.x, self.y = nx, ny
+
+    def draw(self, surf, ox=0, oy=0):
+        if self.spawn_t:
+            return super().draw(surf, ox, oy)
+        c = self.cycle % 220
+        a = 255 if c < 140 else 60 if c >= 160 and c < 210 else 140
+        img = self.image().copy()
+        if self.hurt_t and (self.hurt_t // 2) % 2:
+            img = gfx.flash(img)
+        img.set_alpha(a)
+        surf.blit(img, (round(self.x) + ox, round(self.y) + oy + round(math.sin(self.t * 0.07) * 2)))
+        if a == 255:
+            self.draw_hp(surf, ox, oy)
+
+    def image(self):
+        return gfx.SPR['bilge'][(self.t // 15) % 2]
+
+
+class IceSquid(Enemy):
+    """Frozen Shelf: jets about in pulses and fires ice shards in four directions."""
+    max_hp = 4
+    sprite = 'squid'
+    who = 'flyer'
+    hb = (3, 1, 10, 12)
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.v = [0.0, 0.0]
+        self.shot_t = random.randint(60, 140)
+
+    def ai(self, game):
+        if self.t % 70 == 0:
+            vx, vy, d = _aim(self, game, 2.0)
+            if d > 140:
+                a = random.uniform(0, math.tau)
+                vx, vy = math.cos(a) * 1.6, math.sin(a) * 1.6
+            self.v = [vx, vy]
+        self.v[0] *= 0.95
+        self.v[1] *= 0.95
+        if not self.move(self.v[0], 0, game.level):
+            self.v[0] = -self.v[0]
+        if not self.move(0, self.v[1], game.level):
+            self.v[1] = -self.v[1]
+        self.shot_t -= 1
+        if self.shot_t <= 0:
+            self.shot_t = 130
+            diag = (self.t // 130) % 2
+            for a in range(4):
+                ang = a * math.pi / 2 + (math.pi / 4 if diag else 0)
+                _fire(game, self, math.cos(ang) * 1.7, math.sin(ang) * 1.7, 'ice')
+            sound.play('shoot')
+
+    def image(self):
+        return gfx.SPR['squid'][1 if abs(self.v[0]) + abs(self.v[1]) > 0.8 else 0]
+
+
+class CinderSlug(Enemy):
+    """Ember Vents: oozes after Octo, leaving patches of fire that linger."""
+    max_hp = 5
+    damage = 2
+    sprite = 'slug'
+    immune = ('burn',)
+    hb = (1, 7, 14, 9)
+
+    def ai(self, game):
+        vx, vy, d = _aim(self, game, 0.35)
+        self.face = -1 if vx < 0 else 1
+        if d < 160:
+            if not self.move(vx, 0, game.level):
+                self.move(0, vy * 1.5 or 0.35, game.level)
+            self.move(0, vy, game.level)
+        if self.t % 45 == 0 and d < 200:
+            cx, cy = self.rect.center
+            game.shots.append(EnemyShot(cx - 5, cy - 3, 0, 0, 'ember', life=170))
+
+    def image(self):
+        img = gfx.SPR['slug'][(self.t // 20) % 2]
+        return gfx.flipped(img) if getattr(self, 'face', 1) < 0 else img
+
+
+class LanternWisp(Enemy):
+    """Sunken City: blinks out, reappears beside Octo, and bursts a ring of bubbles."""
+    max_hp = 3
+    sprite = 'wisp'
+    who = 'flyer'
+    knockback = False
+    hb = (3, 3, 10, 10)
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.cycle = random.randint(0, 120)
+
+    @property
+    def active(self):
+        return self.spawn_t == 0 and not self.dead and not (150 <= self.cycle % 200 < 175)
+
+    def ai(self, game):
+        self.cycle += 1
+        c = self.cycle % 200
+        if c == 162:                           # reappear somewhere near Octo
+            px, py = game.player.rect.center
+            for _ in range(12):
+                a = random.uniform(0, math.tau)
+                nx, ny = px + math.cos(a) * 52 - 8, py + math.sin(a) * 52 - 8
+                r = pygame.Rect(nx + 3, ny + 3, 10, 10)
+                if not game.level.blocked(r, 'flyer') and game.view_rect.contains(r):
+                    self.x, self.y = nx, ny
+                    break
+        elif c == 185:
+            for a in range(6):
+                ang = a * math.tau / 6 + self.t * 0.1
+                _fire(game, self, math.cos(ang) * 1.3, math.sin(ang) * 1.3, 'bubble')
+            sound.play('bubble')
+        elif c < 150:
+            vx, vy, _ = _aim(self, game, 0.3)
+            self.move(vx, vy, game.level)
+
+    def draw(self, surf, ox=0, oy=0):
+        c = self.cycle % 200
+        if not self.spawn_t and 150 <= c < 175:
+            if c < 158:
+                pygame.draw.circle(surf, (200, 170, 255), (self.rect.centerx + ox, self.rect.centery + oy), 158 - c, 1)
+            return
+        super().draw(surf, ox, oy)
+
+    def image(self):
+        return gfx.SPR['wisp'][(self.t // 8) % 2]
+
+
+class CloudPuff(Enemy):
+    """Sky Islands: a grumpy little cloud. Pop it and it splits in two!"""
+    max_hp = 3
+    sprite = 'cloud'
+    who = 'flyer'
+    hb = (2, 3, 12, 10)
+
+    def __init__(self, x, y, small=False):
+        super().__init__(x, y)
+        self.small = small
+        if small:
+            self.max_hp = self.hp = 1
+            self.spawn_t = 0
+            self.hb = (4, 5, 8, 7)
+
+    def ai(self, game):
+        vx, vy, d = _aim(self, game, 0.8 if self.small else 0.45)
+        wob = math.sin(self.t * 0.06) * 0.4
+        if d < 160:
+            self.move(vx - vy * wob, vy + vx * wob, game.level)
+
+    def die(self, game):
+        if not self.small:
+            for dx in (-6, 6):
+                kid = CloudPuff(self.x + dx, self.y, small=True)
+                kid.damage = self.damage
+                kid.spawn = {'kind': 'cloud', 'arena': 'trial', 'inst': None, 'killed': False}
+                kid.kb, kid.kb_t = (sign(dx), 0), 6
+                game.enemies.append(kid)
+        super().die(game)
+
+    def image(self):
+        return gfx.SPR['cloudlet' if self.small else 'cloud'][(self.t // 18) % 2]
+
+
 def make_enemy(kind, x, y):
     if kind.startswith('mini:'):
         return MiniBoss(kind[5:], x, y, lurk=True)      # waits in its region until Octo comes close
@@ -1650,7 +2058,10 @@ def make_enemy(kind, x, y):
 
 
 ENEMY_TYPES = {'gull': Gull, 'crab': Crab, 'urchin': Urchin, 'jelly': Jelly, 'puffer': Puffer, 'shark': Shark,
-               'murk': Murk, 'icecrab': IceCrab, 'lavacrab': LavaCrab}
+               'murk': Murk, 'icecrab': IceCrab, 'lavacrab': LavaCrab,
+               # one creature of its own for every region
+               'eel': SandEel, 'clam': SnapjawClam, 'lionfish': Lionfish, 'ray': Stingray, 'angler': Anglerfish,
+               'bilge': BilgeGhost, 'squid': IceSquid, 'slug': CinderSlug, 'wisp': LanternWisp, 'cloud': CloudPuff}
 
 
 # ===========================================================================
@@ -1718,13 +2129,13 @@ def max_bombs(p):
 
 
 SHELLY_TALK = [
-    "OLD SHELLY: OCTO! GRIMFIN THE SHARK AND HIS SISTER MURK STOLE THE GOLDEN PEARL! MURK LOCKED IT IN HER PALACE "
-    "IN THE DARK SUNKEN CITY, FAR TO THE SOUTHEAST.",
-    "HER PALACE DOOR IS SEALED. ONLY THE PEAL OF ALL SEVEN TIDE BELLS CAN BREAK THE SEAL.",
-    "GRIMFIN GUARDS ONE BELL IN THE SUNKEN SHRINE TO THE NORTH. THE OTHER SIX LIE IN DEEP TEMPLES ALL OVER THE "
-    "SEA - LOOK FOR DARK CAVE MOUTHS IN THE KELP WOODS, THE CORAL GARDENS, THE LAGOON, THE ABYSS, THE FROZEN "
-    "SHELF AND THE EMBER VENTS.",
-    "IT WON'T BE EASY. TRAIN IN THE TRIALS, FIND HEART SHELLS, AND DON'T FORGET YOUR SEA POTIONS!",
+    "OLD SHELLY: OCTO! GRIMFIN THE SHARK AND HIS BIG SISTER MURK STOLE THE GOLDEN PEARL - THE HEART OF THE "
+    "WHOLE REEF. WITHOUT IT THE SEA WILL SLOWLY GO DARK!",
+    "MURK LOCKED THE PEARL IN HER PALACE IN THE SUNKEN CITY, FAR TO THE SOUTHEAST, AND SEALED THE DOOR WITH "
+    "SEVEN TIDE BELLS. RING ALL SEVEN AND THE SEAL BREAKS.",
+    "THE BELLS ARE HIDDEN IN THE SUNKEN SHRINE AND IN SIX DEEP TEMPLES. MURK PUT A GUARDIAN IN EVERY REGION, "
+    "AND EACH ONE CARRIES THE SIGIL THAT UNSEALS ITS DUNGEON. BEAT THE GUARDIAN, OPEN THE DUNGEON, RING THE BELL!",
+    "IT WON'T BE EASY. TRAIN IN THE TRIALS TO LEARN NEW FORMS, HUNT FOR HEART SHELLS, AND CARRY SEA POTIONS!",
     "YOU'RE A REVERSIBLE OCTOPUS, REMEMBER? PRESS X TO FLIP YOUR MOOD.",
     "HAPPY BLUE OCTO SQUIRTS INK - PRESS C TO SWAP A LONG LINE FOR A SHORT WIDE BURST. GRUMPY BLACK OCTO SLAPS HARD AND CUTS KELP.",
     "INK PASSES RIGHT THROUGH JELLIES, AND SLAPPING AN URCHIN... OUCH. CHOOSE YOUR MOOD WISELY!",
@@ -2044,20 +2455,30 @@ class Bomb(Entity):
 class EnemyShot(Entity):
     who = 'shot'
 
-    def __init__(self, x, y, vx, vy, kind):
+    def __init__(self, x, y, vx, vy, kind, life=None):
         super().__init__(x, y)
         self.vx, self.vy = vx, vy
         self.kind = kind
         self.damage = 1
         self.t = 0
-        size = 10 if kind == 'bubble' else 6
+        self.life = life
+        size = 10 if kind in ('bubble', 'ember') else 6
         self.hb = (1, 1, size - 2, size - 2)
 
     def update(self, game):
         self.t += 1
+        if self.life is not None:
+            self.life -= 1
+            if self.life <= 0:
+                self.dead = True
+                return
         self.x += self.vx
         self.y += self.vy
         r = self.rect
+        if self.kind == 'ember':                 # a patch of fire on the floor: only hurts if touched
+            if r.colliderect(game.player.rect) and self.t > 20:
+                game.player.hurt(game, self.damage, r.center)
+            return
         if game.level.blocked(r, 'shot') and self.kind != 'bubble' or not game.view_rect.colliderect(r):
             self.dead = True
             return
@@ -2077,6 +2498,8 @@ class EnemyShot(Entity):
 
     def draw(self, surf, ox=0, oy=0):
         img = gfx.SPR['shots'][self.kind]
+        if self.kind == 'ember' and self.life is not None and self.life < 40 and (self.t // 3) % 2:
+            return
         wob = int(math.sin(self.t * 0.3) * 1) if self.kind == 'bubble' else 0
         surf.blit(img, (round(self.x) + ox + wob, round(self.y) + oy))
 

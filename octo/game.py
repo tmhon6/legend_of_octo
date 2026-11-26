@@ -293,8 +293,8 @@ class Game:
         self.update_area()
         self.banner_t = 0
         self.state = 'play'
-        self.say([SHELLY_TALK[0], SHELLY_TALK[1], SHELLY_TALK[2],
-                  "COME TALK TO ME (PRESS Z NEXT TO ME) IF YOU NEED MORE ADVICE."])
+        self.say([SHELLY_TALK[0], SHELLY_TALK[1], SHELLY_TALK[2], self.next_goal(),
+                  "IF YOU EVER GET LOST, COME BACK AND TALK TO ME (PRESS Z NEXT TO ME)."])
 
     def respawn_player(self):
         p = self.player
@@ -403,6 +403,7 @@ class Game:
                 a = i / max(1, len(loot)) * math.tau
                 it.x, it.y = p.x + math.cos(a) * 16, p.y + math.sin(a) * 16
                 self.pickups.append(it)
+            self.guardian_beaten(bf['bid'])
         else:
             p.hp = max(p.hp, max(2, p.max_hp // 2))
             sound.play('warp')
@@ -928,6 +929,11 @@ class Game:
         self.temple_armed = False
         tid = world.temple_door(tx, ty)
         if tid:
+            if not self.unsealed(tid):
+                self.seal_t = -999
+                self.sigil_bump(tid)
+                p.y += 6                    # step back off the sealed door
+                return
             self.enter_temple(tid)
             return
         tid = world.temple_at(tx, ty)
@@ -1004,9 +1010,87 @@ class Game:
         else:
             pages.append(f"{need - n} MORE BELL{'S' if need - n > 1 else ''} TO GO. MURK'S PALACE STAYS SEALED "
                          "UNTIL ALL SEVEN RING.")
+        if n < need:
+            pages.append("OLD SHELLY'S ADVICE: " + self.next_goal())
         if tid != 'shrine':
             self.leave_temple(tid)
         self.say(pages)
+
+    # ---- the story ------------------------------------------------------------
+    def dungeon_title(self, did):
+        return 'SUNKEN SHRINE' if did == 'shrine' else world.TEMPLES[did]['title']
+
+    def dungeon_place(self, did):
+        if did == 'shrine':
+            return "NORTH OF THE OCTO TEMPLE"
+        return "IN " + world.region_at(*world.TEMPLES[did]['door'])
+
+    def unsealed(self, did):
+        return world.GUARDIAN_OF[did] in self.flags.get('minis', [])
+
+    def next_goal(self):
+        """What Octo should do next, in the order the quest is meant to flow."""
+        bells = self.bells()
+        for did, gid in world.QUEST:
+            if did in bells:
+                continue
+            title, where = self.dungeon_title(did), self.dungeon_place(did)
+            if not self.unsealed(did):
+                return (f"NEXT, BEAT {MINIBOSS_NAME(gid)}, MURK'S GUARDIAN {where}. IT CARRIES THE SIGIL THAT "
+                        f"UNSEALS THE {title}.")
+            extra = ""
+            if did != 'shrine' and world.TEMPLES[did]['gate']:
+                extra = " " + temples.GATE_HINT[world.TEMPLES[did]['gate']].split('.')[0] + " - YOU MAY NEED THAT INSIDE."
+            return f"THE {title} {where} IS OPEN. GO IN, BEAT ITS KEEPER AND RING THE TIDE BELL!{extra}"
+        if 'golden' not in self.flags:
+            return ("ALL SEVEN BELLS HAVE RUNG! MURK'S PALACE IN THE SUNKEN CITY IS OPEN. TAKE BACK THE "
+                    "GOLDEN PEARL! (THE CITY IS DARK AND A GHOST WALL GUARDS IT - GLOWY AND SPOOKY OCTO WILL HELP.)")
+        return "YOU DID IT, OCTO! THE REEF IS SAFE."
+
+    def short_goal(self):
+        bells = self.bells()
+        for did, gid in world.QUEST:
+            if did not in bells:
+                if not self.unsealed(did):
+                    return f"GOAL: BEAT {MINIBOSS_NAME(gid)}"
+                return "GOAL: " + self.dungeon_title(did)
+        return "GOAL: MURK'S PALACE"
+
+    def guardian_beaten(self, gid):
+        """A region guardian falls: its sigil unseals a dungeon, or it drops a treasure."""
+        p = self.player
+        name = MINIBOSS_NAME(gid)
+        did = world.SIGIL_OF.get(gid)
+        if did == 'shrine':
+            for tx, ty in world.SHRINE_GATE:
+                if self.level.tile(tx, ty) == 'U':
+                    self.level.set_tile(tx, ty, world.floor_for(tx, ty))
+                self.opened.add((tx, ty))
+            pages = [f"{name} DROPPED A GLOWING SIGIL!", "THE SEALED GATE OF THE SUNKEN SHRINE SWINGS OPEN. "
+                     "GRIMFIN AND THE FIRST TIDE BELL ARE SOMEWHERE INSIDE."]
+        elif did:
+            t = world.TEMPLES[did]
+            pages = [f"{name} DROPPED A GLOWING SIGIL!",
+                     f"FAR AWAY, THE SEAL ON THE {t['title']} CRUMBLES. ITS CAVE MOUTH {self.dungeon_place(did)} "
+                     "IS OPEN NOW (IT'S MARKED ON YOUR MAP)."]
+        else:
+            p.max_hp = min(40, p.max_hp + 2)
+            p.hp = p.max_hp
+            lore = {'captain': "THE OLD PIRATE MUTTERS: 'MURK PAID ME IN PEARLS TO SINK EVERY SHIP THAT CAME NEAR...'",
+                    'warden': "THE WARDEN GROANS: 'MURK... WAITS... BEHIND THE BELL SEAL... YOU'LL NEVER RING ALL SEVEN...'",
+                    'storm': "THE STORM GULL SHRIEKS: 'FROM UP HERE I SAW IT ALL - THE BELLS ARE HIDDEN DEEP BELOW!'"}
+            pages = [f"{name} WAS HOARDING A HEART SHELL! YOUR LIFE GREW BY ONE HEART.",
+                     lore.get(gid, "ANOTHER OF MURK'S GUARDIANS IS BEATEN.")]
+        sound.play('item')
+        self.say(pages + ["OLD SHELLY'S ADVICE: " + self.next_goal()])
+
+    def sigil_bump(self, did):
+        if self.t - getattr(self, 'seal_t', -999) < 240:
+            return
+        self.seal_t = self.t
+        gid = world.GUARDIAN_OF[did]
+        self.say([f"THE {self.dungeon_title(did)} IS SEALED WITH A GUARDIAN'S SIGIL.",
+                  f"{MINIBOSS_NAME(gid)} CARRIES IT. BEAT {MINIBOSS_NAME(gid)} AND THE SEAL WILL BREAK."])
 
     def seal_bump(self):
         if self.t - getattr(self, 'seal_t', -999) < 240:
@@ -1626,7 +1710,7 @@ class Game:
                 if isinstance(npc, Hermie):
                     self.open_catalogue()
                     return True
-                self.say(SHELLY_TALK[1:])
+                self.say(["OLD SHELLY: " + self.next_goal()] + SHELLY_TALK[4:])
                 return True
         return False
 
@@ -1751,12 +1835,20 @@ class Game:
                 sound.music(world.REGION_MUSIC.get(region, 'reef'))
         if area != self.area:
             self.area = area
-            if area in ('overworld', 'sky'):
-                sound.music(world.REGION_MUSIC.get(region, 'reef'))
-            else:
-                sound.music(AREA_INFO[area]['music'])
+            sound.music(self.area_music())
             if area == 'dungeon' and world.temple_at(tx, ty) is None:
                 self.checkpoint = world.SHRINE_CHECKPOINT
+
+    def area_music(self):
+        """The tune for where Octo is: every region, the temples and boss fights have their own."""
+        if self.bossfight or (self.active_arena and ARENAS[self.active_arena].get('boss')):
+            return 'boss'
+        if self.area in ('overworld', 'sky'):
+            return world.REGION_MUSIC.get(self.region, 'reef')
+        p = self.player
+        if world.temple_at(p.rect.centerx // TILE, p.rect.centery // TILE):
+            return 'temple'
+        return AREA_INFO[self.area]['music']
 
     def update_spawns(self):
         view = self.view_rect
@@ -1823,6 +1915,8 @@ class Game:
                     self.active_arena = name
                     self.spawn_arena(name)
                     lv.set_doors(name, True)
+                    if a.get('boss'):
+                        sound.music('boss')
                     sound.play('shut')
                     self.shake = 6
                     break
@@ -1833,6 +1927,8 @@ class Game:
             lv.set_doors(name, False)
             self.cleared.add(name)
             self.active_arena = None
+            if ARENAS[name].get('boss'):
+                sound.music(self.area_music())
             sound.play('door')
             kind, tx, ty = ARENAS[name]['reward']
             it = self.place_item(kind, tx, ty, ('reward', name))
@@ -1995,6 +2091,7 @@ class Game:
         elif k == 'bell':
             self.ring_bell(it)
         elif k == 'golden':
+            self.flags['golden'] = True
             sound.play('item')
             sound.music('victory', loops=0)
             self.state = 'win'
@@ -2178,6 +2275,17 @@ class Game:
             ps.blit(v, (0, 0))
 
     def draw_portals(self, ps, ox, oy):
+        for tid, t in world.TEMPLES.items():          # a sealed temple door shows its guardian's sigil
+            if self.unsealed(tid):
+                continue
+            dx, dy = t['door']
+            cx, cy = dx * TILE + 8 + ox, dy * TILE + 8 + oy
+            if -16 < cx < PLAY_W + 16 and -16 < cy < PLAY_H + 16:
+                glow = 120 + int(math.sin(self.t * 0.08) * 60)
+                pygame.draw.circle(ps, (20, 60, 50), (cx, cy), 7)
+                pygame.draw.circle(ps, (100, glow + 60, 170), (cx, cy), 6, 1)
+                pygame.draw.line(ps, (100, glow + 60, 170), (cx - 3, cy), (cx + 3, cy))
+                pygame.draw.line(ps, (100, glow + 60, 170), (cx, cy - 3), (cx, cy + 3))
         for name, t in world.TRIALS.items():
             px, py = t['portal']
             cx, cy = px * TILE + 8, py * TILE + 8
@@ -2678,6 +2786,8 @@ class Game:
         self.draw_bell_row(scr, box.right - 6 - 7 * 9, box.y + 4, small=True)
         if getattr(self, 'pause_msg', ''):
             gfx.text(scr, self.pause_msg, SCREEN_W // 2, box.bottom - 11, (255, 220, 120), center=True)
+        else:
+            gfx.text(scr, self.short_goal(), SCREEN_W // 2, box.bottom - 11, (255, 200, 120), center=True)
 
     def draw_mute_icon(self, scr, x, y):
         """A little crossed-out speaker."""

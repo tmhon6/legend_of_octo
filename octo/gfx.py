@@ -606,6 +606,15 @@ def _sealed(rnd):
     return s
 
 
+def _sigil_gate(rnd):
+    """A gate sealed by a guardian's sigil: green stone with a glowing ring."""
+    s = tint(_locked(rnd).copy(), (120, 210, 170))
+    pygame.draw.circle(s, (20, 60, 50), (8, 8), 5)
+    pygame.draw.circle(s, (150, 255, 210), (8, 8), 4, 1)
+    s.set_at((8, 8), (220, 255, 240))
+    return s
+
+
 def make_key():
     pal = {'k': (60, 40, 0), 'Y': (250, 206, 50), 'y': (190, 140, 20)}
     rows = [
@@ -1274,6 +1283,7 @@ def make_tiles():
         'X': [_shutter(rnd)],
         'E': [_stairs()],
         'B': [_sealed(rnd)],
+        'U': [_sigil_gate(rnd)],
     }
     return {'overworld': ow, 'dungeon': dg, 'themes': make_themes(rnd)}
 
@@ -1432,6 +1442,199 @@ def make_murk():
     return out
 
 
+
+# --------------------------------------------------------------------------
+# Regional enemies (one per region), drawn with shapes at 16x16
+# --------------------------------------------------------------------------
+def _canvas(w=16, h=16):
+    return pygame.Surface((w, h), pygame.SRCALPHA)
+
+
+def _eye(s, x, y, white=True):
+    if white:
+        s.set_at((x, y), (255, 255, 255))
+        s.set_at((x + 1, y), (20, 20, 20))
+    else:
+        s.set_at((x, y), (20, 20, 20))
+
+
+def make_eel():
+    out = []
+    for f in range(2):
+        s = _canvas()
+        body = (230, 200, 120)
+        sway = (0, 1)[f]
+        pts = [(6 + sway, 15), (5, 11), (6 - sway, 7), (7, 3)]
+        for i in range(len(pts) - 1):
+            pygame.draw.line(s, (90, 60, 20), pts[i], pts[i + 1], 6)
+            pygame.draw.line(s, body, pts[i], pts[i + 1], 4)
+        pygame.draw.ellipse(s, (90, 60, 20), (3, 0, 10, 7))
+        pygame.draw.ellipse(s, (250, 220, 150), (4, 1, 8, 5))
+        pygame.draw.line(s, (200, 60, 50), (7, 5), (11, 5))        # gaping mouth
+        _eye(s, 6, 2)
+        for y in range(8, 15, 3):
+            s.set_at((6, y), (170, 120, 60))
+        out.append(s)
+    return out
+
+
+def make_clam():
+    out = []
+    for gap in (0, 5):
+        s = _canvas()
+        shell, dark = (160, 120, 200), (60, 40, 90)
+        pygame.draw.ellipse(s, dark, (0, 8, 16, 8))
+        pygame.draw.ellipse(s, shell, (1, 9, 14, 6))
+        if gap:
+            pygame.draw.ellipse(s, (240, 140, 160), (3, 6, 10, 5))   # tongue
+            pygame.draw.circle(s, (255, 255, 240), (8, 7), 2)        # pearl
+        top = 8 - gap
+        pygame.draw.ellipse(s, dark, (0, top - 3, 16, 8))
+        pygame.draw.ellipse(s, (190, 150, 230), (1, top - 2, 14, 6))
+        for x in (4, 8, 12):
+            pygame.draw.line(s, dark, (8, top + 3), (x, top - 2))
+        out.append(s)
+    return out
+
+
+def make_lionfish():
+    out = []
+    for f in range(2):
+        s = _canvas()
+        for i, a in enumerate(range(-70, 80, 28)):
+            r = math.radians(a + f * 8)
+            x2, y2 = 7 + math.cos(r + math.pi) * 8, 8 + math.sin(r + math.pi) * 8
+            pygame.draw.line(s, (240, 240, 230) if i % 2 else (200, 60, 40), (7, 8), (x2, y2))
+        pygame.draw.ellipse(s, (90, 30, 20), (4, 4, 11, 9))
+        pygame.draw.ellipse(s, (230, 110, 70), (5, 5, 9, 7))
+        for x in (7, 10):
+            pygame.draw.line(s, (255, 240, 220), (x, 5), (x, 11))
+        _eye(s, 11, 7)
+        out.append(s)
+    return out
+
+
+def make_ray():
+    out = []
+    for f in range(2):
+        s = _canvas()
+        w = 7 if f == 0 else 6
+        pts = [(8, 2), (8 + w, 7 + f), (8, 11), (8 - w, 7 + f)]
+        pygame.draw.polygon(s, (40, 60, 80), pts)
+        pygame.draw.polygon(s, (110, 150, 180), [(8, 3), (7 + w, 7 + f), (8, 10), (9 - w, 7 + f)])
+        pygame.draw.line(s, (40, 60, 80), (8, 11), (8, 15))
+        s.set_at((8, 15), (240, 220, 90))                          # stinger
+        _eye(s, 6, 5, False)
+        _eye(s, 10, 5, False)
+        out.append(s)
+    return out
+
+
+def make_angler():
+    out = []
+    for f in range(2):
+        s = _canvas()
+        pygame.draw.ellipse(s, (20, 20, 40), (1, 5, 14, 11))
+        pygame.draw.ellipse(s, (70, 60, 110), (2, 6, 12, 9))
+        pygame.draw.line(s, (240, 240, 240), (3, 12), (12, 12))      # teeth
+        for x in range(3, 13, 2):
+            s.set_at((x, 11), (240, 240, 240))
+        _eye(s, 9, 8)
+        pygame.draw.line(s, (90, 80, 120), (8, 6), (11, 1))          # the lure's stalk
+        glow = (255, 255, 150) if f == 0 else (200, 255, 200)
+        pygame.draw.circle(s, glow, (12, 2), 2)
+        out.append(s)
+    return out
+
+
+def make_bilge_ghost():
+    out = []
+    for f in range(2):
+        s = _canvas()
+        pygame.draw.ellipse(s, (150, 200, 180, 200), (2, 1, 12, 11))
+        for i in range(4):
+            x = 2 + i * 3
+            pygame.draw.circle(s, (150, 200, 180, 200), (x + 1, 12 + (i + f) % 2), 2)
+        pygame.draw.circle(s, (20, 40, 40), (6, 6), 2)
+        pygame.draw.circle(s, (20, 40, 40), (10, 6), 2)
+        pygame.draw.ellipse(s, (20, 40, 40), (6, 9, 4, 3))
+        pygame.draw.line(s, (200, 180, 120), (3, 2), (12, 1))       # a sailor's bandana
+        out.append(s)
+    return out
+
+
+def make_squid():
+    out = []
+    for f in range(2):
+        s = _canvas()
+        pygame.draw.polygon(s, (60, 110, 160), [(8, 0), (13, 7), (3, 7)])
+        pygame.draw.ellipse(s, (60, 110, 160), (3, 4, 10, 7))
+        pygame.draw.ellipse(s, (170, 220, 255), (4, 5, 8, 5))
+        _eye(s, 5, 7, False)
+        _eye(s, 10, 7, False)
+        for i, x in enumerate((4, 6, 8, 10, 12)):
+            spread = (i - 2) * (1 if f else 0)
+            pygame.draw.line(s, (120, 180, 230), (x, 10), (x + spread, 15))
+        out.append(s)
+    return out
+
+
+def make_slug():
+    out = []
+    for f in range(2):
+        s = _canvas()
+        stretch = f
+        pygame.draw.ellipse(s, (60, 15, 5), (0, 7 - stretch, 16, 9 + stretch))
+        pygame.draw.ellipse(s, (180, 60, 20), (1, 8 - stretch, 14, 7 + stretch))
+        for x in (4, 8, 12):
+            pygame.draw.circle(s, (255, 180, 60), (x, 11), 1)          # glowing cracks
+        pygame.draw.line(s, (60, 15, 5), (12, 8), (14, 3))
+        pygame.draw.line(s, (60, 15, 5), (10, 8), (11, 3))
+        s.set_at((14, 3), (255, 230, 120))
+        s.set_at((11, 3), (255, 230, 120))
+        out.append(s)
+    return out
+
+
+def make_wisp():
+    out = []
+    for f in range(2):
+        s = _canvas()
+        pygame.draw.circle(s, (120, 90, 200, 110), (8, 8), 7)
+        pygame.draw.circle(s, (230, 200, 255), (8, 8), 4 + f)
+        pygame.draw.circle(s, (255, 255, 255), (8, 8), 2)
+        pygame.draw.polygon(s, (180, 140, 255), [(8, 0), (10, 4), (6, 4)])
+        out.append(s)
+    return out
+
+
+def make_cloud(small=False):
+    out = []
+    for f in range(2):
+        s = _canvas()
+        k = 0.6 if small else 1.0
+        for cx, cy, r in ((5, 9, 4), (10, 9, 4), (8, 6, 5), (3, 11, 3), (13, 11, 3)):
+            cx2, cy2 = 8 + (cx - 8) * k, 8 + (cy - 8) * k + f * 0.5
+            pygame.draw.circle(s, (150, 160, 190), (cx2, cy2 + 1), max(1, int(r * k)))
+            pygame.draw.circle(s, (250, 250, 255), (cx2, cy2), max(1, int(r * k)))
+        _eye(s, 6, 8, False)
+        _eye(s, 10, 8, False)
+        s.set_at((8, 10), (230, 120, 140))
+        out.append(s)
+    return out
+
+
+def make_regional_shots():
+    ice = _canvas(6, 6)
+    pygame.draw.polygon(ice, (120, 190, 255), [(3, 0), (6, 3), (3, 6), (0, 3)])
+    pygame.draw.polygon(ice, (235, 250, 255), [(3, 1), (5, 3), (3, 5), (1, 3)])
+    ember = _canvas(10, 10)
+    pygame.draw.circle(ember, (200, 60, 10, 200), (5, 6), 4)
+    pygame.draw.circle(ember, (255, 170, 40), (5, 6), 2)
+    pygame.draw.polygon(ember, (255, 220, 100), [(5, 0), (7, 5), (3, 5)])
+    return {'ice': ice, 'ember': ember}
+
+
 def load():
     global OCTO, SLAP, TILES, SPR
     OCTO = make_octo()
@@ -1459,7 +1662,10 @@ def load():
         'shrimp': make_shrimp(),
         'key': make_key(),
         'puff': make_puff(),
-        'shots': make_shots(),
+        'shots': {**make_shots(), **make_regional_shots()},
+        'eel': make_eel(), 'clam': make_clam(), 'lionfish': make_lionfish(), 'ray': make_ray(),
+        'angler': make_angler(), 'bilge': make_bilge_ghost(), 'squid': make_squid(), 'slug': make_slug(),
+        'wisp': make_wisp(), 'cloud': make_cloud(), 'cloudlet': make_cloud(small=True),
         'items': make_items(),
         'orb': make_pearl((120, 255, 200), (230, 255, 245), size=10),
     }

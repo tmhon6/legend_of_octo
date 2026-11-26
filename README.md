@@ -4,6 +4,8 @@ By Minu Hong.
 
 ## ▶ [Play it in your browser](https://tmhon6.github.io/legend_of_octo/)
 
+📜 **[Game layout for review](docs/layout.pdf)**: story flow, the whole map, every dungeon, the trial rooms and all creatures, without playing. The pages are also pictures in [docs/layout](docs/layout/). Rebuild them with `.venv/bin/python tools/make_layout.py`.
+
 No download needed. Wait about 15 seconds for it to load, click or tap the page, then press Enter or tap again.
 Works with a keyboard on a computer, or with on-screen touch controls on phones and tablets.
 On a phone, play sideways: the controls sit on both sides of the game, and your first tap goes full
@@ -119,7 +121,9 @@ Grimfin the Shark and his big sister Murk stole the Golden Pearl. Murk locked it
 the dark Sunken City and sealed the door with the magic of seven **Tide Bells**. Ring all seven
 to break the seal:
 
-* one bell is guarded by Grimfin in the **Sunken Shrine**
+* Murk put a **guardian** (mini-boss) in every region. Each guardian carries the **sigil** that
+  unseals its region's dungeon. Beat the guardian, open the dungeon, ring the bell
+* one bell is guarded by Grimfin in the **Sunken Shrine** (Big Pinch holds its sigil)
 * six more lie in **deep temples** whose cave mouths are hidden in the Kelp Woods, Coral Gardens,
   The Lagoon, The Abyss, Frozen Shelf and Ember Vents
 
@@ -139,6 +143,9 @@ Each temple is a multi-room dungeon of 9 to 14 rooms, seen one screen at a time:
 * Enemies get tougher and hit harder the further you roam from the Octo Temple, and harder
   still in the later temples.
 * Hearts drop less often.
+* Every region has its own creature: sand eels, snapjaw clams, lionfish, stingrays, anglerfish, bilge
+  ghosts, ice squid, cinder slugs, lantern wisps and cloud puffs.
+* Every region, the temples and the boss fights have their own music.
 * If you fall, you start again at the temple entrance (or your last checkpoint) with three hearts.
 
 Beat Murk to win. Then press Enter for **Deep Tide**, a harder replay of the whole game.

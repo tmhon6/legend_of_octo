@@ -240,6 +240,110 @@ def _sky_song():
     return render_song(mel, bass, 0.17, mel_wave='tri', mel_duty=0.5, mel_vol=0.32, bass_vol=0.25, arp=arp)
 
 
+# ---- a tune for every region -----------------------------------------------
+
+def _bass(roots, pattern):
+    """roots: 16 bass notes, one per bar of 4 steps; pattern: offsets per step (None = hold)."""
+    out = []
+    for r in roots:
+        out += [0 if o is None else r + o for o in pattern]
+    return out
+
+
+def _kelp_song():
+    """Kelp Woods: a sneaky, swaying tune in D dorian."""
+    H = 0
+    mel = [62, H, 64, 65, 69, H, 67, H, 65, 64, 62, H, 60, H, 62, H,
+           65, H, 67, 69, 71, H, 69, H, 67, 65, 64, H, None, None, 62, 64,
+           65, H, 64, 62, 60, H, 62, 64, 57, H, H, H, 60, H, 62, H,
+           64, H, 65, 64, 62, H, 60, H, 62, H, H, H, None, None, None, None]
+    bass = _bass((38, 38, 36, 36, 43, 43, 41, 40, 38, 38, 36, 36, 33, 36, 38, 38), (0, None, 7, 12))
+    return render_song(mel, bass, 0.19, mel_wave='tri', mel_duty=0.5, mel_vol=0.3, bass_vol=0.26)
+
+
+def _garden_song():
+    """Coral Gardens: a sunny, skipping tune in G major."""
+    H = 0
+    mel = [67, 71, 74, H, 76, 74, 71, H, 72, 71, 69, H, 67, H, H, H,
+           69, 72, 76, H, 79, 76, 72, H, 74, 72, 71, H, 69, H, H, H,
+           71, 74, 79, H, 78, 76, 74, H, 76, 74, 72, H, 71, 69, 67, H,
+           69, H, 71, 72, 74, H, 66, H, 67, H, H, H, None, None, None, None]
+    bass = _bass((43, 43, 48, 48, 45, 45, 50, 50, 43, 43, 48, 48, 45, 50, 43, 43), (0, 7, 12, 7))
+    arp = []
+    for r in (67, 67, 72, 72, 69, 69, 74, 74, 67, 67, 72, 72, 69, 74, 67, 67):
+        arp += [r + 12, r + 16, r + 19, r + 24]
+    return render_song(mel, bass, 0.15, mel_duty=0.25, mel_vol=0.2, bass_vol=0.26, arp=arp)
+
+
+def _lagoon_song():
+    """The Lagoon: lazy, warm and sunlit, on the pentatonic scale."""
+    H = 0
+    mel = [72, H, H, 74, 76, H, 79, H, 76, H, 74, H, 72, H, H, H,
+           69, H, H, 72, 74, H, 76, H, 74, H, 72, H, 69, H, H, H,
+           72, H, 76, H, 79, H, 81, H, 79, H, 76, H, 74, H, 76, H,
+           72, H, H, H, 69, H, 67, H, 72, H, H, H, None, None, None, None]
+    bass = _bass((48, 48, 45, 45, 41, 41, 43, 43, 48, 48, 45, 45, 41, 43, 48, 48), (0, None, 7, None))
+    return render_song(mel, bass, 0.23, mel_wave='sine', mel_duty=0.5, mel_vol=0.34, bass_vol=0.26)
+
+
+def _abyss_song():
+    """The Abyss: slow, deep and lonely."""
+    H = 0
+    mel = [57, H, H, H, None, None, 60, H, 59, H, H, H, None, None, None, None,
+           55, H, H, H, None, None, 57, H, 52, H, H, H, None, None, None, None,
+           57, H, 60, H, 64, H, H, H, 63, H, H, H, 60, H, H, H,
+           59, H, H, H, 56, H, H, H, 57, H, H, H, None, None, None, None]
+    bass = _bass((33, 33, 31, 31, 29, 29, 28, 28, 33, 33, 36, 36, 29, 28, 33, 33), (0, None, None, None))
+    return render_song(mel, bass, 0.34, mel_wave='sine', mel_duty=0.5, mel_vol=0.3, bass_vol=0.34)
+
+
+def _wreck_song():
+    """Ship Graveyard: a creaky old sea shanty in D minor."""
+    H = 0
+    mel = [62, H, 62, 65, H, 62, 69, H, 67, 65, H, 64, 62, H, H, H,
+           60, H, 60, 64, H, 60, 67, H, 65, 64, H, 62, 60, H, H, H,
+           62, H, 62, 65, H, 69, 74, H, 72, 70, H, 69, 67, H, 65, H,
+           64, H, 62, 61, H, 64, 62, H, H, H, None, None, None, None, None, None]
+    bass = _bass((38, 38, 36, 36, 34, 34, 33, 33, 38, 38, 34, 34, 33, 33, 38, 38), (0, None, 7, None))
+    return render_song(mel, bass, 0.15, mel_wave='saw', mel_duty=0.5, mel_vol=0.12, bass_vol=0.32)
+
+
+def _palace_song():
+    """Murk Palace: cold, creeping and chromatic."""
+    H = 0
+    mel = [59, H, 62, H, 61, H, 58, H, 59, H, H, H, None, None, 54, H,
+           59, H, 62, H, 66, H, 65, H, 62, H, H, H, None, None, None, None,
+           67, H, 66, H, 65, H, 62, H, 61, H, 62, H, 58, H, 59, H,
+           54, H, 55, H, 58, H, 61, H, 59, H, H, H, None, None, None, None]
+    bass = _bass((35, 35, 34, 34, 35, 35, 31, 31, 35, 35, 34, 34, 31, 30, 35, 35), (0, 0, 6, 0))
+    return render_song(mel, bass, 0.21, mel_wave='square', mel_duty=0.5, mel_vol=0.14, bass_vol=0.34)
+
+
+def _temple_song():
+    """The deep temples: a steady, echoing march in A minor."""
+    H = 0
+    mel = [69, H, 72, 71, 69, H, 64, H, 65, H, 64, 62, 64, H, H, H,
+           69, H, 72, 71, 69, H, 76, H, 74, H, 72, 71, 72, H, H, H,
+           77, H, 76, 74, 72, H, 71, H, 72, H, 71, 69, 68, H, 64, H,
+           69, H, 71, H, 72, H, 68, H, 69, H, H, H, None, None, None, None]
+    bass = _bass((45, 45, 41, 41, 45, 45, 43, 43, 41, 41, 45, 45, 40, 40, 45, 45), (0, 12, 0, 12))
+    arp = []
+    for r in (69, 69, 65, 65, 69, 69, 67, 67, 65, 65, 69, 69, 64, 64, 69, 69):
+        arp += [r + 12, r + 15, r + 19, r + 15]
+    return render_song(mel, bass, 0.14, mel_duty=0.25, mel_vol=0.17, bass_vol=0.3, arp=arp)
+
+
+def _boss_song():
+    """Guardian fights: fast and fierce in E minor."""
+    H = 0
+    mel = [64, 64, 67, 64, 70, H, 69, 67, 64, 64, 67, 64, 71, H, 70, 69,
+           64, 64, 67, 64, 72, H, 71, 70, 69, 67, 66, 67, 64, H, H, H,
+           76, H, 74, H, 72, H, 71, H, 72, H, 71, H, 70, H, 67, H,
+           64, 66, 67, 69, 70, 69, 67, 66, 64, H, 76, H, 75, H, 64, H]
+    bass = _bass((40, 40, 40, 40, 43, 43, 41, 41, 36, 36, 38, 38, 40, 39, 40, 40), (0, 12, 0, 12))
+    return render_song(mel, bass, 0.1, mel_wave='saw', mel_duty=0.5, mel_vol=0.12, bass_vol=0.34)
+
+
 def init():
     global enabled, SR, _channels, _music_channel
     if WEB:
@@ -378,6 +482,10 @@ def _synth(S, M):
     M['vents'] = _to_sound(_vents_song())
     M['city'] = _to_sound(_city_song())
     M['sky'] = _to_sound(_sky_song())
+    for name, song in (('kelp', _kelp_song), ('garden', _garden_song), ('lagoon', _lagoon_song),
+                       ('abyss', _abyss_song), ('wreck', _wreck_song), ('palace', _palace_song),
+                       ('temple', _temple_song), ('boss', _boss_song)):
+        M[name] = _to_sound(song())
 
 
 def play(name):

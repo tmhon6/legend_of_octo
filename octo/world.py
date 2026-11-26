@@ -181,6 +181,9 @@ LEVEL = [
 ]
 # the Murk Palace door is sealed until all seven Tide Bells have rung
 LEVEL[77] = LEVEL[77][:148] + 'BB' + LEVEL[77][150:]
+# the Sunken Shrine's gate is sealed with Big Pinch's sigil
+LEVEL[21] = LEVEL[21][:46] + 'UUUU' + LEVEL[21][50:]
+SHRINE_GATE = [(x, 21) for x in range(46, 50)]
 TEMPLE_Y = len(LEVEL)        # rows from here down are the six deep temples (see temples.py)
 _rows, TEMPLES = temples.build_all(len(LEVEL[0]), TEMPLE_Y)
 LEVEL = LEVEL + _rows
@@ -196,8 +199,16 @@ THEMES = {
     'SHIP GRAVEYARD': 'wreck', 'FROZEN SHELF': 'frost', 'EMBER VENTS': 'vents', 'SUNKEN CITY': 'city',
     'MURK PALACE': 'city', 'SKY ISLANDS': 'sky',
 }
-REGION_MUSIC = {'SKY ISLANDS': 'sky', 'FROZEN SHELF': 'frost', 'EMBER VENTS': 'vents', 'SUNKEN CITY': 'city', 'MURK PALACE': 'city'}
+REGION_MUSIC = {'SKY ISLANDS': 'sky', 'FROZEN SHELF': 'frost', 'EMBER VENTS': 'vents', 'SUNKEN CITY': 'city',
+                'MURK PALACE': 'palace', 'KELP WOODS': 'kelp', 'CORAL GARDENS': 'garden', 'THE LAGOON': 'lagoon',
+                'THE ABYSS': 'abyss', 'SHIP GRAVEYARD': 'wreck'}
 DARK_REGIONS = {'SUNKEN CITY', 'MURK PALACE'} | {t['title'] for t in TEMPLES.values() if t.get('dark')}
+# the story: each region's guardian carries the sigil that unseals its dungeon,
+# in the order Old Shelly suggests (dungeon id, guardian id)
+QUEST = [('shrine', 'pinch'), ('snarl', 'wraith'), ('bloom', 'thorn'), ('tidepool', 'blowhard'),
+         ('gloam', 'gloom'), ('rime', 'frostmaw'), ('cinder', 'magma')]
+SIGIL_OF = {g: d for d, g in QUEST}          # guardian -> the dungeon its sigil opens
+GUARDIAN_OF = {d: g for d, g in QUEST}
 SKY_Y = 92               # rows from here down are the Sky Islands
 SKY_RECT = (0, 92, 59, 127)
 GEYSERS = [((53, 49), (8, 102)), ((10, 28), (14, 119)), ((140, 18), (52, 100))]   # (sea tile, sky tile) pairs
@@ -253,6 +264,22 @@ TRIALS = {
     'spires': {'title': 'TRIAL OF SPIRES', 'color': (200, 170, 255), 'kind': 'duel', 'room': (119, 141, 134, 151), 'entry': (7.5, 8), 'portal': (124, 73), 'boss': 'warden', 'boss_at': (7.5, 2), 'goal': 'A GUARDIAN BLOCKS THE WAY. DEFEAT IT!'},
     'thunder': {'title': 'TRIAL OF THUNDER', 'color': (255, 255, 140), 'kind': 'waves', 'room': (136, 141, 151, 151), 'entry': (7.5, 5), 'portal': (41, 102), 'goal': 'DEFEAT THREE WAVES OF ENEMIES!', 'waves': [['gull', 'puffer', 'gull', 'gull', 'gull', 'gull', 'gull', 'puffer', 'puffer', 'gull'], ['gull', 'puffer', 'gull', 'gull', 'gull', 'gull', 'gull', 'gull', 'gull', 'gull', 'gull', 'puffer'], ['gull', 'puffer', 'gull', 'puffer', 'gull', 'gull', 'gull', 'puffer', 'gull', 'gull', 'gull', 'gull', 'puffer', 'gull']], 'spots': [(10, 1), (4, 3), (1, 6), (3, 8), (13, 4), (2, 3), (13, 6), (13, 1), (13, 2), (1, 9)]},
 }
+
+
+def _settle_trial_spots():
+    """A spot at x.5 sits across two tiles: if the right-hand one is wall, centre it on the left one
+    instead, so nobody lands half inside a wall."""
+    for t in TRIALS.values():
+        x0, y0 = t['room'][:2]
+        for k in ('entry', 'boss_at', 'thief_at', 'clam_at'):
+            if k not in t:
+                continue
+            x, y = t[k]
+            if x != int(x) and LEVEL[y0 + int(y)][x0 + int(x) + 1] not in '.,=dH':
+                t[k] = (int(x), y)
+
+
+_settle_trial_spots()
 SHRINE_RECT = (28, 0, 67, 21)     # tiles (x0, y0, x1, y1) of the Sunken Shrine
 
 REGIONS = [   # (banner name, tile rect x0, y0, x1, y1); anywhere else is the Coral Reef
@@ -548,6 +575,71 @@ ITEMS = [
     ('shrimp', 31, 113),
 ]
 
+# each region's own creature (see entities.py: SandEel, SnapjawClam, ...)
+REGIONAL_ENEMIES = [
+    ('eel', 60, 52),
+    ('eel', 41, 42),
+    ('eel', 37, 29),
+    ('eel', 54, 42),
+    ('eel', 37, 24),
+    ('eel', 48, 22),
+    ('eel', 27, 22),
+    ('clam', 2, 1),
+    ('clam', 1, 7),
+    ('clam', 1, 20),
+    ('clam', 7, 2),
+    ('clam', 27, 13),
+    ('clam', 15, 15),
+    ('lionfish', 92, 2),
+    ('lionfish', 94, 17),
+    ('lionfish', 84, 1),
+    ('lionfish', 93, 7),
+    ('lionfish', 79, 1),
+    ('lionfish', 69, 14),
+    ('ray', 1, 53),
+    ('ray', 21, 39),
+    ('ray', 1, 48),
+    ('ray', 22, 54),
+    ('ray', 1, 39),
+    ('ray', 8, 32),
+    ('angler', 73, 54),
+    ('angler', 73, 43),
+    ('angler', 85, 38),
+    ('angler', 93, 54),
+    ('angler', 88, 48),
+    ('angler', 73, 35),
+    ('bilge', 42, 78),
+    ('bilge', 16, 60),
+    ('bilge', 92, 78),
+    ('bilge', 61, 78),
+    ('bilge', 5, 78),
+    ('bilge', 26, 78),
+    ('squid', 110, 1),
+    ('squid', 142, 11),
+    ('squid', 117, 1),
+    ('squid', 116, 24),
+    ('squid', 123, 10),
+    ('squid', 104, 1),
+    ('slug', 132, 52),
+    ('slug', 148, 29),
+    ('slug', 111, 30),
+    ('slug', 109, 44),
+    ('slug', 150, 52),
+    ('slug', 157, 44),
+    ('wisp', 124, 54),
+    ('wisp', 111, 60),
+    ('wisp', 100, 54),
+    ('wisp', 108, 73),
+    ('wisp', 106, 55),
+    ('wisp', 116, 54),
+    ('cloud', 49, 106),
+    ('cloud', 27, 98),
+    ('cloud', 9, 118),
+    ('cloud', 52, 121),
+    ('cloud', 14, 102),
+]
+ENEMIES += REGIONAL_ENEMIES
+
 # arenas: interior rect in tiles (x0, y0, x1, y1 inclusive) + reward when cleared
 ARENAS = {
     'pool': {'rect': (29, 12, 37, 20), 'reward': ('container', 33, 16)},
@@ -562,8 +654,8 @@ for _t in TEMPLES.values():
     ITEMS += _t['items']
 
 
-SOLID_ALL = set('#CKWSLRIPQB')
-OPENABLE = set('KLRIlB')       # tiles that can be opened for good (saved in savegames)
+SOLID_ALL = set('#CKWSLRIPQBU')
+OPENABLE = set('KLRIlBU')       # tiles that can be opened for good (saved in savegames)
 FLOOR_CHARS = set('.,=dH')
 
 
@@ -801,7 +893,7 @@ def validate():
         if LEVEL[int(ty)][int(tx)] not in FLOOR_CHARS:
             problems.append(f"{name} reward sits on {LEVEL[int(ty)][int(tx)]!r}")
     # can Octo reach everything? (kelp can be cut, doors unlocked, shutters open)
-    walk = FLOOR_CHARS | set('KLXRIGlYEB')
+    walk = FLOOR_CHARS | set('KLXRIGlYEBU')
     links = {}
     for a, b in GEYSERS:
         links[a] = b
@@ -850,4 +942,7 @@ def validate():
         for k, x, y in pts:
             if (int(x) + x0, int(y) + y0) not in inside:
                 problems.append(f"{name}: {k} at {(x, y)} is not reachable floor")
+            elif x != int(x) and k in ('entry', 'boss_at', 'thief_at', 'clam_at') and \
+                    (int(x) + 1 + x0, int(y) + y0) not in inside:
+                problems.append(f"{name}: {k} at {(x, y)} overlaps a wall")
     return problems

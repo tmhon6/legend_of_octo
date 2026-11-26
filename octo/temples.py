@@ -22,17 +22,17 @@ ENTRY_ROOM = (2, GH - 1)   # bottom middle
 # id, banner title, overworld door tile, gate tile on the main path, enemy pool, boss, size, locks, tier
 SPECS = [
     dict(id='snarl', title='SNARLWOOD TEMPLE', door=(18, 1), gate='K', rooms=9, locks=2, tier=1, seed=11,
-         pool=['jelly', 'crab', 'puffer'], boss='tanglemaw', color=(90, 200, 110)),
+         pool=['jelly', 'crab', 'clam', 'puffer'], boss='tanglemaw', color=(90, 200, 110)),
     dict(id='bloom', title='BLOOM TEMPLE', door=(74, 12), gate='R', rooms=10, locks=2, tier=2, seed=22,
-         pool=['urchin', 'puffer', 'crab'], boss='bramble', color=(255, 130, 190)),
+         pool=['urchin', 'lionfish', 'puffer', 'crab'], boss='bramble', color=(255, 130, 190)),
     dict(id='tidepool', title='TIDEPOOL TEMPLE', door=(17, 26), gate=None, rooms=11, locks=3, tier=2, seed=33,
-         pool=['puffer', 'crab', 'jelly', 'urchin'], boss='bellows', color=(140, 220, 255)),
+         pool=['puffer', 'ray', 'crab', 'jelly', 'urchin'], boss='bellows', color=(140, 220, 255)),
     dict(id='gloam', title='GLOAM TEMPLE', door=(75, 24), gate='G', rooms=12, locks=2, tier=3, seed=44,
-         pool=['jelly', 'puffer', 'urchin', 'jelly'], boss='deepeye', color=(190, 110, 255), dark=True),
+         pool=['jelly', 'angler', 'puffer', 'urchin', 'angler'], boss='deepeye', color=(190, 110, 255), dark=True),
     dict(id='rime', title='RIME TEMPLE', door=(139, 2), gate='I', rooms=13, locks=3, tier=4, seed=55,
-         pool=['icecrab', 'icecrab', 'urchin', 'jelly', 'puffer'], boss='hoarclaw', color=(200, 235, 255)),
+         pool=['icecrab', 'squid', 'icecrab', 'urchin', 'squid'], boss='hoarclaw', color=(200, 235, 255)),
     dict(id='cinder', title='CINDER TEMPLE', door=(118, 50), gate='l', rooms=14, locks=3, tier=5, seed=66,
-         pool=['lavacrab', 'lavacrab', 'puffer', 'urchin', 'crab'], boss='slagjaw', color=(255, 120, 60)),
+         pool=['lavacrab', 'slug', 'lavacrab', 'puffer', 'slug'], boss='slagjaw', color=(255, 120, 60)),
 ]
 GATE_HINT = {
     'K': "THICK KELP BLOCKS A DOORWAY HERE. GRUMPY OCTO'S SLAP CAN CUT IT.",
