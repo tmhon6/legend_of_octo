@@ -1,8 +1,12 @@
 """On-screen touch controls for phones and tablets.
 
-Portrait: the game sits at the top of the screen and a controller panel fills the space below it.
-Landscape (or a touchscreen laptop): translucent buttons are drawn over the edges of the game.
+Landscape (the best way to play): the game sits in the middle and the controls fill the space on
+  either side of it -- D-pad on the left, action buttons on the right.
+Portrait: the game sits at the top and a controller panel fills the space below it.
+Squarish screens (tablets) or a touchscreen laptop: see-through buttons over the edges of the game.
+
 Buttons simply send the same key presses the keyboard would, so the game logic doesn't change.
+On a phone the first tap also asks the browser for full screen, locked to landscape where allowed.
 """
 import math
 import sys
@@ -14,12 +18,18 @@ from settings import HUD_H, SCREEN_H, SCREEN_W
 
 WEB = sys.platform == 'emscripten'
 PANEL_H = 176
+MIN_SIDE = 70                   # narrowest side panel worth using in landscape
 
-# name, label, key sent
+# name, label, key sent (None = handled specially)
 PILLS = [('pause', "II", pygame.K_p), ('map', "MAP", pygame.K_m), ('warp', "WARP", pygame.K_t),
          ('bomb', "BOMB", pygame.K_b), ('ink', "INK", pygame.K_c), ('save', "SAVE", pygame.K_LSHIFT),
-         ('mute', "MUTE", pygame.K_n)]
+         ('mute', "MUTE", pygame.K_n), ('full', "FULL", None)]
 ARROW = {'up': pygame.K_UP, 'down': pygame.K_DOWN, 'left': pygame.K_LEFT, 'right': pygame.K_RIGHT}
+
+
+def _window():
+    import platform
+    return platform.window
 
 
 def touch_device():
@@ -27,21 +37,33 @@ def touch_device():
     if not WEB:
         return False
     try:
-        import platform
-        w = platform.window
+        w = _window()
         return bool(w.matchMedia("(pointer: coarse)").matches) or int(w.navigator.maxTouchPoints) > 0
     except Exception:
         return False
 
 
-def panel_height():
-    """Make the controller panel tall enough that the whole page fills the phone screen."""
+def viewport():
     try:
-        import platform
-        w, h = int(platform.window.innerWidth), int(platform.window.innerHeight)
-        return max(150, min(380, int(SCREEN_W * h / w) - SCREEN_H))
+        w = _window()
+        return int(w.innerWidth), int(w.innerHeight)
     except Exception:
-        return PANEL_H
+        return None
+
+
+def go_fullscreen():
+    """Ask the browser for full screen + landscape (only works right after a tap)."""
+    try:
+        _window().octoFullscreen()
+    except Exception as e:
+        print("fullscreen:", e)
+
+
+def is_fullscreen():
+    try:
+        return bool(_window().document.fullscreenElement)
+    except Exception:
+        return False
 
 
 def fit_canvas():
@@ -49,8 +71,7 @@ def fit_canvas():
     if not WEB:
         return
     try:
-        import platform
-        win = platform.window
+        win = _window()
         surf = pygame.display.get_surface()
         if surf is None:
             return
@@ -66,24 +87,17 @@ def fit_canvas():
         print("fit_canvas:", e)
 
 
-def portrait():
-    if not WEB:
-        return False
-    try:
-        import platform
-        return int(platform.window.innerHeight) > int(platform.window.innerWidth)
-    except Exception:
-        return False
-
-
 class TouchControls:
     def __init__(self, game):
         self.game = game
-        self.mode = 'none'          # 'none' | 'panel' | 'overlay'
+        self.mode = 'none'          # 'none' | 'sides' | 'panel' | 'overlay'
         self.fingers = {}           # finger id -> what it is pressing
         self.dir = None             # direction held on the D-pad
         self.lit = {}               # button -> frames left to show it pressed
-        self.ph = PANEL_H
+        self.ph = PANEL_H           # height of the portrait panel
+        self.side = 0               # width of each landscape side panel
+        self.gx = 0                 # where the game picture sits on the display
+        self.vp = None
         self.layout()
 
     # ---- setup -------------------------------------------------------------
@@ -91,44 +105,85 @@ class TouchControls:
     def active(self):
         return self.mode != 'none'
 
+    def choose(self, vp):
+        """Pick a layout (and display size) for a viewport of vp = (width, height) CSS pixels."""
+        if vp is None:
+            return 'overlay', (SCREEN_W, SCREEN_H)
+        vw, vh = vp
+        if vh > vw:
+            ph = max(150, min(380, int(SCREEN_W * vh / vw) - SCREEN_H))
+            return 'panel', (SCREEN_W, SCREEN_H + ph)
+        total = min(int(SCREEN_H * vw / vh), SCREEN_W * 3)
+        if (total - SCREEN_W) // 2 >= MIN_SIDE:
+            return 'sides', (total, SCREEN_H)
+        return 'overlay', (SCREEN_W, SCREEN_H)
+
     def activate(self, mode=None):
-        mode = mode or ('panel' if portrait() else 'overlay')
-        if mode == self.mode:
-            return
-        self.mode = mode
         g = self.game
-        self.ph = panel_height() if WEB else PANEL_H
-        size = (SCREEN_W, SCREEN_H + self.ph) if mode == 'panel' else (SCREEN_W, SCREEN_H)
-        if mode == 'panel' or WEB:
+        self.vp = viewport() if WEB else None
+        auto_mode, size = self.choose(self.vp)
+        mode = mode or auto_mode
+        if mode == 'panel' and size[1] == SCREEN_H:
+            size = (SCREEN_W, SCREEN_H + PANEL_H)
+        if mode == 'sides' and size[0] == SCREEN_W:
+            size = (SCREEN_W + 2 * 96, SCREEN_H)
+        if mode == 'overlay':
+            size = (SCREEN_W, SCREEN_H)
+        self.mode = mode
+        self.ph = size[1] - SCREEN_H
+        self.side = (size[0] - SCREEN_W) // 2
+        self.gx = self.side if mode == 'sides' else 0
+        if mode in ('panel', 'sides') or WEB:
             g.display = pygame.display.set_mode(size)
         else:
             g.display = pygame.display.get_surface()
         if g.screen is g.display or g.screen.get_size() != (SCREEN_W, SCREEN_H):
             g.screen = pygame.Surface((SCREEN_W, SCREEN_H))
+        self.fingers.clear()
+        self.dir = None
         self.layout()
         fit_canvas()
 
     def check_orientation(self):
-        """Switch between panel and overlay when the phone is turned."""
-        if self.active and WEB and self.game.t % 30 == 0:
-            want = 'panel' if portrait() else 'overlay'
-            if want != self.mode:
-                self.activate(want)
-            else:
-                fit_canvas()            # the page may have resized (address bar, rotation)
+        """Re-lay-out when the phone is turned or goes full screen."""
+        if self.active and WEB and self.game.t % 20 == 0:
+            vp = viewport()
+            if vp != self.vp:
+                self.activate()
 
     def layout(self):
-        if self.mode == 'panel':
+        names = [n for n, _, _ in PILLS]
+        if self.mode == 'sides':
+            s, W = self.side, SCREEN_W + 2 * self.side
+            # left: pause / map / warp / full on top, D-pad below.  right: the rest, then buttons
+            left, right = ['pause', 'map', 'warp', 'full'], ['bomb', 'ink', 'save', 'mute']
+            pw, ph = min(s - 12, 74), 15
+            rects = {}
+            for col, x0 in ((left, (s - pw) // 2), (right, W - s + (s - pw) // 2)):
+                for i, n in enumerate(col):
+                    rects[n] = pygame.Rect(x0, 6 + i * 18, pw, ph)
+            self.pill_rects = [rects[n] for n in names]
+            r = min(46, s // 2 - 6)
+            self.dpad = (s // 2, 6 + 4 * 18 + (SCREEN_H - 78) // 2 + 4, r)
+            rx = W - s // 2
+            k = min(1.0, s / 110)
+            cy = 6 + 4 * 18 + (SCREEN_H - 78) // 2
+            self.buttons = {'atk': (int(rx + 18 * k), int(cy - 16 * k), int(24 * k), pygame.K_z, "ATTACK"),
+                            'form': (int(rx - 24 * k), int(cy + 22 * k), int(17 * k), pygame.K_x, "FORM"),
+                            'jet': (int(rx + 22 * k), int(cy + 44 * k), int(15 * k), pygame.K_v, "JET")}
+        elif self.mode == 'panel':
             y0 = SCREEN_H
-            self.pill_rects = [pygame.Rect(2 + i * 36, y0 + 10, 34, 16) for i in range(len(PILLS))]
+            n = len(PILLS)
+            w = (SCREEN_W - 4) // n
+            self.pill_rects = [pygame.Rect(2 + i * w, y0 + 10, w - 2, 16) for i in range(n)]
             cy = y0 + 30 + (self.ph - 30) // 2          # middle of the space under the buttons row
             self.dpad = (64, cy, 46)
             self.buttons = {'atk': (206, cy - 18, 24, pygame.K_z, "ATTACK"),
                             'form': (158, cy + 22, 18, pygame.K_x, "FORM"),
                             'jet': (222, cy + 38, 16, pygame.K_v, "JET")}
         else:
-            self.pill_rects = [pygame.Rect(SCREEN_W - 4 - (len(PILLS) - i) * 31, HUD_H + 3, 29, 12)
-                               for i in range(len(PILLS))]
+            n = len(PILLS)
+            self.pill_rects = [pygame.Rect(SCREEN_W - 4 - (n - i) * 28, HUD_H + 3, 26, 12) for i in range(n)]
             self.dpad = (40, SCREEN_H - 40, 32)
             self.buttons = {'atk': (226, SCREEN_H - 40, 18, pygame.K_z, "ATK"),
                             'form': (194, SCREEN_H - 20, 13, pygame.K_x, "FORM"),
@@ -166,32 +221,35 @@ class TouchControls:
         g = self.game
         x, y = pos
         st = g.state
-        # D-pad
-        dx, dy, r = self.dpad
-        if math.hypot(x - dx, y - dy) <= r + 10 and st != 'title':
-            self.fingers[fid] = 'dpad'
-            self.move(fid, pos)
-            return
-        for name, (bx, by, br, key, _) in self.buttons.items():
-            if math.hypot(x - bx, y - by) <= br + 6 and st != 'title':
-                self.fingers[fid] = name
-                self.lit[name] = 8
-                self.press(key)
+        if st != 'title':
+            dx, dy, r = self.dpad
+            if math.hypot(x - dx, y - dy) <= r + 10:
+                self.fingers[fid] = 'dpad'
+                self.move(fid, pos)
                 return
-        for (name, _, key), rect in zip(PILLS, self.pill_rects):
-            if rect.inflate(2, 6).collidepoint(x, y) and st not in ('title',):
-                self.fingers[fid] = name
-                self.lit[name] = 8
-                self.press(key)
-                return
+            for name, (bx, by, br, key, _) in self.buttons.items():
+                if math.hypot(x - bx, y - by) <= br + 6:
+                    self.fingers[fid] = name
+                    self.lit[name] = 8
+                    self.press(key)
+                    return
+            for (name, _, key), rect in zip(PILLS, self.pill_rects):
+                if rect.inflate(2, 4).collidepoint(x, y):
+                    self.fingers[fid] = name
+                    self.lit[name] = 8
+                    if name == 'full':
+                        go_fullscreen()
+                    else:
+                        self.press(key)
+                    return
         # a tap anywhere else
         self.fingers[fid] = 'tap'
         if st == 'title':
             for i, rect in enumerate(getattr(g.title_scene, 'menu_rects', [])):
-                if rect.collidepoint(x, y):
+                if rect.collidepoint(x - self.gx, y):
                     g.title_sel = i
             g.on_key(pygame.K_RETURN)
-        elif st in ('dialog',):
+        elif st == 'dialog':
             g.on_key(pygame.K_z)
         elif st == 'map':
             g.on_key(pygame.K_m)
@@ -199,8 +257,6 @@ class TouchControls:
             g.on_key(pygame.K_p)
         elif st in ('gameover', 'win'):
             g.on_key(pygame.K_RETURN)
-        elif st == 'warp':
-            g.on_key(pygame.K_z)
 
     def move(self, fid, pos):
         if self.fingers.get(fid) != 'dpad':
@@ -226,17 +282,16 @@ class TouchControls:
     def present(self, disp):
         """Put the game picture and the controls on the real display."""
         g = self.game
-        disp.blit(g.screen, (0, 0))
         for k in list(self.lit):
             self.lit[k] -= 1
             if self.lit[k] <= 0:
                 del self.lit[k]
-        if g.state == 'title':
-            if self.mode == 'panel':
-                self._panel_bg(disp)
-            return
-        if self.mode == 'panel':
+        if self.mode in ('panel', 'sides'):
             self._panel_bg(disp)
+        disp.blit(g.screen, (self.gx, 0))
+        if g.state == 'title':
+            return
+        if self.mode in ('panel', 'sides'):
             self._draw_controls(disp, alpha=255)
         else:
             layer = pygame.Surface(disp.get_size(), pygame.SRCALPHA)
@@ -244,15 +299,28 @@ class TouchControls:
             disp.blit(layer, (0, 0))
 
     def _panel_bg(self, disp):
+        w, h = disp.get_size()
+        if self.mode == 'sides':
+            for i in range(h):
+                c = 30 - i // 14
+                pygame.draw.line(disp, (c, c + 6, c + 24), (0, i), (w, i))
+            pygame.draw.line(disp, (90, 110, 170), (self.side - 1, 0), (self.side - 1, h))
+            pygame.draw.line(disp, (90, 110, 170), (w - self.side, 0), (w - self.side, h))
+            if self.game.state == 'title':
+                for x0 in (0, w - self.side):
+                    gfx.text(disp, "TAP", x0 + self.side // 2, h // 2 - 10, (200, 215, 255), center=True)
+                    gfx.text(disp, "TO PLAY", x0 + self.side // 2, h // 2 + 2, (200, 215, 255), center=True)
+            return
         y0 = SCREEN_H
         for i in range(self.ph):
             c = 34 - i // 12
-            pygame.draw.line(disp, (c, c + 6, c + 24), (0, y0 + i), (SCREEN_W, y0 + i))
+            pygame.draw.line(disp, (max(0, c), max(0, c + 6), max(0, c + 24)), (0, y0 + i), (SCREEN_W, y0 + i))
         pygame.draw.line(disp, (90, 110, 170), (0, y0), (SCREEN_W, y0))
         if self.game.state == 'title':
-            gfx.text(disp, "TAP THE SCREEN TO PLAY", SCREEN_W // 2, y0 + self.ph // 2 - 10, (200, 215, 255), center=True)
-            gfx.text(disp, "TURN SIDEWAYS FOR A BIGGER VIEW", SCREEN_W // 2, y0 + self.ph // 2 + 10, (120, 135, 180),
+            gfx.text(disp, "TAP THE SCREEN TO PLAY", SCREEN_W // 2, y0 + self.ph // 2 - 10, (200, 215, 255),
                      center=True)
+            gfx.text(disp, "TURN SIDEWAYS FOR A BIGGER VIEW", SCREEN_W // 2, y0 + self.ph // 2 + 10,
+                     (120, 135, 180), center=True)
 
     def _draw_controls(self, s, alpha):
         def col(c, lit=False):
@@ -260,6 +328,8 @@ class TouchControls:
             return c + (alpha,)
         # pills
         for (name, label, _), rect in zip(PILLS, self.pill_rects):
+            if name == 'full' and (not WEB or is_fullscreen()):
+                continue
             lit = name in self.lit
             pygame.draw.rect(s, col((50, 60, 100), lit), rect, border_radius=6)
             pygame.draw.rect(s, col((140, 160, 220)), rect, 1, border_radius=6)
@@ -290,4 +360,6 @@ class TouchControls:
             pygame.draw.circle(s, col((0, 0, 0)), (bx + 1, by + 2), br)
             pygame.draw.circle(s, col(colours[name], lit), (bx, by), br)
             pygame.draw.circle(s, col((255, 255, 255)), (bx, by), br, 1)
+            if gfx.text_width(label) > br * 2 - 2:
+                label = label[:3]
             gfx.text(s, label, bx, by - 3, (255, 255, 255), center=True)

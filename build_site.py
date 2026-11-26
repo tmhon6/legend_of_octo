@@ -78,6 +78,10 @@ def write_launcher(versions, dev):
         [v['tag'] for v in versions]))
     with open(os.path.join(SITE, 'index.html'), 'w') as f:
         f.write(page)
+    # the launcher can be added to a phone's home screen too, and then opens full screen
+    sys.path.insert(0, ROOT)
+    import build_web
+    build_web.write_app_files(SITE, './', os.path.join(ROOT, 'octo'))
 
 
 TEMPLATE = '''<!doctype html>
@@ -86,6 +90,12 @@ TEMPLATE = '''<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Legend of Octo</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Octo">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="octo-icon.png">
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -122,7 +132,9 @@ TEMPLATE = '''<!doctype html>
 %ROWS%
   <footer>
     Each version keeps its own saved game. Works with a keyboard on a computer, or with touch
-    controls on a phone. The first load takes about 15 seconds.<br>
+    controls on a phone: turn it sideways, and your first tap goes full screen.
+    On an iPhone, use Share &rarr; Add to Home Screen to play full screen.
+    The first load takes about 15 seconds.<br>
     <a href="https://github.com/tmhon6/legend_of_octo">Source code on GitHub</a>
   </footer>
 </main>

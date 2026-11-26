@@ -34,6 +34,65 @@ def git_version(src):
         return 'dev'
 
 
+# lets a phone go full screen (and landscape) on the first tap, and adds "Add to Home Screen" support
+MOBILE_HEAD = """
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Octo">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="octo-icon.png">
+"""
+MOBILE_SCRIPT = """
+<script>
+window.octoFullscreen = function () {
+  var el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) return;
+  var req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) return;                       // e.g. iPhone Safari: use Share > Add to Home Screen instead
+  var lock = function () {
+    try { screen.orientation.lock('landscape').catch(function () {}); } catch (e) {}
+  };
+  try {
+    var p = req.call(el, {navigationUI: 'hide'});
+    if (p && p.then) { p.then(lock).catch(function () {}); } else { lock(); }
+  } catch (e) {}
+};
+(function () {
+  if (!(window.matchMedia && matchMedia('(pointer: coarse)').matches)) return;
+  var once = function () {
+    window.octoFullscreen();
+    document.removeEventListener('touchend', once, true);
+  };
+  document.addEventListener('touchend', once, true);
+})();
+</script>
+"""
+
+
+def write_app_files(out, start_url, src_octo):
+    """Home-screen icon + web app manifest (full screen, landscape)."""
+    import json
+    os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+    sys.path.insert(0, src_octo)
+    import pygame
+    import gfx
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+    gfx.load()
+    icon = pygame.Surface((192, 192))
+    icon.fill((14, 52, 112))
+    octo = pygame.transform.scale(gfx.OCTO['blue']['down'][0], (144, 144))
+    icon.blit(octo, (24, 28))
+    pygame.image.save(icon, os.path.join(out, 'octo-icon.png'))
+    manifest = {'name': 'Legend of Octo', 'short_name': 'Octo', 'start_url': start_url, 'scope': './',
+                'display': 'fullscreen', 'orientation': 'landscape', 'background_color': '#06142e',
+                'theme_color': '#06142e',
+                'icons': [{'src': 'octo-icon.png', 'sizes': '192x192', 'type': 'image/png'}]}
+    with open(os.path.join(out, 'manifest.webmanifest'), 'w') as f:
+        json.dump(manifest, f, indent=1)
+
+
 def main():
     serve = '--serve' in sys.argv
     src = arg('--src', ROOT)
@@ -84,7 +143,10 @@ def main():
     html = html.replace("Loading, please wait ...", "Loading Legend of Octo... (about 15 seconds)", 1)
     html = html.replace('msg  = "Ready to start ! Please click/touch page"', 'msg  = "Ready! Click here to play"', 1)
     html = html.replace("Authors : pgw", "Authors : Minu Hong", 1)
+    html = html.replace("</head>", MOBILE_HEAD + "</head>", 1)
+    html = html.replace("</body>", MOBILE_SCRIPT + "</body>", 1)
     open(index, 'w').write(html)
+    write_app_files(out, './', os.path.join(src, 'octo'))
     print("built:", out)
     for f in sorted(os.listdir(out)):
         print(f"  {f}  {os.path.getsize(os.path.join(out, f)) // 1024} KB")

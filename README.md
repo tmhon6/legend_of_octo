@@ -5,8 +5,9 @@ By Minu Hong.
 ## ▶ [Play it in your browser](https://tmhon6.github.io/legend_of_octo/)
 
 No download needed. Wait about 15 seconds for it to load, click or tap the page, then press Enter or tap again.
-Works with a keyboard on a computer, or with on-screen touch controls on phones and tablets
-(a controller panel under the game when the phone is upright, see-through buttons when it's sideways).
+Works with a keyboard on a computer, or with on-screen touch controls on phones and tablets.
+On a phone, play sideways: the controls sit on both sides of the game, and your first tap goes full
+screen. On an iPhone, use Share → Add to Home Screen to play full screen.
 
 A top-down undersea adventure starring Octo, the reversible octopus. It's a fan tribute to the
 1st-gen 2D action-adventure style, built in pygame.
