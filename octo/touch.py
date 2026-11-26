@@ -254,7 +254,7 @@ class TouchControls:
                     return
             # anywhere else on the left half: a joystick appears under your thumb -- drag to swim
             w = pygame.display.get_surface().get_width() if pygame.display.get_surface() else SCREEN_W
-            if st in ('play', 'warp', 'fuse', 'altar', 'forms') and x < w / 2:
+            if st in ('play', 'warp', 'fuse', 'altar', 'forms', 'catalogue') and x < w / 2:
                 self.fingers[fid] = 'dpad'
                 self.stick = (x, y)
                 self.knob = (x, y)
@@ -271,7 +271,7 @@ class TouchControls:
             g.on_key(pygame.K_z)
         elif st == 'map':
             g.on_key(pygame.K_m)
-        elif st in ('fuse', 'altar', 'forms'):
+        elif st in ('fuse', 'altar', 'forms', 'catalogue'):
             g.on_key(pygame.K_ESCAPE)
         elif st == 'pause':
             g.on_key(pygame.K_p)

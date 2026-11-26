@@ -14,7 +14,7 @@ import sound
 import world
 from title import TitleScene
 from touch import TouchControls, touch_device
-from entities import (Altar, DIRS, ENEMY_TYPES, FusionMachine, MiniBoss, Patroller, Thief, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
+from entities import (CATALOGUE, max_bombs, Altar, DIRS, ENEMY_TYPES, FusionMachine, MiniBoss, Patroller, Thief, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
                       EnemyShot, Hermie, Jelly, Particle, Pickup, Player, Puff, Shelly, Urchin)
 from settings import SAVE_SLOT, FPS, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
 from world import ARENAS, Level
@@ -346,7 +346,7 @@ class Game:
     def drop_loot(self, center, chance=1.0):
         if self.trial:
             chance *= 0.5           # trials are meant to be hard
-        chance *= self.player.stat('luck', 1.0)
+        chance *= self.player.stat('luck', 1.0) * (1.5 if 'charm' in self.player.items else 1.0)
         r = random.random() / chance
         kind = None
         if r < 0.30:
@@ -417,7 +417,7 @@ class Game:
             'version': 1,
             'pos': pos,
             'player': {k: getattr(p, k) for k in ('hp', 'max_hp', 'pearls', 'keys', 'bombs', 'mood', 'ink_mode',
-                                                       'sphere', 'spirit')},
+                                                       'sphere', 'spirit', 'potions')},
             'items': sorted(p.items), 'forms': p.forms,
             'opened': sorted(self.opened), 'cleared': sorted(self.cleared),
             'collected': [list(i) for i in self.collected], 'bought': sorted(self.bought),
@@ -490,6 +490,53 @@ class Game:
                 px, py = t['portal']
                 spots.append((t['title'].replace('TRIAL OF ', '') + ' PORTAL', (px, py + 1)))
         return spots
+
+    # ---- Hermie's catalogue -------------------------------------------------
+    def open_catalogue(self):
+        self.cat_i = 0
+        self.state = 'catalogue'
+        sound.play('pause')
+
+    def catalogue_key(self, k):
+        n = len(CATALOGUE)
+        if k in (pygame.K_UP, pygame.K_w):
+            self.cat_i = (self.cat_i - 1) % n
+            sound.play('text')
+        elif k in (pygame.K_DOWN, pygame.K_s):
+            self.cat_i = (self.cat_i + 1) % n
+            sound.play('text')
+        elif k in ACTION_KEYS or k in CONFIRM_KEYS:
+            self.state = 'play'
+            self.buy(CATALOGUE[self.cat_i])
+            if self.state == 'play':
+                self.state = 'catalogue'
+        elif k in FUSE_KEYS_CLOSE:
+            self.state = 'play'
+            sound.play('pause')
+
+    def draw_catalogue(self, scr):
+        p = self.player
+        box = pygame.Rect(8, HUD_H + 3, SCREEN_W - 16, PLAY_H - 6)
+        self.draw_box(scr, box)
+        gfx.text(scr, "HERMIE'S CATALOGUE", SCREEN_W // 2, box.y + 5, (255, 220, 120), center=True)
+        gfx.text(scr, f"YOU HAVE {p.pearls} PEARLS", SCREEN_W // 2, box.y + 15, (170, 180, 220), center=True)
+        show = 9
+        top = max(0, min(self.cat_i - show // 2, len(CATALOGUE) - show))
+        for j, ware in enumerate(CATALOGUE[top:top + show]):
+            i = top + j
+            wid, name, price, desc, once = ware
+            y = box.y + 28 + j * 11
+            owned = once and wid in self.bought
+            if i == self.cat_i:
+                gfx.text(scr, ">", box.x + 5, y, (255, 220, 120))
+            col = (120, 200, 140) if owned else (255, 255, 255) if p.pearls >= price else (150, 150, 175)
+            gfx.text(scr, name, box.x + 14, y, col)
+            tag = "OWNED" if owned else str(price)
+            gfx.text(scr, tag, box.right - 6 - gfx.text_width(tag), y, col)
+        desc = CATALOGUE[self.cat_i][3]
+        for j, line in enumerate(gfx.wrap(desc, 38)[:2]):
+            gfx.text(scr, line, box.x + 6, box.bottom - 33 + j * 10, (200, 210, 240))
+        gfx.text(scr, "Z: BUY   ESC: LEAVE", SCREEN_W // 2, box.bottom - 10, (140, 150, 190), center=True)
 
     # ---- the spirit altar (temple) -------------------------------------------
     ALTAR_COST = 3
@@ -1127,9 +1174,17 @@ class Game:
             sound.play('nope')
             self.say(["HERMIE: YOU LOOK WELL FED ALREADY! SAVE IT FOR WHEN YOU'RE HURT."])
             return
-        if wid == 'bombs' and p.bombs >= MAX_BOMBS:
+        if wid == 'bombs' and p.bombs >= max_bombs(p):
             sound.play('nope')
-            self.say([f"HERMIE: YOUR BOMB BAG IS FULL ({MAX_BOMBS} BOMBS)."])
+            self.say([f"HERMIE: YOUR BOMB BAG IS FULL ({max_bombs(p)} BOMBS)."])
+            return
+        if wid == 'potion' and p.potions >= 2:
+            sound.play('nope')
+            self.say(["HERMIE: TWO POTIONS IS ALL YOU CAN CARRY!"])
+            return
+        if once and wid in self.bought:
+            sound.play('nope')
+            self.say(["HERMIE: YOU ALREADY HAVE THAT ONE!"])
             return
         p.pearls -= price
         sound.play('buy')
@@ -1141,11 +1196,17 @@ class Game:
             p.hp = p.max_hp
             sound.play('munch')
         elif wid == 'bombs':
-            p.bombs = min(MAX_BOMBS, p.bombs + 5)
+            p.bombs = min(max_bombs(p), p.bombs + 5)
             if 'bombbag' not in p.items:
                 p.items.add('bombbag')
                 self.say(["YOU GOT BUBBLE BOMBS!", "PRESS B TO DROP ONE. STAND BACK - IT BLASTS ENEMIES "
                           "AND CRACKED ROCK."])
+        elif wid == 'potion':
+            p.potions += 1
+            self.say(["YOU GOT A SEA POTION! IF YOU FALL, IT SAVES YOU."])
+        elif wid == 'spiritpearl':
+            p.spirit += 1
+            self.say([f"YOU BOUGHT A SPIRIT PEARL! YOU HAVE {p.spirit}. TAKE THREE TO THE TEMPLE ALTAR."])
         elif wid == 'heart':
             p.max_hp += 2
             p.hp = p.max_hp
@@ -1304,6 +1365,8 @@ class Game:
             self.fuse_key(k)
         elif st == 'forms':
             self.forms_key(k)
+        elif st == 'catalogue':
+            self.catalogue_key(k)
         elif st == 'map':
             if k in MAP_KEYS or k in PAUSE_KEYS:
                 self.state = 'play'
@@ -1358,7 +1421,10 @@ class Game:
                 if isinstance(npc, Altar):
                     self.open_altar()
                     return True
-                self.say(HERMIE_TALK if isinstance(npc, Hermie) else SHELLY_TALK[1:])
+                if isinstance(npc, Hermie):
+                    self.open_catalogue()
+                    return True
+                self.say(SHELLY_TALK[1:])
                 return True
         return False
 
@@ -1572,7 +1638,7 @@ class Game:
             s.update(self)
         for n in self.npcs:
             n.update(self)
-        mag = p.stat('magnet', 0)
+        mag = max(p.stat('magnet', 0), 56 if 'pmagnet' in p.items else 0)
         pcx, pcy = p.rect.center
         for it in self.pickups:
             it.update(self)
@@ -1609,6 +1675,13 @@ class Game:
         if p.hp <= 0 and self.trial:
             self.finish_trial(False)
             return
+        if p.hp <= 0 and p.potions > 0:          # a sea potion saves Octo
+            p.potions -= 1
+            p.hp = max(2, p.max_hp // 2)
+            p.invuln = 120
+            self.burst(p.rect.center, (120, 230, 255), 20)
+            sound.play('heart')
+            self.toast = ("THE SEA POTION SAVED YOU!", 150)
         if p.hp <= 0:
             self.state = 'dying'
             self.die_t = 0
@@ -1721,7 +1794,7 @@ class Game:
             veil.fill((255, 255, 255))
             veil.set_alpha(int(255 * self.flash_t / 20))
             scr.blit(veil, (0, HUD_H))
-        if st in ('warp', 'map', 'fuse', 'altar', 'forms'):
+        if st in ('warp', 'map', 'fuse', 'altar', 'forms', 'catalogue'):
             veil = pygame.Surface((PLAY_W, PLAY_H))
             veil.fill((0, 0, 16))
             veil.set_alpha(150)
@@ -1737,6 +1810,8 @@ class Game:
             self.draw_altar(scr)
         elif st == 'forms':
             self.draw_forms(scr)
+        elif st == 'catalogue':
+            self.draw_catalogue(scr)
         if st == 'dialog':
             self.draw_dialog(scr)
         elif st == 'pause':
@@ -1961,7 +2036,7 @@ class Game:
     def draw_darkness(self, ps, ox, oy):
         """The Sunken City is pitch dark: Octo only sees a little circle - unless Glowy lights it up."""
         p = self.player
-        r = p.stat('light', 44)
+        r = p.stat('light', 44) + (40 if 'goggles' in p.items else 0)
         if self.light_mask[0] != r:
             m = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
             m.fill((0, 0, 12, 230))
@@ -2038,9 +2113,10 @@ class Game:
             return x0 <= tx < x0 + w and y0 <= ty < y0 + h and self.seen[int(ty)][int(tx)]
         blink = (self.t // 15) % 2
         # trial portals
+        compass = 'compass' in self.player.items          # the Trial Compass shows every portal
         for name, t in world.TRIALS.items():
             px, py = t['portal']
-            if inside(px, py):
+            if inside(px, py) or (compass and x0 <= px < x0 + w and y0 <= py < y0 + h):
                 c = (120, 120, 130) if name in self.trials_done else self.portal_color(t)
                 sx, sy = spot(px, py)
                 pygame.draw.circle(scr, c, (sx, sy), 2)

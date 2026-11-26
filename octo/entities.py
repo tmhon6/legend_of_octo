@@ -94,6 +94,7 @@ class Player(Entity):
         self.fog_cd = 0
         self.regen_t = 0
         self.spirit = 0          # spirit pearls from trials, traded at the temple altar
+        self.potions = 0         # sea potions: save Octo once each when he'd fall
         self.analog = None       # (x, y) from the touch joystick, length up to 1
         self.roll_t = 0
         self.roll_dir = (0, 0)
@@ -398,7 +399,7 @@ class Player(Entity):
         self.facing = d
         self.dash_dir = DIRS[d]
         self.dash_t = JET_FRAMES + (4 if 'fins' in self.items else 0)
-        self.dash_cd = int(JET_COOLDOWN * self.stat('jet', 1.0))
+        self.dash_cd = int(JET_COOLDOWN * self.stat('jet', 1.0) * (0.6 if 'jetink' in self.items else 1.0))
         cx, cy = self.rect.center
         game.shots.append(InkCloud(cx - self.dash_dir[0] * 4, cy - self.dash_dir[1] * 4))
         sound.play('jet')
@@ -465,7 +466,7 @@ class Player(Entity):
     def hurt(self, game, dmg, src):
         if self.invuln or self.dash_t or self.bubble_t or self.tumble or self.roll_t or dmg <= 0:
             return
-        dmg = max(1, dmg - self.stat('armor', 0))
+        dmg = max(1, dmg - self.stat('armor', 0) - (1 if 'armor' in self.items else 0))
         if self.in_sky and self.sphere > 0:
             # the water sphere takes the hit instead of Octo
             self.sphere -= 1
@@ -1557,6 +1558,22 @@ SHOP_WARES = [
     ('heart', "HEART SHELL", 50, "ONE MORE HEART OF LIFE.", True),
 ]
 MAX_BOMBS = 10
+# Hermie's catalogue (talk to him): everything on the counter plus his back room
+CATALOGUE = SHOP_WARES + [
+    ('potion', "SEA POTION", 20, "IF YOU FALL, IT SAVES YOU ONCE AND REFILLS HALF YOUR HEARTS. CARRY UP TO 2.", False),
+    ('bigbag', "BIG BOMB BAG", 30, "CARRY 20 BUBBLE BOMBS INSTEAD OF 10.", True),
+    ('compass', "TRIAL COMPASS", 25, "EVERY TRIAL PORTAL SHOWS ON YOUR MAP, EVEN WHERE YOU HAVEN'T BEEN.", True),
+    ('charm', "LUCKY CHARM", 40, "ENEMIES DROP TREASURE 50% MORE OFTEN.", True),
+    ('goggles', "DEEP GOGGLES", 35, "SEE MUCH FARTHER IN DARK PLACES.", True),
+    ('jetink', "JET INK", 30, "YOUR INK JET RECHARGES FASTER.", True),
+    ('armor', "CORAL ARMOR", 60, "BIG HITS HURT HALF A HEART LESS - IN EVERY FORM.", True),
+    ('pmagnet', "PEARL MAGNET", 30, "PEARLS AND HEARTS NEARBY FLY STRAIGHT TO YOU.", True),
+    ('spiritpearl', "SPIRIT PEARL", 120, "A SPIRIT PEARL FOR THE TEMPLE ALTAR. PRICEY, BUT NO TRIAL NEEDED.", False),
+]
+
+
+def max_bombs(p):
+    return 20 if 'bigbag' in p.items else MAX_BOMBS
 
 
 SHELLY_TALK = [
