@@ -21,6 +21,7 @@ from collections import deque
 import pygame
 
 import gfx
+import temples
 
 from settings import TILE
 
@@ -178,7 +179,17 @@ LEVEL = [
     "W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W########",
     "WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW########",
 ]
+# the Murk Palace door is sealed until all seven Tide Bells have rung
+LEVEL[77] = LEVEL[77][:148] + 'BB' + LEVEL[77][150:]
+TEMPLE_Y = len(LEVEL)        # rows from here down are the six deep temples (see temples.py)
+_rows, TEMPLES = temples.build_all(len(LEVEL[0]), TEMPLE_Y)
+LEVEL = LEVEL + _rows
+for _t in TEMPLES.values():          # each temple's door: a dark cave mouth on the sea floor
+    _x, _y = _t['door']
+    LEVEL[_y] = LEVEL[_y][:_x] + 'E' + LEVEL[_y][_x + 1:]
 LEVEL_W, LEVEL_H = len(LEVEL[0]), len(LEVEL)
+BELLS_NEEDED = 1 + len(TEMPLES)      # the Sunken Shrine's bell + one per temple
+SEAL = [(148, 77), (149, 77)]
 # each region has its own look (tiles, tint, particles) and some their own music
 THEMES = {
     'KELP WOODS': 'kelp', 'CORAL GARDENS': 'garden', 'THE LAGOON': 'lagoon', 'THE ABYSS': 'abyss',
@@ -186,7 +197,7 @@ THEMES = {
     'MURK PALACE': 'city', 'SKY ISLANDS': 'sky',
 }
 REGION_MUSIC = {'SKY ISLANDS': 'sky', 'FROZEN SHELF': 'frost', 'EMBER VENTS': 'vents', 'SUNKEN CITY': 'city', 'MURK PALACE': 'city'}
-DARK_REGIONS = {'SUNKEN CITY', 'MURK PALACE'}
+DARK_REGIONS = {'SUNKEN CITY', 'MURK PALACE'} | {t['title'] for t in TEMPLES.values() if t.get('dark')}
 SKY_Y = 92               # rows from here down are the Sky Islands
 SKY_RECT = (0, 92, 59, 127)
 GEYSERS = [((53, 49), (8, 102)), ((10, 28), (14, 119)), ((140, 18), (52, 100))]   # (sea tile, sky tile) pairs
@@ -245,6 +256,7 @@ TRIALS = {
 SHRINE_RECT = (28, 0, 67, 21)     # tiles (x0, y0, x1, y1) of the Sunken Shrine
 
 REGIONS = [   # (banner name, tile rect x0, y0, x1, y1); anywhere else is the Coral Reef
+    *[(t['title'], t['rect']) for t in TEMPLES.values()],
     ('OCTO TEMPLE', (43, 46, 50, 53)),
     ('PEARL SHOP', (27, 47, 33, 50)),
     ('MURK PALACE', (126, 55, 157, 77)),
@@ -540,13 +552,18 @@ ITEMS = [
 ARENAS = {
     'pool': {'rect': (29, 12, 37, 20), 'reward': ('container', 33, 16)},
     'vault': {'rect': (58, 12, 66, 20), 'reward': ('key', 64, 16)},
-    'throne': {'rect': (39, 1, 56, 9), 'reward': ('halfpearl', 47.5, 5), 'boss': True},
+    'throne': {'rect': (39, 1, 56, 9), 'reward': ('bell', 47.5, 5), 'boss': True},
     'keyroom': {'rect': (127, 66, 139, 76), 'reward': ('key', 133, 71)},
-    'murk': {'rect': (127, 56, 156, 64), 'reward': ('halfpearl', 141.5, 60), 'boss': True},
+    'murk': {'rect': (127, 56, 156, 64), 'reward': ('golden', 141.5, 60), 'boss': True},
 }
+for _t in TEMPLES.values():
+    ARENAS.update(_t['arenas'])
+    ENEMIES += _t['enemies']
+    ITEMS += _t['items']
 
-SOLID_ALL = set('#CKWSLRIPQ')
-OPENABLE = set('KLRIl')       # tiles that can be opened for good (saved in savegames)
+
+SOLID_ALL = set('#CKWSLRIPQB')
+OPENABLE = set('KLRIlB')       # tiles that can be opened for good (saved in savegames)
 FLOOR_CHARS = set('.,=dH')
 
 
@@ -555,7 +572,9 @@ def in_rect(tx, ty, r):
 
 
 def area_at(tx, ty):
-    if ty >= SKY_Y and tx <= SKY_RECT[2]:
+    if ty >= TEMPLE_Y:
+        return 'dungeon'
+    if SKY_Y <= ty <= SKY_RECT[3] and tx <= SKY_RECT[2]:
         return 'sky'
     if ty >= WORLD_H:
         return 'trial'
@@ -569,7 +588,26 @@ def trial_at(tx, ty):
     return None
 
 
+def temple_at(tx, ty):
+    if ty < TEMPLE_Y:
+        return None
+    for tid, t in TEMPLES.items():
+        if in_rect(tx, ty, t['rect']):
+            return tid
+    return None
+
+
+def temple_door(tx, ty):
+    for tid, t in TEMPLES.items():
+        if t['door'] == (tx, ty):
+            return tid
+    return None
+
+
 def region_at(tx, ty):
+    if ty >= TEMPLE_Y:
+        tid = temple_at(tx, ty)
+        return TEMPLES[tid]['title'] if tid else 'CORAL REEF'
     for name, r in REGIONS:
         if in_rect(tx, ty, r):
             return name
@@ -619,6 +657,7 @@ class Level:
         self.ghost_ok = False          # True while Octo is in Spooky form
         self.themes = [[theme_at(x, y) for x in range(self.w)] for y in range(self.h)]
         self.surface = None
+        self.chunks = {}
         self.dirty_tiles = set()
 
     # -- tiles -------------------------------------------------------------
@@ -683,21 +722,56 @@ class Level:
             return 3                     # the sanctuary on top
         return self.PYRAMID_HEIGHT.get(ch, 0)
 
-    def _blit_tile(self, tiles, tx, ty):
+    def _blit_tile(self, tiles, tx, ty, surf=None, off=(0, 0)):
+        surf = surf or self.surface
         ch = self.tiles[ty][tx]
         top = ch == '=' and region_at(tx, ty) == 'OCTO TEMPLE'
         if ch in 'PQH' or top:
             h = self._height(tx, ty)
             lower = tuple(self._height(tx + dx, ty + dy) < h for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)))
             rail = (self.tile(tx - 1, ty) != 'H', self.tile(tx + 1, ty) != 'H')
-            self.surface.blit(gfx.pyramid_tile('T' if top else ch, lower, rail), (tx * TILE, ty * TILE))
+            surf.blit(gfx.pyramid_tile('T' if top else ch, lower, rail), (tx * TILE - off[0], ty * TILE - off[1]))
             return
         area = 'dungeon' if area_at(tx, ty) in ('dungeon', 'trial') else 'overworld'
         other = 'overworld' if area == 'dungeon' else 'dungeon'
         themed = tiles['themes'].get(self.themes[ty][tx], {}) if area == 'overworld' else {}
         variants = themed.get(ch) or tiles[area].get(ch) or tiles[other].get(ch) or tiles[area][floor_for(tx, ty)]
         img = variants[(tx * 7 + ty * 13 + tx * ty) % len(variants)]
-        self.surface.blit(img, (tx * TILE, ty * TILE))
+        surf.blit(img, (tx * TILE - off[0], ty * TILE - off[1]))
+
+    CHUNK = 32          # tiles per side of a cached piece of the map
+    MAX_CHUNKS = 16
+
+    def _chunk(self, tiles, key):
+        c = self.CHUNK
+        surf = pygame.Surface((c * TILE, c * TILE))
+        off = (key[0] * c * TILE, key[1] * c * TILE)
+        for ty in range(key[1] * c, min(self.h, key[1] * c + c)):
+            for tx in range(key[0] * c, min(self.w, key[0] * c + c)):
+                self._blit_tile(tiles, tx, ty, surf, off)
+        return surf
+
+    def draw_view(self, dest, tiles, view):
+        """Blit the part of the map under the camera. The map is drawn in chunks on demand,
+        so the whole (tall) map never has to sit in memory at once."""
+        c = self.CHUNK
+        if self.dirty_tiles:
+            for (tx, ty) in self.dirty_tiles:
+                key = (tx // c, ty // c)
+                if key in self.chunks:
+                    self._blit_tile(tiles, tx, ty, self.chunks[key], (key[0] * c * TILE, key[1] * c * TILE))
+            self.dirty_tiles.clear()
+        span = c * TILE
+        for cy in range(max(0, view.top // span), (view.bottom - 1) // span + 1):
+            for cx in range(max(0, view.left // span), (view.right - 1) // span + 1):
+                if cx * c >= self.w or cy * c >= self.h:
+                    continue
+                key = (cx, cy)
+                surf = self.chunks.pop(key, None) or self._chunk(tiles, key)
+                self.chunks[key] = surf              # most recently used last
+                dest.blit(surf, (cx * span - view.x, cy * span - view.y))
+        while len(self.chunks) > self.MAX_CHUNKS:
+            del self.chunks[next(iter(self.chunks))]
 
     def render(self, tiles):
         if self.surface is None:
@@ -727,11 +801,17 @@ def validate():
         if LEVEL[int(ty)][int(tx)] not in FLOOR_CHARS:
             problems.append(f"{name} reward sits on {LEVEL[int(ty)][int(tx)]!r}")
     # can Octo reach everything? (kelp can be cut, doors unlocked, shutters open)
-    walk = FLOOR_CHARS | set('KLXRIGlY')
+    walk = FLOOR_CHARS | set('KLXRIGlYEB')
     links = {}
     for a, b in GEYSERS:
         links[a] = b
         links[b] = a     # R: cracked rock, bombs open it
+    for t in TEMPLES.values():
+        inside = (int(t['entry'][0]), int(t['entry'][1]))
+        links[t['door']] = inside
+        links[inside] = t['door']
+        if LEVEL[t['door'][1]][t['door'][0]] != 'E':
+            problems.append(f"{t['id']} door at {t['door']} is not an E tile")
     seen = {(int(START[0]), int(START[1]))}
     q = deque(seen)
     while q:

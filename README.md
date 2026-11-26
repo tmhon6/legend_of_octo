@@ -11,7 +11,8 @@ screen (the FULL / EXIT button toggles it). Put your thumb anywhere on the left 
 swim (any angle; push further to go faster). On an iPhone, use Share → Add to Home Screen to play full screen.
 
 A top-down undersea adventure starring Octo, the reversible octopus. It's a fan tribute to the
-1st-gen 2D action-adventure style, built in pygame.
+classic 8-bit action-adventure style, built in pygame. All the characters, places, art, music and
+maps are original.
 
 ## Run
 
@@ -114,9 +115,33 @@ Jellies ignore ink, and slapping an urchin hurts *you*.
 
 ## The journey
 
-Grimfin the Shark stole the Golden Pearl. Beat Grimfin in the Sunken Shrine and you only get
-**half** of it. Murk, Grimfin's big sister, has the other half in her palace in the dark
-Sunken City to the far southeast. Bring both halves together to win.
+Grimfin the Shark and his big sister Murk stole the Golden Pearl. Murk locked it in her palace in
+the dark Sunken City and sealed the door with the magic of seven **Tide Bells**. Ring all seven
+to break the seal:
+
+* one bell is guarded by Grimfin in the **Sunken Shrine**
+* six more lie in **deep temples** whose cave mouths are hidden in the Kelp Woods, Coral Gardens,
+  The Lagoon, The Abyss, Frozen Shelf and Ember Vents
+
+Each temple is a multi-room dungeon of 9 to 14 rooms, seen one screen at a time:
+
+* **Keys and locked doors.** Each key lies in a room you can reach before its door.
+* **Sealed rooms.** Their doors slam shut until every enemy inside is beaten.
+* **Barriers.** Kelp, cracked walls, ghost walls, ice or lava block the way, and you need the
+  right form (or bombs) to pass.
+* **Secret cracked walls** to bomb, and a **guardian boss** with three battle stages.
+* **Rewards.** Ringing a bell gives you one more heart and carries you back out to the sea.
+* **The map.** Press **M** inside a temple to see the rooms you've visited, and the Trial Compass
+  shows where the guardian waits.
+
+**Difficulty.** You start with three hearts, the same as classic games of this kind:
+
+* Enemies get tougher and hit harder the further you roam from the Octo Temple, and harder
+  still in the later temples.
+* Hearts drop less often.
+* If you fall, you start again at the temple entrance (or your last checkpoint) with three hearts.
+
+Beat Murk to win. Then press Enter for **Deep Tide**, a harder replay of the whole game.
 
 The world map is 160×80 tiles, plus seven one-screen trial rooms and the Sky Islands:
 
@@ -141,6 +166,7 @@ a shell shield, deep ink and a heart shell. Bubble bombs blast open cracked rock
 
 * `settings.py`: screen size, speeds
 * `world.py`: the whole map as ASCII (sea, trial rooms and sky), spawns, arenas, trials, regions and themes, the `Level` class, and a validator that checks everything can be reached
+* `temples.py`: builds the six deep temples (room tree, locks and keys, barriers, guardians) from fixed seeds
 * `entities.py`: Player (forms, jet, bombs), enemies and bosses, NPCs, projectiles, pickups, effects
 * `gfx.py`: every sprite, themed tileset and the bitmap font, drawn in code
 * `sound.py`: chiptune synth for SFX and music (cached to `.sound_cache.pkl`)

@@ -19,6 +19,7 @@ from entities import (CATALOGUE, max_bombs, Altar, DIRS, ENEMY_TYPES, FusionMach
                       EnemyShot, Hermie, Jelly, Particle, Pickup, Player, Puff, Shelly, Urchin)
 from settings import SAVE_SLOT, FPS, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
 from world import ARENAS, Level
+import temples
 
 DIR_KEYS = {
     pygame.K_UP: 'up', pygame.K_w: 'up',
@@ -292,7 +293,7 @@ class Game:
         self.update_area()
         self.banner_t = 0
         self.state = 'play'
-        self.say([SHELLY_TALK[0], SHELLY_TALK[1],
+        self.say([SHELLY_TALK[0], SHELLY_TALK[1], SHELLY_TALK[2],
                   "COME TALK TO ME (PRESS Z NEXT TO ME) IF YOU NEED MORE ADVICE."])
 
     def respawn_player(self):
@@ -300,6 +301,7 @@ class Game:
         p.x, p.y = tile_to_px(*self.checkpoint)
         p.facing = 'up'
         p.invuln = p.knock_t = p.attack_t = p.flip_t = 0
+        self.cam_snap = True
         self.update_camera()
 
     def place_item(self, kind, tx, ty, item_id=None):
@@ -358,7 +360,7 @@ class Game:
         p.x, p.y = tile_to_px(x0 + 7.5, y0 + 8)
         p.facing = 'up'
         p.knock_t = p.attack_t = p.dash_t = p.roll_t = 0
-        boss = MiniBoss(lurker.bid, *tile_to_px(x0 + 7.5, y0 + 3), hp_mult=2.5)
+        boss = MiniBoss(lurker.bid, *tile_to_px(x0 + 7.5, y0 + 3), hp_mult=3.2 if self.flags.get('deep') else 2.5)
         boss.spawn = {'kind': 'mini', 'arena': 'trial', 'inst': boss, 'killed': False}
         boss.in_lair = True
         boss.home = (boss.x, boss.y)
@@ -411,6 +413,10 @@ class Game:
         if getattr(boss, 'in_trial', False):          # a trial duel, not the region's guardian
             self.burst(boss.rect.center, (255, 220, 120), 20)
             return
+        if getattr(boss, 'in_temple', False):         # a temple boss: its room opens on the Tide Bell
+            self.burst(boss.rect.center, (255, 220, 120), 24)
+            self.toast = (f"{boss.name} DEFEATED!", 180)
+            return
         beaten = self.flags.setdefault('minis', [])
         if boss.bid not in beaten:
             beaten.append(boss.bid)
@@ -427,6 +433,8 @@ class Game:
     def drop_loot(self, center, chance=1.0):
         if self.trial:
             chance *= 0.5           # trials are meant to be hard
+        if self.flags.get('deep'):
+            chance *= 0.7
         chance *= self.player.stat('luck', 1.0) * (1.5 if 'charm' in self.player.items else 1.0)
         r = random.random() / chance
         kind = None
@@ -434,9 +442,9 @@ class Game:
             kind = 'pearl'
         elif r < 0.36:
             kind = 'bluepearl'
-        elif r < 0.44:
+        elif r < 0.41:
             kind = 'heart' if self.player.hp < self.player.max_hp else 'pearl'
-        elif r < 0.58:
+        elif r < 0.52:
             kind = 'shrimp' if self.player.hp < self.player.max_hp else 'pearl'
         if kind:
             p = Pickup(0, 0, kind, life=480)
@@ -907,6 +915,106 @@ class Game:
             self.portal_armed = True
         elif self.portal_armed and touching not in self.trials_done:
             self.enter_trial(touching)
+
+    # ---- the deep temples ----------------------------------------------------
+    def check_temple_doors(self):
+        p = self.player
+        tx, ty = p.rect.centerx // TILE, p.rect.centery // TILE
+        if self.level.tile(tx, ty) != 'E':
+            self.temple_armed = True
+            return
+        if not getattr(self, 'temple_armed', True):
+            return
+        self.temple_armed = False
+        tid = world.temple_door(tx, ty)
+        if tid:
+            self.enter_temple(tid)
+            return
+        tid = world.temple_at(tx, ty)
+        if tid:
+            self.leave_temple(tid)
+
+    def _clear_field(self):
+        for sp in self.spawns:
+            sp['inst'] = None
+        self.enemies, self.shots = [], []
+        self.pickups = [i for i in self.pickups if i.life is None]
+        if self.active_arena:
+            self.level.set_doors(self.active_arena, False)
+            self.active_arena = None
+
+    def _move_player(self, tx, ty, facing):
+        p = self.player
+        p.x, p.y = tile_to_px(tx, ty)
+        p.facing = facing
+        p.knock_t = p.attack_t = p.dash_t = p.roll_t = 0
+        self.flash_t = 16
+        self.cam_snap = True
+        self.update_camera()
+        self.area = self.region = None
+        self.update_area()
+
+    def enter_temple(self, tid):
+        t = world.TEMPLES[tid]
+        self._clear_field()
+        sound.play('warp')
+        self._move_player(*t['entry'], 'up')
+        self.checkpoint = t['entry']
+        seen = self.flags.setdefault('temples_seen', [])
+        if tid not in seen:
+            seen.append(tid)
+            pages = [f"THE {t['title']}. SOMEWHERE DEEP INSIDE, A TIDE BELL HUMS...",
+                     "ITS ROOMS ARE GUARDED, ITS DOORS ARE LOCKED. FIND THE KEYS, BEAT THE GUARDIAN, RING THE BELL. "
+                     "PRESS M FOR A MAP OF THE ROOMS YOU'VE SEEN. THE STAIRS BY THE ENTRANCE LEAD BACK OUT."]
+            if t['gate']:
+                pages.append("LEGEND SAYS: " + temples.GATE_HINT[t['gate']])
+            self.say(pages)
+
+    def leave_temple(self, tid):
+        t = world.TEMPLES[tid]
+        self._clear_field()
+        sound.play('warp')
+        dx, dy = t['door']
+        self._move_player(dx, dy + 1, 'down')
+        self.checkpoint = (dx, dy + 1)
+
+    def bells(self):
+        return self.flags.get('bells', [])
+
+    def ring_bell(self, it):
+        p = self.player
+        tid = world.temple_at(it.rect.centerx // TILE, it.rect.centery // TILE) or 'shrine'
+        bells = self.flags.setdefault('bells', [])
+        if tid not in bells:
+            bells.append(tid)
+        n, need = len(bells), world.BELLS_NEEDED
+        p.max_hp = min(40, p.max_hp + 2)
+        p.hp = p.max_hp
+        sound.music('victory', loops=0)
+        self.flash_t = 30
+        self.burst(it.rect.center, (255, 220, 120), 24)
+        pages = [f"YOU RANG A TIDE BELL!  ({n} OF {need})", "ITS PEAL FILLS YOU WITH STRENGTH: ONE MORE HEART!"]
+        if n >= need:
+            for tx, ty in world.SEAL:
+                if self.level.tile(tx, ty) == 'B':
+                    self.level.set_tile(tx, ty, world.floor_for(tx, ty))
+                self.opened.add((tx, ty))
+            pages.append("FAR AWAY, THE SEAL ON MURK'S PALACE SHATTERS! THE GOLDEN PEARL WAITS IN THE DARK "
+                         "SUNKEN CITY, FAR TO THE SOUTHEAST. GO!")
+        else:
+            pages.append(f"{need - n} MORE BELL{'S' if need - n > 1 else ''} TO GO. MURK'S PALACE STAYS SEALED "
+                         "UNTIL ALL SEVEN RING.")
+        if tid != 'shrine':
+            self.leave_temple(tid)
+        self.say(pages)
+
+    def seal_bump(self):
+        if self.t - getattr(self, 'seal_t', -999) < 240:
+            return
+        self.seal_t = self.t
+        n = len(self.bells())
+        self.say([f"THE PALACE DOOR IS SEALED BY SEVEN TIDE BELLS. YOU HAVE RUNG {n}.",
+                  "OLD SHELLY KNOWS WHERE THE BELLS ARE HIDDEN."])
 
     def check_geysers(self):
         p = self.player
@@ -1454,7 +1562,8 @@ class Game:
             if k in MAP_KEYS or k in PAUSE_KEYS:
                 self.state = 'play'
                 sound.play('pause')
-            elif k in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_a, pygame.K_d) and self.sky_seen():
+            elif k in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_a, pygame.K_d) and self.sky_seen() and \
+                    self.map_page != 'temple':
                 self.map_page = 'sky' if self.map_page == 'sea' else 'sea'
                 self.map_cache = None
                 sound.play('text')
@@ -1486,8 +1595,18 @@ class Game:
                 self.continue_game()
         elif st == 'win':
             if k in CONFIRM_KEYS and self.t > 120:
+                self.start_deep_tide()
+            elif k == pygame.K_ESCAPE and self.t > 120:
                 self.state = 'title'
                 sound.music('title')
+
+    def start_deep_tide(self):
+        """The harder replay: same sea, fiercer enemies, fewer hearts dropped."""
+        self.new_game()
+        self.flags['deep'] = True
+        sound.music('reef')
+        self.say(["THE DEEP TIDE RISES! THE SAME SEA - BUT EVERY ENEMY IS FIERCER AND HEARTS ARE SCARCE.",
+                  "MURK HAS STOLEN THE GOLDEN PEARL AGAIN. RING ALL SEVEN TIDE BELLS ONCE MORE!"])
 
     def inside_ghost_wall(self):
         return any(ch == 'G' for _, _, ch in self.level.tiles_in(self.player.rect))
@@ -1589,6 +1708,19 @@ class Game:
             x, y = r.x, r.y
         elif self.bossfight:
             x, y = world.BOSS_LAIR[0] * TILE, world.BOSS_LAIR[1] * TILE
+        elif cy >= world.TEMPLE_Y * TILE:
+            # deep temples: one room per screen; the camera glides to the next room
+            tid = world.temple_at(cx // TILE, cy // TILE)
+            ox, oy = world.TEMPLES[tid]['origin'] if tid else (0, world.TEMPLE_Y)
+            rx = (cx // TILE - ox) // temples.RW
+            ry = (cy // TILE - oy) // temples.RH
+            x, y = (ox + rx * temples.RW) * TILE, (oy + ry * temples.RH) * TILE
+            old = getattr(self, 'cam', None)
+            if old and not getattr(self, 'cam_snap', False) and abs(old[0] - x) <= PLAY_W and \
+                    abs(old[1] - y) <= PLAY_H:
+                x = old[0] + max(-12, min(12, x - old[0]))
+                y = old[1] + max(-9, min(9, y - old[1]))
+            self.cam_snap = False
         elif cy >= world.SKY_Y * TILE:
             x0, y0, x1, y1 = world.SKY_RECT
             x = max(x0 * TILE, min((x1 + 1) * TILE - PLAY_W, cx - PLAY_W // 2))
@@ -1623,7 +1755,7 @@ class Game:
                 sound.music(world.REGION_MUSIC.get(region, 'reef'))
             else:
                 sound.music(AREA_INFO[area]['music'])
-            if area == 'dungeon':
+            if area == 'dungeon' and world.temple_at(tx, ty) is None:
                 self.checkpoint = world.SHRINE_CHECKPOINT
 
     def update_spawns(self):
@@ -1640,7 +1772,7 @@ class Game:
                 if near.colliderect(pt) and math.hypot(pt.centerx - pc[0], pt.centery - pc[1]) > 56:
                     if sp['kind'].startswith('mini:') and sp['kind'][5:] in self.flags.get('minis', []):
                         continue
-                    e = make_enemy(sp['kind'], sp['x'], sp['y'])
+                    e = self.toughen(make_enemy(sp['kind'], sp['x'], sp['y']))
                     e.spawn = sp
                     sp['inst'] = e
                     self.enemies.append(e)
@@ -1649,10 +1781,33 @@ class Game:
                 e.dead = True
                 sp['inst'] = None
 
+    REGION_TIER = {'KELP WOODS': 1, 'CORAL GARDENS': 1, 'THE LAGOON': 1, 'SUNKEN SHRINE': 1,
+                   'THE ABYSS': 2, 'SHIP GRAVEYARD': 2, 'SKY ISLANDS': 2, 'FROZEN SHELF': 3, 'EMBER VENTS': 3,
+                   'SUNKEN CITY': 4, 'MURK PALACE': 4}
+
+    def tier_at(self, tx, ty):
+        tid = world.temple_at(tx, ty)
+        tier = world.TEMPLES[tid]['tier'] if tid else self.REGION_TIER.get(world.region_at(tx, ty), 0)
+        return tier + (2 if self.flags.get('deep') else 0)
+
+    def toughen(self, e):
+        """Enemies get tougher and hit harder the further from home Octo roams."""
+        tier = self.tier_at(int(e.rect.centerx // TILE), int(e.rect.centery // TILE))
+        if tier <= 0 or getattr(e, 'lurk', False):
+            return e
+        if isinstance(e, MiniBoss) or getattr(e, 'boss', False):
+            k = 1.3 if self.flags.get('deep') else 1.0      # bosses are tuned by hand
+        else:
+            k = 1 + 0.3 * tier
+            if e.damage > 0:
+                e.damage += tier // 2
+        e.max_hp = e.hp = max(e.hp, math.ceil(e.max_hp * k))
+        return e
+
     def spawn_arena(self, name):
         for sp in self.spawns:
             if sp['arena'] == name and not sp['killed'] and sp['inst'] is None:
-                e = make_enemy(sp['kind'], sp['x'], sp['y'])
+                e = self.toughen(make_enemy(sp['kind'], sp['x'], sp['y']))
                 e.spawn = sp
                 sp['inst'] = e
                 self.enemies.append(e)
@@ -1713,6 +1868,7 @@ class Game:
             self.update_spawns()
             self.check_portals()
             self.check_geysers()
+            self.check_temple_doors()
             if self.trial:
                 return
 
@@ -1836,6 +1992,8 @@ class Game:
                           "THE OTHER HALF IS WITH MURK, GRIMFIN'S GLOOMY BIG SISTER, DEEP IN THE DARK SUNKEN CITY "
                           "FAR TO THE SOUTHEAST.",
                           "A GHOSTLY WALL GUARDS THE WAY FROM THE SHIP GRAVEYARD... ONLY SPOOKY OCTO CAN PASS."])
+        elif k == 'bell':
+            self.ring_bell(it)
         elif k == 'golden':
             sound.play('item')
             sound.music('victory', loops=0)
@@ -1926,7 +2084,7 @@ class Game:
             self.player.draw(scr, ox, HUD_H + oy)
 
     def draw_world(self, ps):
-        ps.blit(self.level.render(gfx.TILES), (0, 0), self.view_rect)
+        self.level.draw_view(ps, gfx.TILES, self.view_rect)
         ox, oy = -self.cam[0], -self.cam[1]
         theme0 = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
         if self.area == 'overworld' and theme0 not in ('abyss', 'city') and \
@@ -2201,6 +2359,8 @@ class Game:
             sound.play('nope')
             return
         self.map_page = 'sky' if self.area == 'sky' else 'sea'
+        if self.current_temple():
+            self.map_page = 'temple'
         self.map_cache = None
         self.state = 'map'
         sound.play('pause')
@@ -2211,7 +2371,93 @@ class Game:
             return x0, y0, x1 - x0 + 1, y1 - y0 + 1, 4
         return 0, 0, self.level.w, world.WORLD_H, 1.5
 
+    def current_temple(self):
+        p = self.player
+        return world.temple_at(p.rect.centerx // TILE, p.rect.centery // TILE)
+
+    def room_seen(self, t, room):
+        ox, oy = t['origin']
+        return self.seen[oy + room[1] * temples.RH + 5][ox + room[0] * temples.RW + 7]
+
+    def draw_temple_grid(self, scr, tid, x, y, cw, ch, big=True):
+        """The rooms of a temple you've seen, their doors, you, and (with a compass) the guardian."""
+        t = world.TEMPLES[tid]
+        gap = 2 if big else 1
+        here = None
+        p = self.player
+        ox, oy = t['origin']
+        here = ((p.rect.centerx // TILE - ox) // temples.RW, (p.rect.centery // TILE - oy) // temples.RH)
+        compass = 'compass' in p.items
+        for room in t['rooms']:
+            seen = self.room_seen(t, room)
+            boss = room == t['boss_room']
+            if not seen and not (boss and compass):
+                continue
+            rx, ry = x + room[0] * cw, y + room[1] * ch
+            pygame.draw.rect(scr, (70, 80, 130) if seen else (40, 40, 60), (rx + gap, ry + gap, cw - 2 * gap, ch - 2 * gap))
+            if boss and tid not in self.bells():
+                pygame.draw.circle(scr, (230, 50, 60), (rx + cw // 2, ry + ch // 2), max(2, cw // 6))
+            if room == here and (self.t // 12) % 2:
+                pygame.draw.rect(scr, (255, 255, 255), (rx + cw // 2 - 2, ry + ch // 2 - 2, 5, 5))
+        if not big:
+            return
+        for e, kind in t['edges'].items():
+            a, b = tuple(e)
+            if not (self.room_seen(t, a) or self.room_seen(t, b)):
+                continue
+            ax, ay = x + a[0] * cw + cw // 2, y + a[1] * ch + ch // 2
+            bx, by = x + b[0] * cw + cw // 2, y + b[1] * ch + ch // 2
+            mx, my = (ax + bx) // 2, (ay + by) // 2
+            c = {'lock': (230, 180, 50), 'bomb': (120, 120, 140), 'gate': (180, 120, 255)}.get(kind, (160, 170, 220))
+            if kind == 'bomb' and not any(self.level.tile(tx, ty) != 'R' for tx, ty in self.door_tiles(t, a, b)):
+                continue                  # still a secret
+            pygame.draw.rect(scr, c, (mx - 2, my - 2, 5, 5))
+
+    def door_tiles(self, t, a, b):
+        ox, oy = t['origin']
+        out = []
+        for r, o in ((a, b), (b, a)):
+            d = next(k for k, (dx, dy) in temples.DIRS.items() if (r[0] + dx, r[1] + dy) == o)
+            for cx, cy in temples.DOOR_CELLS[d]:
+                out.append((ox + r[0] * temples.RW + cx, oy + r[1] * temples.RH + cy))
+        return out
+
+    def draw_bell_row(self, scr, x, y, small=False):
+        """The seven Tide Bells: gold once rung, dark until then."""
+        if not hasattr(self, '_bell_imgs'):
+            full = gfx.SPR['bell']
+            dim = gfx.tint(full, (70, 70, 90))
+            self._bell_imgs = {False: (full, dim),
+                               True: tuple(pygame.transform.scale(i, (8, 8)) for i in (full, dim))}
+        full, dim = self._bell_imgs[small]
+        n = len(self.bells())
+        for i in range(world.BELLS_NEEDED):
+            scr.blit(full if i < n else dim, (x + i * (9 if small else 16), y))
+
     def draw_map(self, scr):
+        if self.map_page == 'temple':
+            tid = self.current_temple()
+            if tid:
+                t = world.TEMPLES[tid]
+                shade = pygame.Surface((SCREEN_W, SCREEN_H - HUD_H), pygame.SRCALPHA)
+                shade.fill((4, 6, 18, 225))
+                scr.blit(shade, (0, HUD_H))
+                gfx.text(scr, "MAP - " + t['title'], SCREEN_W // 2, HUD_H + 4, (255, 220, 120), center=True)
+                cw, ch = 40, 28
+                gx, gy = (SCREEN_W - temples.GW * cw) // 2, HUD_H + 22
+                pygame.draw.rect(scr, (90, 100, 150), (gx - 3, gy - 3, temples.GW * cw + 6, temples.GH * ch + 6), 1)
+                self.draw_temple_grid(scr, tid, gx, gy, cw, ch)
+                ly = SCREEN_H - 30
+                self.draw_bell_row(scr, (SCREEN_W - 7 * 16) // 2, ly - 4)
+                pygame.draw.rect(scr, (230, 180, 50), (8, SCREEN_H - 10, 5, 5))
+                gfx.text(scr, "LOCK", 16, SCREEN_H - 11, (220, 220, 230))
+                pygame.draw.rect(scr, (180, 120, 255), (52, SCREEN_H - 10, 5, 5))
+                gfx.text(scr, "BARRIER", 60, SCREEN_H - 11, (220, 220, 230))
+                pygame.draw.circle(scr, (230, 50, 60), (118, SCREEN_H - 8), 2)
+                gfx.text(scr, "GUARDIAN", 124, SCREEN_H - 11, (220, 220, 230))
+                gfx.text(scr, "M: CLOSE", SCREEN_W - 6 - gfx.text_width("M: CLOSE"), SCREEN_H - 11, (150, 160, 200))
+                return
+            self.map_page = 'sea'
         x0, y0, w, h, k = self.map_layout()
         mw, mh = int(w * k), int(h * k)
         ox, oy = (SCREEN_W - mw) // 2, HUD_H + 16 + (PLAY_H - 30 - mh) // 2
@@ -2259,6 +2505,14 @@ class Game:
                 c = (110, 110, 120) if bid in beaten else (255, 80, 80)
                 pygame.draw.polygon(scr, c, [(sx - 3, sy + 2), (sx - 3, sy - 2), (sx - 1, sy),
                                              (sx, sy - 3), (sx + 1, sy), (sx + 3, sy - 2), (sx + 3, sy + 2)])
+        # temple doors: a bell, grey once it has rung
+        for tid, t in world.TEMPLES.items():
+            dx, dy = t['door']
+            if inside(dx, dy) or (compass and x0 <= dx < x0 + w and y0 <= dy < y0 + h):
+                sx, sy = spot(dx, dy)
+                c = (110, 110, 120) if tid in self.bells() else (255, 210, 90)
+                pygame.draw.rect(scr, (20, 20, 30), (sx - 3, sy - 3, 7, 7))
+                pygame.draw.rect(scr, c, (sx - 2, sy - 2, 5, 5))
         # big bosses
         for boss in ('throne', 'murk'):
             bx0, by0, bx1, by1 = ARENAS[boss]['rect']
@@ -2288,6 +2542,15 @@ class Game:
 
     def draw_minimap(self, scr, x, y):
         lv = self.level
+        tid = self.current_temple()
+        if tid:
+            mw, mh = MINIMAP_SIZE
+            pygame.draw.rect(scr, (40, 44, 70), (x - 1, y - 1, mw + 2, mh + 2), 1)
+            pygame.draw.rect(scr, (6, 8, 22), (x, y, mw, mh))
+            cw, ch = mw // temples.GW, mh // temples.GH
+            self.draw_temple_grid(scr, tid, x + (mw - cw * temples.GW) // 2, y + (mh - ch * temples.GH) // 2,
+                                  cw, ch, big=False)
+            return
         if self.t % 20 == 0 or not hasattr(self, '_mini_scaled'):
             mm = self.minimap
             for ty in range(world.WORLD_H):
@@ -2335,7 +2598,10 @@ class Game:
         pygame.draw.circle(scr, (190, 140, 255), (102, 28), 3)
         scr.set_at((101, 27), (255, 255, 255))
         gfx.text(scr, f"X{p.spirit}", 108, 25, (210, 180, 255))
-        gfx.text(scr, self.region, 56, 41, (150, 170, 220))
+        name = self.region or ''
+        if gfx.text_width(name) > 84:          # long names would run into the form box
+            name = name.replace('TRIAL OF ', '').replace(' TEMPLE', '').replace('THE ', '')
+        gfx.text(scr, name, 56, 41, (150, 170, 220))
         if 'bombbag' in p.items:
             scr.blit(gfx.SPR['items']['bomb'], (98, 10))
             gfx.text(scr, f"X{p.bombs:02d}", 109, 12)
@@ -2370,8 +2636,9 @@ class Game:
                 img = gfx.SPR['heart']['half']
             else:
                 img = gfx.SPR['heart']['empty']
-            hx = 188 + (i % 7) * 9
-            hy = 24 + (i // 7) * 9
+            per = 7 if hearts <= 14 else 10
+            hx = (188 + (i % 7) * 9) if per == 7 else (186 + (i % 10) * 7)
+            hy = 24 + (i // per) * 9
             scr.blit(img, (hx, hy))
 
     def draw_box(self, scr, rect):
@@ -2408,6 +2675,7 @@ class Game:
         forms = "  ".join(f"{i + 1}:{gfx.MOOD_NAMES[f]}" for i, f in enumerate(self.player.forms))
         for j, line in enumerate(gfx.wrap("FORMS  " + forms, 36)):
             gfx.text(scr, line, SCREEN_W // 2, y + 13 + j * 10, (190, 200, 255), center=True)
+        self.draw_bell_row(scr, box.right - 6 - 7 * 9, box.y + 4, small=True)
         if getattr(self, 'pause_msg', ''):
             gfx.text(scr, self.pause_msg, SCREEN_W // 2, box.bottom - 11, (255, 220, 120), center=True)
 
@@ -2507,10 +2775,12 @@ class Game:
             hop = abs(int(math.sin(self.t * 0.12 + i * 1.5) * 8))
             scr.blit(img, (SCREEN_W // 2 - 70 + i * 108, 82 - hop))
         self.big_text(scr, "VICTORY!", SCREEN_W // 2, 14, (255, 220, 120))
+        hrs = self.frames // 216000
         lines = ["OCTO RECLAIMED THE GOLDEN PEARL", "AND THE REEF IS AT PEACE AGAIN.", "",
-                 f"PEARLS: {p.pearls}", f"TIME: {self.frames // 3600}:{(self.frames // 60) % 60:02d}",
-                 "", "THANKS FOR PLAYING!"]
+                 f"PEARLS: {p.pearls}   HEARTS: {p.max_hp // 2}",
+                 f"TIME: {hrs}:{(self.frames // 3600) % 60:02d}:{(self.frames // 60) % 60:02d}",
+                 "THANKS FOR PLAYING!", "ENTER: DEEP TIDE (HARDER REPLAY)  ESC: TITLE"]
         for i, l in enumerate(lines):
             gfx.text(scr, l, SCREEN_W // 2, 130 + i * 11, center=True)
         if self.t > 120 and (self.t // 30) % 2:
-            gfx.text(scr, "PRESS ENTER", SCREEN_W // 2, 216, (255, 220, 120), center=True)
+            gfx.text(scr, "DIVE AGAIN?", SCREEN_W // 2, 216, (255, 220, 120), center=True)

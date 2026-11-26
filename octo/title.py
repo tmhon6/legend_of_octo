@@ -269,6 +269,8 @@ class TitleScene:
         scr.blit(self.logo, (lx, 16 + math.sin(t * 0.03) * 1.5))
         gfx.text(scr, "A REVERSIBLE UNDERSEA ADVENTURE", W // 2 + 1, 89, (0, 10, 30), center=True)
         gfx.text(scr, "A REVERSIBLE UNDERSEA ADVENTURE", W // 2, 88, (200, 230, 255), center=True)
+        gfx.text(scr, "A FAN TRIBUTE TO 8-BIT ADVENTURES", W // 2 + 1, 100, (0, 10, 30), center=True)
+        gfx.text(scr, "A FAN TRIBUTE TO 8-BIT ADVENTURES", W // 2, 99, (140, 160, 200), center=True)
         scr.blit(self.vignette, (0, 0))
         # menu panel
         ph = 10 + len(menu) * 11

@@ -575,6 +575,37 @@ def make_golden():
     return s
 
 
+def make_bell():
+    """A Tide Bell: a little bronze bell with a pearl clapper."""
+    pal = {'k': (70, 40, 10), 'Y': (240, 190, 70), 'y': (190, 130, 40), 'w': (255, 245, 200), 'p': (230, 240, 255)}
+    rows = [
+        "......kk......",
+        ".....kYYk.....",
+        "....kkYYkk....",
+        "...kYwYYyyk...",
+        "...kYwYYyyk...",
+        "..kYwYYYYyyk..",
+        "..kYwYYYYyyk..",
+        "..kYwYYYYyyk..",
+        ".kYwYYYYYYyyk.",
+        ".kYYYYYYYYyyk.",
+        "kYYYYYYYYYYyyk",
+        "kkkkkkkkkkkkkk",
+        ".....kppk.....",
+        "......kk......",
+    ]
+    return from_strings(rows, pal)
+
+
+def _sealed(rnd):
+    """The bell seal on the Murk Palace door: a purple door with seven gold studs."""
+    s = _locked(rnd).copy()
+    s = tint(s, (170, 110, 230))
+    for i in range(7):
+        s.set_at((2 + i * 2 % 12, 3 + (i % 2) * 8), (255, 220, 90))
+    return s
+
+
 def make_key():
     pal = {'k': (60, 40, 0), 'Y': (250, 206, 50), 'y': (190, 140, 20)}
     rows = [
@@ -1242,6 +1273,7 @@ def make_tiles():
         'L': [_locked(rnd)],
         'X': [_shutter(rnd)],
         'E': [_stairs()],
+        'B': [_sealed(rnd)],
     }
     return {'overworld': ow, 'dungeon': dg, 'themes': make_themes(rnd)}
 
@@ -1423,6 +1455,7 @@ def load():
         'pearl': make_pearl((236, 236, 246), (255, 255, 255)),
         'bluepearl': make_pearl((90, 170, 255), (220, 240, 255)),
         'golden': make_golden(),
+        'bell': make_bell(),
         'shrimp': make_shrimp(),
         'key': make_key(),
         'puff': make_puff(),

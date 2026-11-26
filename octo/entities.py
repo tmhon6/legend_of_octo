@@ -651,6 +651,9 @@ class Player(Entity):
     def _try_unlock(self, game, dx, dy):
         probe = self.rect.move(dx * 2, dy * 2)
         for tx, ty, ch in game.level.tiles_in(probe):
+            if ch == 'B':
+                game.seal_bump()
+                return
             if ch == 'L':
                 if self.keys > 0:
                     self.keys -= 1
@@ -1247,7 +1250,21 @@ MINIBOSS_STYLES = {
                    moves=('teleport', 'spread', 'ring'), minion='jelly', shot='bubble', fly=True),
     'storm': dict(name="STORM GULL", base='gull', tint=(200, 210, 255), hp=16, dmg=2, speed=1.0,
                   moves=('charge', 'spread', 'summon'), minion='gull', shot='spine', fly=True),
+    # the six temple bosses: each guards a Tide Bell
+    'tanglemaw': dict(name="TANGLEMAW", base='jelly', tint=(90, 210, 110), hp=16, dmg=1, speed=0.6,
+                      moves=('spread', 'teleport', 'summon'), minion='jelly', shot='bubble', phase=True),
+    'bramble': dict(name="BRAMBLEBACK", base='urchin', tint=(255, 120, 190), hp=18, dmg=2, speed=0.55,
+                    moves=('ring', 'charge', 'summon'), minion='urchin', shot='spine'),
+    'bellows': dict(name="OLD BELLOWS", base='puffer', tint=(170, 225, 255), hp=20, dmg=2, speed=0.65,
+                    moves=('ring', 'spread', 'summon'), minion='puffer', shot='spine'),
+    'deepeye': dict(name="DEEPEYE", base='jelly', tint=(200, 90, 255), hp=22, dmg=2, speed=0.7,
+                    moves=('teleport', 'spread', 'ring'), minion='jelly', shot='bubble', fly=True),
+    'hoarclaw': dict(name="HOARCLAW", base='icecrab', tint=(190, 225, 255), hp=26, dmg=2, speed=0.9,
+                     moves=('charge', 'ring', 'summon'), minion='icecrab', shot='bubble'),
+    'slagjaw': dict(name="SLAGJAW", base='lavacrab', tint=(255, 110, 70), hp=28, dmg=3, speed=0.9,
+                    moves=('charge', 'spread', 'charge'), minion='lavacrab', shot='spine'),
 }
+TEMPLE_BOSS_HP = 2.0          # temple bosses are tougher than any mini-boss
 
 
 class MiniBoss(Enemy):
@@ -1624,6 +1641,11 @@ def world_room(game):
 def make_enemy(kind, x, y):
     if kind.startswith('mini:'):
         return MiniBoss(kind[5:], x, y, lurk=True)      # waits in its region until Octo comes close
+    if kind.startswith('tboss:'):                       # a temple boss, fought in its own room
+        b = MiniBoss(kind[6:], x, y, hp_mult=TEMPLE_BOSS_HP)
+        b.in_temple = True
+        b.home = (b.x, b.y)
+        return b
     return ENEMY_TYPES[kind](x, y)
 
 
@@ -1696,7 +1718,13 @@ def max_bombs(p):
 
 
 SHELLY_TALK = [
-    "OLD SHELLY: OCTO! GRIMFIN THE SHARK STOLE THE GOLDEN PEARL AND HID IN THE SUNKEN SHRINE TO THE NORTH!",
+    "OLD SHELLY: OCTO! GRIMFIN THE SHARK AND HIS SISTER MURK STOLE THE GOLDEN PEARL! MURK LOCKED IT IN HER PALACE "
+    "IN THE DARK SUNKEN CITY, FAR TO THE SOUTHEAST.",
+    "HER PALACE DOOR IS SEALED. ONLY THE PEAL OF ALL SEVEN TIDE BELLS CAN BREAK THE SEAL.",
+    "GRIMFIN GUARDS ONE BELL IN THE SUNKEN SHRINE TO THE NORTH. THE OTHER SIX LIE IN DEEP TEMPLES ALL OVER THE "
+    "SEA - LOOK FOR DARK CAVE MOUTHS IN THE KELP WOODS, THE CORAL GARDENS, THE LAGOON, THE ABYSS, THE FROZEN "
+    "SHELF AND THE EMBER VENTS.",
+    "IT WON'T BE EASY. TRAIN IN THE TRIALS, FIND HEART SHELLS, AND DON'T FORGET YOUR SEA POTIONS!",
     "YOU'RE A REVERSIBLE OCTOPUS, REMEMBER? PRESS X TO FLIP YOUR MOOD.",
     "HAPPY BLUE OCTO SQUIRTS INK - PRESS C TO SWAP A LONG LINE FOR A SHORT WIDE BURST. GRUMPY BLACK OCTO SLAPS HARD AND CUTS KELP.",
     "INK PASSES RIGHT THROUGH JELLIES, AND SLAPPING AN URCHIN... OUCH. CHOOSE YOUR MOOD WISELY!",
@@ -2086,7 +2114,7 @@ class Pickup(Entity):
         if self.life is not None and self.life < 120 and (self.t // 4) % 2:
             return
         bob = 0
-        if self.kind in ('container', 'golden', 'key', 'halfpearl'):
+        if self.kind in ('container', 'golden', 'key', 'halfpearl', 'bell'):
             bob = round(math.sin(self.t * 0.08) * 1.5)
         surf.blit(self._img(), (round(self.x) + ox, round(self.y) + oy + bob))
         if self.kind == 'golden' and (self.t // 6) % 3 == 0:
