@@ -287,7 +287,7 @@ class TitleScene:
                 gfx.text(scr, arrow, px + 10, y, (255, 220, 120))
             gfx.text(scr, item, W // 2 + 4, y, (255, 255, 255) if on else (140, 160, 200), center=True)
         if (t // 25) % 2:
-            gfx.text(scr, "PRESS ENTER OR CLICK TO PLAY", W // 2, py - 10, (255, 255, 255), center=True)
+            gfx.text(scr, "TAP TO PLAY" if getattr(self, 'touch', False) else "PRESS ENTER OR CLICK TO PLAY", W // 2, py - 10, (255, 255, 255), center=True)
         gfx.text(scr, "A FAN TRIBUTE", W // 2, H - 8, (110, 120, 150), center=True)
         # fade in from black when the game starts
         if t < 60:

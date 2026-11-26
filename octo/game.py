@@ -12,6 +12,7 @@ import gfx
 import sound
 import world
 from title import TitleScene
+from touch import TouchControls, touch_device
 from entities import (DIRS, ENEMY_TYPES, MiniBoss, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
                       EnemyShot, Hermie, Particle, Pickup, Player, Puff, Shelly, Urchin)
 from settings import FPS, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
@@ -147,6 +148,10 @@ class Game:
         self.rays = self._make_rays()
         self.title_bg = self._make_gradient((10, 30, 90), (2, 8, 30))
         self.title_scene = TitleScene()
+        self.display = self.screen
+        self.touch = TouchControls(self)
+        if touch_device():
+            self.touch.activate()
         self.title_sel = 0
         self.state = 'title'
         sound.music('title')
@@ -831,6 +836,8 @@ class Game:
                 self.handle_event(ev)
             self.update()
             self.draw()
+            if self.touch.active:
+                self.touch.present(self.display)
             pygame.display.flip()
             self.clock.tick(FPS)
             await asyncio.sleep(0)      # lets the browser breathe (pygbag); harmless on desktop
@@ -838,6 +845,8 @@ class Game:
     def handle_event(self, ev):
         if ev.type == pygame.QUIT:
             quit_game()
+        if self.touch.handle(ev):
+            return
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and self.state == 'title':
             # clicking a menu item picks it; clicking anywhere else starts the highlighted one
             for i, r in enumerate(getattr(self.title_scene, 'menu_rects', [])):
@@ -894,7 +903,7 @@ class Game:
             elif k in SAVE_KEYS:
                 self.save_game()
             elif k in JET_KEYS:
-                self.player.jet(self, self.held[-1] if self.held else None)
+                self.player.jet(self, self.held[-1] if self.held else self.touch.dir)
             elif k in BOMB_KEYS:
                 self.player.drop_bomb(self)
             elif (k in FLIP_KEYS or k in FORM_KEYS) and self.inside_ghost_wall():
@@ -998,6 +1007,7 @@ class Game:
 
     def update(self):
         self.t += 1
+        self.touch.check_orientation()
         if self.shake:
             self.shake -= 1
         if self.banner_t:
@@ -1144,7 +1154,7 @@ class Game:
 
     def update_play(self):
         p = self.player
-        move_dir = self.held[-1] if self.held else None
+        move_dir = self.held[-1] if self.held else self.touch.dir
         self.level.ghost_ok = p.mood == 'ghost'
         if p.tumble:
             self.update_tumble()
@@ -1786,6 +1796,7 @@ class Game:
             w = abs(math.cos((phase - 225) / 15 * math.pi / 2))
         elif phase < 15 and self.t > 15:
             w = abs(math.sin(phase / 15 * math.pi / 2))
+        self.title_scene.touch = self.touch.active
         self.title_scene.draw(scr, self.t, menu, self.title_sel, mood, w)
 
     def draw_title_old(self, scr):
