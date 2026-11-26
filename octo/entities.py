@@ -8,6 +8,7 @@ import forms
 import fx
 import gfx
 import sound
+import style
 from settings import PLAYER_SPEED, TILE
 
 
@@ -87,6 +88,8 @@ class Player(Entity):
         self.forms = ['blue', 'mad']    # trials add 'zap', 'ice' and 'ghost'
         self.next_mood = 'mad'
         self.ink_mode = 'line'      # 'line': long-range stream, 'burst': short wide fan
+        self.hat = 'none'          # wardrobe: the hat Octo wears
+        self.dash_col = 0          # wardrobe: ink jet colour
         self.max_hp = 6
         self.hp = 6
         self.pearls = 0
@@ -262,6 +265,10 @@ class Player(Entity):
 
     def fusion_attack(self, game, cx, cy):
         """Attacks built from a shape and an element: every fused form, plus the newer base forms."""
+        if forms.is_mega(self.mood):
+            m = forms.register_mega(self.mood)
+            self.mega_cast(game, m['shape'], m['elements'], cx, cy)
+            return
         if self.mood in forms.FUSIONS:
             f = forms.FUSIONS[self.mood]
             self.cast(game, f['shape'], f['element'], cx, cy)
@@ -399,6 +406,56 @@ class Player(Entity):
             self.shoot_cd = 50
             sound.play('shut')
 
+    def mega_cast(self, game, shape, elems, cx, cy):
+        """The six mega attacks (from the secret Mega Machine). elems is a pair of elements."""
+        self.attack_t = 12
+        game.shake = max(game.shake, 8)
+        if shape == 'supernova':
+            game.shots.append(Nova(cx, cy, elems, max_r=150, dmg=4))
+            self.shoot_cd = 80
+            sound.play('boom')
+        elif shape == 'tsunami':
+            dx, dy = self.aim(game, cx, cy)
+            px, py = -dy, dx
+            for off in (-18, 0, 18):
+                game.shots.append(Quake(cx + px * off, cy + py * off, (round(dx) or 0, round(dy) or 0)
+                                        if abs(dx) + abs(dy) else DIRS[self.facing], elems))
+            self.shoot_cd = 70
+            sound.play('whoosh')
+        elif shape == 'meteor':
+            seen = [e for e in game.enemies if e.active and game.view_rect.colliderect(e.rect)]
+            spots = [e.rect.center for e in seen[:12]] or \
+                [(cx + math.cos(a) * 50, cy + math.sin(a) * 50) for a in (0.3, 1.9, 3.5, 5.1)]
+            for i, (tx, ty) in enumerate(spots):
+                game.shots.append(Hail(tx, ty, delay=i * 4, elem=elems))
+                game.shots.append(Hail(tx + 6, ty - 4, delay=i * 4 + 10, elem=elems))
+            self.shoot_cd = 90
+            sound.play('boom')
+        elif shape == 'blackhole':
+            dx, dy = self.aim(game, cx, cy)
+            game.shots.append(Whirlpool(cx, cy, dx, dy, elems))
+            game.shots.append(Nova(cx + dx * 40, cy + dy * 40, 'pull', max_r=90, dmg=1))
+            self.shoot_cd = 80
+            sound.play('whoosh')
+        elif shape == 'prism':
+            dx, dy = self.aim(game, cx, cy, 220)
+            base = math.atan2(dy, dx)
+            for k in range(-3, 4):
+                a = base + k * 0.22
+                game.shots.append(Beam(cx, cy, math.cos(a), math.sin(a), elems))
+            self.shoot_cd = 70
+            sound.play('zap')
+        elif shape == 'titan':
+            for e in list(game.enemies):
+                if e.active and math.hypot(e.rect.centerx - cx, e.rect.centery - cy) < 80:
+                    strike(game, e, 4, 'quake', (cx, cy), elems)
+            for d in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                game.shots.append(Quake(cx, cy, d, elems))
+            game.effects.append(fx.ImpactRing(cx, cy, big=True, col=(255, 215, 80)))
+            game.shake = 18
+            self.shoot_cd = 75
+            sound.play('boom')
+
     def _roll_update(self, game):
         """Prickly's spike roll: barrel along, bounce off walls, spike everything in the way."""
         self.roll_t -= 1
@@ -428,7 +485,7 @@ class Player(Entity):
         self.dash_t = JET_FRAMES + (4 if 'fins' in self.items else 0)
         self.dash_cd = int(JET_COOLDOWN * self.stat('jet', 1.0) * (0.6 if 'jetink' in self.items else 1.0))
         cx, cy = self.rect.center
-        game.shots.append(InkCloud(cx - self.dash_dir[0] * 4, cy - self.dash_dir[1] * 4))
+        game.shots.append(InkCloud(cx - self.dash_dir[0] * 4, cy - self.dash_dir[1] * 4, self.dash_col))
         sound.play('jet')
 
     def drop_bomb(self, game):
@@ -793,6 +850,8 @@ class Player(Entity):
             else:
                 y += round(math.sin(self.idle_t * 0.07))           # floating in the water
         surf.blit(img, (x, y))
+        if not self.dash_t and not self.flip_t:
+            style.draw_hat(surf, getattr(self, 'hat', 'none'), x, y, self.facing, self.idle_t)
         if self.fog_t:
             fog = pygame.Surface((36, 36), pygame.SRCALPHA)
             t = self.fog_t
@@ -2174,6 +2233,36 @@ CRITTERS = {
                        immune=('burn',), doc="SWIMS THROUGH THE HEAT, LEAVING FLAMES IN ITS WAKE."),
 }
 
+# fused creatures: each moves like the first and attacks like the second
+HYBRID_PAIRS = [('glassfish', 'scorpion'), ('seahorse', 'sparkbird'), ('hagfish', 'skullfish'),
+                ('sparkbird', 'salamander'), ('prism', 'crystalbug'), ('starling', 'sporeling'),
+                ('sandhopper', 'magmite'), ('beetle', 'prism'), ('monkey', 'seahorse'), ('scorpion', 'glassfish'),
+                ('magmite', 'starling'), ('crystalbug', 'golem'), ('sporeling', 'monkey'), ('skullfish', 'beetle'),
+                ('golem', 'sparkbird'), ('salamander', 'sandhopper')]
+
+
+def hybrid_kind(a, b):
+    return f"h_{a}_{b}"
+
+
+def _make_hybrids():
+    for a, b in HYBRID_PAIRS:
+        ca, cb = CRITTERS[a], CRITTERS[b]
+        wa, wb = ca['name'].split()[0], cb['name'].split()[-1]
+        name = (wa[:(len(wa) + 1) // 2] + wb[len(wb) // 2:]).upper()
+        cfg = dict(name=name + " (FUSED)", region=ca['region'], hp=round((ca['hp'] + cb['hp']) * 0.75),
+                   dmg=max(ca['dmg'], cb['dmg']), move=ca['move'], speed=ca['speed'],
+                   attack=cb['attack'] or ca['attack'], shot=cb.get('shot', ca.get('shot', 'spine')),
+                   every=min(ca.get('every', 140), cb.get('every', 140)), fly=ca.get('fly') or cb.get('fly'),
+                   immune=tuple(set(ca.get('immune', ())) | set(cb.get('immune', ()))),
+                   knockback=ca.get('knockback', True) and cb.get('knockback', True),
+                   hybrid=(a, b),
+                   doc=f"A FUSED CREATURE: MOVES LIKE A {ca['name']}, ATTACKS LIKE A {cb['name']}.")
+        CRITTERS[hybrid_kind(a, b)] = cfg
+
+
+_make_hybrids()
+
 
 class Critter(Enemy):
     """A creature built from its CRITTERS entry: how it moves and how it attacks."""
@@ -2440,6 +2529,8 @@ SHOP_WARES = [
 ]
 MAX_BOMBS = 10
 # Hermie's catalogue (talk to him): everything on the counter plus his back room
+HAT_WARES = [('hat_' + h, style.HATS[h][0], price, "A HAT FOR OCTO, JUST FOR FUN. WEAR IT IN THE WARDROBE (PRESS H).",
+              True) for h, price in style.HAT_PRICES.items()]
 CATALOGUE = SHOP_WARES + [
     ('potion', "SEA POTION", 20, "IF YOU FALL, IT SAVES YOU ONCE AND REFILLS HALF YOUR HEARTS. CARRY UP TO 2.", False),
     ('bigbag', "BIG BOMB BAG", 30, "CARRY 20 BUBBLE BOMBS INSTEAD OF 10.", True),
@@ -2449,6 +2540,7 @@ CATALOGUE = SHOP_WARES + [
     ('jetink', "JET INK", 30, "YOUR INK JET RECHARGES FASTER.", True),
     ('armor', "CORAL ARMOR", 60, "BIG HITS HURT HALF A HEART LESS - IN EVERY FORM.", True),
     ('pmagnet', "PEARL MAGNET", 30, "PEARLS AND HEARTS NEARBY FLY STRAIGHT TO YOU.", True),
+    *HAT_WARES,
     ('spiritpearl', "SPIRIT PEARL", 120, "A SPIRIT PEARL FOR THE TEMPLE ALTAR. PRICEY, BUT NO TRIAL NEEDED.", False),
 ]
 
@@ -2696,9 +2788,10 @@ class Wisp(Entity):
 class InkCloud:
     """The puff Octo leaves behind when jetting: stings whatever swims into it."""
 
-    def __init__(self, cx, cy):
+    def __init__(self, cx, cy, color=0):
         self.x, self.y = cx, cy
         self.t = 0
+        self.color = color          # the ink colour picked in the wardrobe
         self.life = 50
         self.dead = False
         self.hit_ids = set()
@@ -2730,7 +2823,8 @@ class InkCloud:
         c = size // 2
         for bx, by, k in self.blobs:
             rr = max(2, int(r * k * 0.7))
-            pygame.draw.circle(s, (24, 18, 56, int(190 * fade)), (int(c + bx * r / 16), int(c + by * r / 16)), rr)
+            pygame.draw.circle(s, style.dash_rgb(self.color, self.t + int(bx * 3)) + (int(190 * fade),),
+                               (int(c + bx * r / 16), int(c + by * r / 16)), rr)
         surf.blit(s, (int(self.x - c) + ox, int(self.y - c) + oy))
 
 
@@ -2970,11 +3064,17 @@ def freeze(e, frames):
 
 
 def strike(game, e, dmg, kind, src, elem=None):
-    """Hit an enemy with a shaped attack and apply its element."""
-    if elem == 'heavy':
+    """Hit an enemy with a shaped attack and apply its element (mega attacks carry two)."""
+    elems = elem if isinstance(elem, tuple) else (elem,)
+    if 'heavy' in elems:
         dmg += 1
     if not e.hit(game, dmg, kind, src):
         return
+    for el in elems:
+        _element_effect(game, e, el, src)
+
+
+def _element_effect(game, e, elem, src):
     boss = getattr(e, 'boss', False)
     cx, cy = e.rect.center
     if elem == 'freeze' and not e.dead:
@@ -3455,9 +3555,10 @@ class RainCloud(Entity):
 class Nova:
     """Nova: a ring of force that rings out around Octo. Magnety's version also drags things in."""
 
-    def __init__(self, cx, cy, elem=None):
+    def __init__(self, cx, cy, elem=None, max_r=80, dmg=2):
         self.x, self.y = cx, cy
         self.r = 6
+        self.max_r, self.dmg = max_r, dmg
         self.hit = set()
         self.elem = elem
         self.col = forms.ELEMENTS.get(elem, (0, 0, (180, 200, 255)))[2]
@@ -3478,8 +3579,8 @@ class Nova:
                             e.frozen = max(e.frozen, 40)
                         strike(game, e, 1, 'nova', (self.x, self.y))
                     else:
-                        strike(game, e, 2, 'nova', (self.x, self.y), self.elem)
-        if self.r > 80:
+                        strike(game, e, self.dmg, 'nova', (self.x, self.y), self.elem)
+        if self.r > self.max_r:
             self.dead = True
 
     def draw(self, surf, ox=0, oy=0):
@@ -3753,3 +3854,39 @@ class FusionMachine(Entity):
         for i in range(3):
             pygame.draw.circle(surf, (230, 90, 70) if (t // 20 + i) % 3 == 0 else (60, 60, 70),
                                (x + 7 + i * 9, y + 23), 1)
+
+
+class MegaMachine(FusionMachine):
+    """The secret Mega Machine: asleep under moss until Octo has made every fusion."""
+
+    def update(self, game):
+        self.t += 1
+        if self.t % 30 == 1:
+            self.awake = game.mega_awake()
+
+    def draw(self, surf, ox=0, oy=0):
+        import forms
+        game_awake = getattr(self, 'awake', False)
+        x, y = round(self.x) + ox, round(self.y) + oy
+        t = self.t
+        body = (70, 40, 110) if game_awake else (60, 62, 58)
+        pygame.draw.rect(surf, (20, 14, 30), (x, y + 23, 32, 9))
+        pygame.draw.rect(surf, body, (x + 2, y + 6, 28, 19))
+        pygame.draw.rect(surf, (200, 160, 60) if game_awake else (90, 92, 86), (x + 2, y + 6, 28, 19), 1)
+        for i in range(3):                      # three tanks
+            tx = x + 4 + i * 9
+            pygame.draw.rect(surf, (10, 10, 20), (tx, y - 2, 6, 12))
+            if game_awake:
+                lvl = 5 + int(math.sin(t * 0.06 + i * 2) * 2)
+                pygame.draw.rect(surf, ((255, 120, 200), (255, 215, 80), (120, 220, 255))[i],
+                                 (tx + 1, y + 10 - lvl, 4, lvl))
+            pygame.draw.rect(surf, (200, 210, 230) if game_awake else (110, 110, 110), (tx, y - 2, 6, 12), 1)
+        if game_awake:
+            r = 4 + (t // 6) % 3
+            pygame.draw.circle(surf, (255, 215, 80), (x + 16, y + 17), r)
+            pygame.draw.circle(surf, (255, 255, 230), (x + 16, y + 17), 2)
+        else:                                   # asleep: moss and a faint ember of light
+            for mx, my in ((5, 8), (12, 20), (22, 9), (27, 18), (18, 13)):
+                pygame.draw.circle(surf, (60, 110, 60), (x + mx, y + my), 3)
+            if (t // 40) % 2:
+                surf.set_at((x + 16, y + 17), (255, 200, 120))

@@ -181,6 +181,8 @@ class AuraMote:
 
 def element_of(mood):
     import forms
+    if forms.is_mega(mood):
+        return forms.register_mega(mood)['elements'][0]
     if mood in forms.FUSIONS:
         return forms.FUSIONS[mood]['element']
     return {'magnet': 'pull', 'starry': 'loot', 'wobbly': 'stun', 'stony': 'heavy', 'clammy': None}.get(mood)

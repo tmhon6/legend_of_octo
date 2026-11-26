@@ -64,6 +64,7 @@ In the browser, saves go to the browser's local storage instead of `savegame.jso
 | P / Enter / Esc    | Pause. In the pause menu: **S** saves, **Q** quits  |
 | M                  | World map (game pauses; ←/→ flips between sea and sky) |
 | N                  | Mute / unmute all sound (music and effects)         |
+| H                  | Wardrobe: pick a hat and the ink jet's colour       |
 | F11                | Fullscreen                                          |
 
 ## Forms
@@ -175,6 +176,28 @@ pits, ponds and sky gaps*), **Shroomy** (dizzying spores; finds more treasure) a
 (magma orbs; *walks on lava*). With 20 base forms, the Fusion Machine can make **190** fusions,
 each with a different attack. There are 16 attack shapes (new: beam, orbs, rain) and 12 elements
 (new: venom, sludge, gust, dizzy, crack). The original 91 fusions are unchanged.
+
+### The secret Mega Machine
+
+Make **all 190 fusions** and an old machine wakes deep in the **Ancient Ruins** of the Underdeep.
+It fuses two *fused* forms into a **mega form**, for 100 pearls. Each mega form gets one of six huge
+attacks (Supernova, Tsunami, Meteor Storm, Black Hole, Prism Storm, Titan Slam) carrying *both*
+parents' elements, plus the strengths of both, pushed further.
+
+### Fused creatures
+
+Each new region also has a **fused creature** that moves like one creature and attacks like
+another, with the head of one and the body of the other. For example, a Glassfish × Scorpion darts
+in straight lines and strikes with a stinger. There are 16 kinds.
+
+### Wardrobe: hats and ink colour
+
+Press **H** (or tap **HAT**) to open the wardrobe:
+* **16 hats.** A sea cap, a bow and a party hat are yours from the start. Hermie sells a beanie,
+  chef hat, cowboy hat, sombrero and top hat. The rest are earned: a flower crown for 10 trials, a
+  pirate hat for Captain Claw, a propeller cap for visiting every world, a wizard hat for 10 forms,
+  a viking helm for 10 guardians, a gold crown for all seven Tide Bells, and a halo for every trial.
+* **9 colours for the ink jet's puff**, rainbow included.
 
 The world map is 160×80 tiles, plus seven one-screen trial rooms and the Sky Islands:
 

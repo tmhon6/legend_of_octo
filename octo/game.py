@@ -15,11 +15,12 @@ import sound
 import world
 from title import TitleScene
 from touch import TouchControls, touch_device
-from entities import (CATALOGUE, max_bombs, Altar, DIRS, ENEMY_TYPES, FusionMachine, MiniBoss, Patroller, Thief, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
+from entities import (CATALOGUE, max_bombs, Altar, DIRS, ENEMY_TYPES, FusionMachine, MegaMachine, MiniBoss, Patroller, Thief, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
                       EnemyShot, Hermie, Jelly, Particle, Pickup, Player, Puff, Shelly, Urchin)
 from settings import SAVE_SLOT, FPS, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
 from world import ARENAS, Level
 import temples
+import style
 
 DIR_KEYS = {
     pygame.K_UP: 'up', pygame.K_w: 'up',
@@ -85,6 +86,7 @@ def quit_game():
 BOMB_KEYS = {pygame.K_b}
 MAP_KEYS = {pygame.K_m}
 FORMS_KEYS = {pygame.K_f}
+WARDROBE_KEYS = {pygame.K_h}
 CONFIRM_KEYS = {pygame.K_RETURN, pygame.K_KP_ENTER}
 
 AREA_INFO = {
@@ -298,7 +300,8 @@ class Game:
         mx, my = world.FUSION_MACHINE
         ax, ay = world.ALTAR
         self.npcs = [Shelly(tx * TILE, ty * TILE), Hermie(hx * TILE, hy * TILE), FusionMachine(mx * TILE, my * TILE),
-                     Altar(ax * TILE, ay * TILE)]
+                     Altar(ax * TILE, ay * TILE),
+                     MegaMachine(world.MEGA_MACHINE[0] * TILE, world.MEGA_MACHINE[1] * TILE)]
         self.bought = set()
         self.shop_focus = None
         self.trial = None
@@ -536,7 +539,7 @@ class Game:
             'version': 1,
             'pos': pos,
             'player': {k: getattr(p, k) for k in ('hp', 'max_hp', 'pearls', 'keys', 'bombs', 'mood', 'ink_mode',
-                                                       'sphere', 'spirit', 'potions')},
+                                                       'sphere', 'spirit', 'potions', 'hat', 'dash_col')},
             'items': sorted(p.items), 'forms': p.forms,
             'opened': sorted(self.opened), 'cleared': sorted(self.cleared),
             'collected': [list(i) for i in self.collected], 'bought': sorted(self.bought),
@@ -567,6 +570,8 @@ class Game:
             setattr(p, k, v)
         p.items = set(data['items'])
         p.forms = list(data['forms'])
+        for f in p.forms:
+            self.form_tables(f)
         if p.mood not in p.forms:
             p.mood = 'blue'
         self.bought = set(data['bought'])
@@ -579,6 +584,9 @@ class Game:
                 self.level.set_tile(tx, ty, world.floor_for(tx, ty))
             self.opened.add((tx, ty))
         self.cleared = set(data['cleared'])
+        for n in self.npcs:
+            if isinstance(n, MegaMachine):
+                n.awake = self.mega_awake()
         for sp in self.spawns:
             if sp['arena'] in self.cleared:
                 sp['killed'] = True
@@ -785,6 +793,16 @@ class Game:
         else:
             p.pearls -= forms.FUSION_COST
             p.forms.append(f)
+            if self.mega_awake() and not self.flags.get('mega_woke'):
+                self.flags['mega_woke'] = True
+                p.next_mood = f
+                p.flip_t = 14
+                self.state = 'play'
+                sound.play('roar')
+                self.say(FORM_INFO[f] + ["YOU'VE MADE EVERY FUSION THERE IS!",
+                                         "FAR BELOW, IN THE ANCIENT RUINS OF THE UNDERDEEP, AN OLD MACHINE GROANS "
+                                         "AWAKE... IT CAN FUSE FUSED FORMS!"])
+                return
             p.next_mood = f
             p.flip_t = 14
             self.state = 'play'
@@ -835,6 +853,224 @@ class Game:
             gfx.text(scr, line, box.x + 6, y + j * 10, (255, 220, 120) if j == 0 and self.fuse_a and not
                      self.fuse_msg else colr)
         gfx.text(scr, "Z: PICK / FUSE   ESC: BACK", SCREEN_W // 2, box.bottom - 9, (140, 150, 190), center=True)
+
+    # ---- the secret Mega Machine ---------------------------------------------
+    def form_tables(self, f):
+        """Colours, label and info for a form (mega forms are made on demand)."""
+        if not forms.is_mega(f) or f in FORM_INFO:
+            return
+        m = forms.register_mega(f)
+        a, b = m['parents']
+        FORM_COLORS[f] = tuple((x + y) // 2 for x, y in zip(FORM_COLORS[a], FORM_COLORS[b]))
+        FORM_BOX[f] = (120, 90, 30)
+        FORM_LABEL[f] = m['label']
+        FORM_INFO[f] = [f"THE MEGA MACHINE ROARS... YOU MADE MEGA {m['name']} OCTO!",
+                        f"{m['attack']}: {m['desc']}",
+                        f"STRENGTH - {forms.STRENGTHS[f][0]}: {forms.STRENGTHS[f][1]}"]
+
+    def fusions_made(self):
+        return [f for f in self.player.forms if f in forms.FUSIONS]
+
+    def mega_awake(self):
+        return len(self.fusions_made()) >= len(forms.FUSIONS)
+
+    def talk_mega(self):
+        made = len(self.fusions_made())
+        if not self.mega_awake():
+            sound.play('nope')
+            self.say(["AN ANCIENT MACHINE, ASLEEP UNDER THE MOSS. THREE EMPTY TANKS... A FAINT GLOW STIRS INSIDE.",
+                      f"IT SEEMS TO HUNGER FOR EVERY FUSION THERE IS. YOU'VE MADE {made} OF {len(forms.FUSIONS)}."])
+            return
+        self.mega_i = 0
+        self.mega_a = None
+        self.mega_msg = ''
+        self.state = 'megafuse'
+        sound.play('pause')
+
+    def megafuse_key(self, k):
+        fl = sorted(self.fusions_made(), key=lambda f: forms.NAMES[f])
+        n = len(fl)
+        steps = {pygame.K_UP: -1, pygame.K_w: -1, pygame.K_DOWN: 1, pygame.K_s: 1,
+                 pygame.K_LEFT: -8, pygame.K_a: -8, pygame.K_RIGHT: 8, pygame.K_d: 8}
+        if k in steps and n:
+            self.mega_i = (self.mega_i + steps[k]) % n
+            self.mega_msg = ''
+            sound.play('text')
+        elif (k in ACTION_KEYS or k in CONFIRM_KEYS) and n:
+            cur = fl[self.mega_i]
+            if self.mega_a is None:
+                self.mega_a = cur
+                sound.play('text')
+            elif cur == self.mega_a:
+                self.mega_a = None
+                sound.play('text')
+            else:
+                self.mega_fuse(self.mega_a, cur)
+        elif k in FUSE_KEYS_CLOSE:
+            if self.mega_a:
+                self.mega_a = None
+            else:
+                self.state = 'play'
+            sound.play('pause')
+
+    def mega_fuse(self, a, b):
+        p = self.player
+        mid = forms.mega_of(a, b)
+        if mid in p.forms:
+            self.mega_msg = "YOU ALREADY MADE THAT ONE."
+            sound.play('nope')
+            return
+        if p.pearls < forms.MEGA_COST:
+            self.mega_msg = f"A MEGA FUSION COSTS {forms.MEGA_COST} PEARLS. YOU HAVE {p.pearls}."
+            sound.play('nope')
+            return
+        p.pearls -= forms.MEGA_COST
+        self.form_tables(mid)
+        p.forms.append(mid)
+        p.next_mood = mid
+        p.flip_t = 14
+        self.state = 'play'
+        self.shake = 14
+        sound.play('roar')
+        self.burst(p.rect.center, (255, 215, 80), 26)
+        self.say(FORM_INFO[mid])
+
+    def draw_megafuse(self, scr):
+        p = self.player
+        fl = sorted(self.fusions_made(), key=lambda f: forms.NAMES[f])
+        box = pygame.Rect(8, HUD_H + 3, SCREEN_W - 16, PLAY_H - 6)
+        self.draw_box(scr, box)
+        made = sum(1 for f in p.forms if forms.is_mega(f))
+        gfx.text(scr, "MEGA MACHINE", SCREEN_W // 2, box.y + 5, (255, 215, 80), center=True)
+        gfx.text(scr, f"TWO FUSED FORMS - {forms.MEGA_COST} PEARLS - MADE {made}",
+                 SCREEN_W // 2, box.y + 15, (170, 180, 220), center=True)
+        rows, cols = 8, 3
+        col0 = max(0, min(self.mega_i // rows - 1, (len(fl) - 1) // rows - cols + 1))
+        for i in range(col0 * rows, min(len(fl), (col0 + cols) * rows)):
+            f = fl[i]
+            c, r = i // rows - col0, i % rows
+            x, y = box.x + 10 + c * 80, box.y + 27 + r * 10
+            on = i == self.mega_i
+            if on:
+                gfx.text(scr, ">", x - 6, y, (255, 220, 120))
+            colr = (255, 215, 80) if f == self.mega_a else (255, 255, 255) if on else (170, 175, 205)
+            gfx.text(scr, forms.NAMES[f] + (" *" if f == self.mega_a else ""), x + 2, y, colr)
+        y = box.bottom - 34
+        if not fl:
+            return
+        cur = fl[self.mega_i]
+        if self.mega_msg:
+            lines, colr = gfx.wrap(self.mega_msg, 38), (255, 220, 120)
+        elif self.mega_a is None or cur == self.mega_a:
+            lines, colr = ["PICK TWO FUSED FORMS WITH Z. LEFT/RIGHT JUMPS A PAGE."], (200, 210, 240)
+        else:
+            m = forms.register_mega(forms.mega_id(self.mega_a, cur))
+            lines = [f"> MEGA {m['name']}: {m['attack']}"] + gfx.wrap(m['desc'], 38)
+            colr = (200, 210, 240)
+        for j, line in enumerate(lines[:3]):
+            gfx.text(scr, line, box.x + 6, y + j * 10, colr)
+
+    # ---- the wardrobe: hats and the colour of the ink jet ---------------------
+    def open_wardrobe(self):
+        if self.trial or self.bossfight:
+            sound.play('nope')
+            return
+        hats = list(style.HATS)
+        p = self.player
+        self.ward_row = 0
+        self.ward_i = hats.index(p.hat) if p.hat in hats else 0
+        self.ward_c = p.dash_col
+        self.state = 'wardrobe'
+        sound.play('pause')
+
+    def wardrobe_key(self, k):
+        hats = list(style.HATS)
+        p = self.player
+        if k in (pygame.K_UP, pygame.K_w, pygame.K_DOWN, pygame.K_s):
+            if self.ward_row == 0:
+                step = -4 if k in (pygame.K_UP, pygame.K_w) else 4
+                if step > 0 and self.ward_i + 4 >= len(hats):
+                    self.ward_row = 1
+                elif step < 0 and self.ward_i < 4:
+                    pass
+                else:
+                    self.ward_i = max(0, min(len(hats) - 1, self.ward_i + step))
+            elif k in (pygame.K_UP, pygame.K_w):
+                self.ward_row = 0
+            sound.play('text')
+        elif k in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
+            d = -1 if k in (pygame.K_LEFT, pygame.K_a) else 1
+            if self.ward_row == 0:
+                self.ward_i = (self.ward_i + d) % len(hats)
+            else:
+                self.ward_c = (self.ward_c + d) % len(style.DASH_COLORS)
+                p.dash_col = self.ward_c          # colours are always free: pick and go
+            sound.play('text')
+        elif k in ACTION_KEYS or k in CONFIRM_KEYS:
+            if self.ward_row == 0:
+                hat = hats[self.ward_i]
+                if style.unlocked(self, hat):
+                    p.hat = hat
+                    sound.play('item')
+                    self.burst(p.rect.center, (255, 240, 160), 8)
+                else:
+                    sound.play('nope')
+            else:
+                p.dash_col = self.ward_c
+                sound.play('item')
+        elif k in FUSE_KEYS_CLOSE or k in WARDROBE_KEYS:
+            self.state = 'play'
+            sound.play('pause')
+
+    def draw_wardrobe(self, scr):
+        p = self.player
+        hats = list(style.HATS)
+        box = pygame.Rect(8, HUD_H + 3, SCREEN_W - 16, PLAY_H - 6)
+        self.draw_box(scr, box)
+        gfx.text(scr, "WARDROBE", SCREEN_W // 2, box.y + 5, (255, 220, 120), center=True)
+        # a big Octo wearing the hat under the cursor, puffing the chosen ink colour
+        hat = hats[self.ward_i]
+        ox, oy = box.right - 40, box.y + 22
+        col = style.dash_rgb(self.ward_c, self.t)
+        for i in range(4):
+            pygame.draw.circle(scr, col, (ox - 6 - i * 5, oy + 22 + (i % 2) * 2), 4 - i // 2)
+        big = pygame.transform.scale(gfx.OCTO[p.mood]['down'][(self.t // 20) % 2], (32, 32))
+        scr.blit(big, (ox, oy + 6))
+        if hat != 'none':
+            himg = style.icon(hat)
+            himg = pygame.transform.scale(himg, (himg.get_width() * 2, himg.get_height() * 2))
+            scr.blit(himg, (ox + 16 - himg.get_width() // 2, oy + 6 - himg.get_height() + 8))
+        # the hat grid
+        for i, h in enumerate(hats):
+            cx, cy = box.x + 18 + (i % 4) * 44, box.y + 24 + (i // 4) * 24
+            got = style.unlocked(self, h)
+            on = self.ward_row == 0 and i == self.ward_i
+            pygame.draw.rect(scr, (255, 220, 120) if on else (60, 70, 110), (cx - 14, cy - 8, 28, 20), 1)
+            img = style.icon(h)
+            if img is not None:
+                if not got:
+                    img = gfx.tint(img, (60, 60, 80))
+                scr.blit(img, (cx - img.get_width() // 2, cy - 6))
+            else:
+                gfx.text(scr, "-", cx - 2, cy - 2, (180, 180, 200))
+            if h == p.hat:
+                gfx.text(scr, "*", cx + 8, cy + 5, (120, 255, 160))
+        name, how = style.HATS[hat]
+        got = style.unlocked(self, hat)
+        y = box.y + 124
+        gfx.text(scr, name + ("" if got else " (LOCKED)"), box.x + 8, y, (255, 255, 255) if got else (170, 170, 190))
+        gfx.text(scr, style.HOW[how] if not got or how else "Z: WEAR IT", box.x + 8, y + 10, (170, 180, 220))
+        # ink jet colour
+        cy = box.bottom - 24
+        on = self.ward_row == 1
+        gfx.text(scr, "JET INK:", box.x + 8, cy, (255, 220, 120) if on else (170, 180, 220))
+        for i in range(len(style.DASH_COLORS)):
+            cx = box.x + 66 + i * 16
+            pygame.draw.circle(scr, style.dash_rgb(i, self.t), (cx, cy + 3), 5)
+            if i == self.ward_c:
+                pygame.draw.circle(scr, (255, 255, 255) if on else (150, 150, 170), (cx, cy + 3), 7, 1)
+        gfx.text(scr, style.DASH_COLORS[self.ward_c][0], box.x + 8, cy + 10, (200, 210, 240))
+        gfx.text(scr, "ESC: DONE", box.right - 6 - gfx.text_width("ESC: DONE"), cy + 10, (140, 150, 190))
 
     # ---- choosing a form from the whole list ---------------------------------
     def open_forms(self):
@@ -1681,6 +1917,8 @@ class Game:
                 self.open_map()
             elif k in FORMS_KEYS:
                 self.open_forms()
+            elif k in WARDROBE_KEYS:
+                self.open_wardrobe()
             elif k in FORM_KEYS:
                 self.player.pick_form(FORM_KEYS[k])
         elif st == 'pause':
@@ -1710,6 +1948,10 @@ class Game:
             self.fuse_key(k)
         elif st == 'forms':
             self.forms_key(k)
+        elif st == 'wardrobe':
+            self.wardrobe_key(k)
+        elif st == 'megafuse':
+            self.megafuse_key(k)
         elif st == 'catalogue':
             self.catalogue_key(k)
         elif st == 'map':
@@ -1774,6 +2016,9 @@ class Game:
         probe = p.rect.inflate(4, 4).move(dx * 6, dy * 6)
         for npc in self.npcs:
             if probe.colliderect(npc.rect):
+                if isinstance(npc, MegaMachine):
+                    self.talk_mega()
+                    return True
                 if isinstance(npc, FusionMachine):
                     self.open_fuse()
                     return True
@@ -2230,7 +2475,7 @@ class Game:
             veil.fill((255, 255, 255))
             veil.set_alpha(int(255 * self.flash_t / 20))
             scr.blit(veil, (0, HUD_H))
-        if st in ('warp', 'map', 'fuse', 'altar', 'forms', 'catalogue'):
+        if st in ('warp', 'map', 'fuse', 'altar', 'forms', 'catalogue', 'wardrobe', 'megafuse'):
             veil = pygame.Surface((PLAY_W, PLAY_H))
             veil.fill((0, 0, 16))
             veil.set_alpha(150)
@@ -2246,6 +2491,10 @@ class Game:
             self.draw_altar(scr)
         elif st == 'forms':
             self.draw_forms(scr)
+        elif st == 'wardrobe':
+            self.draw_wardrobe(scr)
+        elif st == 'megafuse':
+            self.draw_megafuse(scr)
         elif st == 'catalogue':
             self.draw_catalogue(scr)
         if st == 'dialog':
@@ -2879,7 +3128,7 @@ class Game:
         lines = ["PAUSED", "ARROWS/WASD  MOVE", "Z / SPACE    ATTACK / TALK / BUY",
                  "X / 1-9      CHANGE FORM", "C            INK: LINE/BURST",
                  "V            INK JET (DASH)", "B            BUBBLE BOMB", "T            WARP TO PORTALS",
-                 "M            WORLD MAP", "N            MUTE", "P/ENTER/ESC  RESUME"]
+                 "M            WORLD MAP", "N / H        MUTE / HATS", "P/ENTER/ESC  RESUME"]
         for i, l in enumerate(lines):
             gfx.text(scr, l, box.x + 10 if i else SCREEN_W // 2, box.y + 6 + i * 10,
                      (255, 220, 120) if i == 0 else (255, 255, 255), center=(i == 0))

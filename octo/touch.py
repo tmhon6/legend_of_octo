@@ -25,7 +25,7 @@ MIN_SIDE = 70                   # narrowest side panel worth using in landscape
 PILLS = [('pause', "II", pygame.K_p), ('map', "MAP", pygame.K_m), ('warp', "WARP", pygame.K_t),
          ('forms', "FORMS", pygame.K_f),
          ('bomb', "BOMB", pygame.K_b), ('ink', "INK", pygame.K_c), ('save', "SAVE", pygame.K_LSHIFT),
-         ('mute', "MUTE", pygame.K_n), ('full', "FULL", None)]
+         ('mute', "MUTE", pygame.K_n), ('hat', "HAT", pygame.K_h), ('full', "FULL", None)]
 ARROW = {'up': pygame.K_UP, 'down': pygame.K_DOWN, 'left': pygame.K_LEFT, 'right': pygame.K_RIGHT}
 
 
@@ -168,7 +168,7 @@ class TouchControls:
         if self.mode == 'sides':
             s, W = self.side, SCREEN_W + 2 * self.side
             # left: pause / map / warp / full on top, D-pad below.  right: the rest, then buttons
-            left, right = ['pause', 'map', 'warp', 'full'], ['forms', 'bomb', 'ink', 'save', 'mute']
+            left, right = ['pause', 'map', 'warp', 'full', 'hat'], ['forms', 'bomb', 'ink', 'save', 'mute']
             pw, ph = min(s - 12, 74), 15
             rects = {}
             for col, x0 in ((left, (s - pw) // 2), (right, W - s + (s - pw) // 2)):
@@ -195,7 +195,8 @@ class TouchControls:
                             'jet': (222, cy + 38, 16, pygame.K_v, "JET")}
         else:
             n = len(PILLS)
-            self.pill_rects = [pygame.Rect(SCREEN_W - 4 - (n - i) * 28, HUD_H + 3, 26, 12) for i in range(n)]
+            pw = min(28, (SCREEN_W - 8) // n)
+            self.pill_rects = [pygame.Rect(SCREEN_W - 4 - (n - i) * pw, HUD_H + 3, pw - 2, 12) for i in range(n)]
             self.dpad = (40, SCREEN_H - 40, 32)
             self.buttons = {'atk': (226, SCREEN_H - 40, 18, pygame.K_z, "ATK"),
                             'form': (194, SCREEN_H - 20, 13, pygame.K_x, "FORM"),
@@ -254,7 +255,7 @@ class TouchControls:
                     return
             # anywhere else on the left half: a joystick appears under your thumb -- drag to swim
             w = pygame.display.get_surface().get_width() if pygame.display.get_surface() else SCREEN_W
-            if st in ('play', 'warp', 'fuse', 'altar', 'forms', 'catalogue') and x < w / 2:
+            if st in ('play', 'warp', 'fuse', 'altar', 'forms', 'catalogue', 'wardrobe', 'megafuse') and x < w / 2:
                 self.fingers[fid] = 'dpad'
                 self.stick = (x, y)
                 self.knob = (x, y)
@@ -271,7 +272,7 @@ class TouchControls:
             g.on_key(pygame.K_z)
         elif st == 'map':
             g.on_key(pygame.K_m)
-        elif st in ('fuse', 'altar', 'forms', 'catalogue'):
+        elif st in ('fuse', 'altar', 'forms', 'catalogue', 'wardrobe', 'megafuse'):
             g.on_key(pygame.K_ESCAPE)
         elif st == 'pause':
             g.on_key(pygame.K_p)

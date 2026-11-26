@@ -518,7 +518,22 @@ _settle_trial_spots()
 MINIBOSSES += WD.NEW_GUARDIANS
 GEYSERS += WD.NEW_GEYSERS
 PASSAGES = list(WD.PASSAGES)          # (tile, tile, 'shore' | 'sinkhole'): walk in to cross between worlds
-ENEMIES += WD.NEW_ENEMIES
+# about one in four of each new region's own creatures is a fused hybrid
+_HYBRID_OF = {a: f"h_{a}_{b}" for a, b in [('glassfish', 'scorpion'), ('seahorse', 'sparkbird'),
+                                             ('hagfish', 'skullfish'), ('sparkbird', 'salamander'),
+                                             ('prism', 'crystalbug'), ('starling', 'sporeling'),
+                                             ('sandhopper', 'magmite'), ('beetle', 'prism'), ('monkey', 'seahorse'),
+                                             ('scorpion', 'glassfish'), ('magmite', 'starling'),
+                                             ('crystalbug', 'golem'), ('sporeling', 'monkey'),
+                                             ('skullfish', 'beetle'), ('golem', 'sparkbird'),
+                                             ('salamander', 'sandhopper')]}
+_count = {}
+for _i, (_k, _x, _y) in enumerate(WD.NEW_ENEMIES):
+    if _k in _HYBRID_OF:
+        _count[_k] = _count.get(_k, 0) + 1
+        if _count[_k] % 4 == 2:
+            _k = _HYBRID_OF[_k]
+    ENEMIES.append((_k, _x, _y))
 ITEMS += WD.NEW_ITEMS
 REGIONS += [(name, r) for name, wld, r, *_ in WD.NEW_REGIONS]
 REGIONS += [(t['title'], t['room']) for t in WD.NEW_TRIALS.values()]
@@ -529,6 +544,22 @@ REGION_TIER = {'KELP WOODS': 1, 'CORAL GARDENS': 1, 'THE LAGOON': 1, 'SUNKEN SHR
                'THE ABYSS': 2, 'SHIP GRAVEYARD': 2, 'SKY ISLANDS': 2, 'FROZEN SHELF': 3, 'EMBER VENTS': 3,
                'SUNKEN CITY': 4, 'MURK PALACE': 4}
 REGION_TIER.update({name: tier for name, wld, r, theme, tier, *_ in WD.NEW_REGIONS})
+def _mega_machine_spot():
+    r = next(rr for name, wld, rr, *_ in WD.NEW_REGIONS if name == 'ANCIENT RUINS')
+    taken = {(int(x), int(y)) for _k, x, y in ENEMIES + ITEMS}
+    cx, cy = (r[0] + r[2]) // 2, (r[1] + r[3]) // 2
+    best = None
+    for y in range(r[1] + 2, r[3] - 3):
+        for x in range(r[0] + 2, r[2] - 3):
+            block = [(x + dx, y + dy) for dy in range(-1, 4) for dx in range(-1, 3)]
+            if all(LEVEL[b][a] in '.,' and (a, b) not in taken for a, b in block):
+                d = abs(x - cx) + abs(y - cy)
+                if best is None or d < best[0]:
+                    best = (d, x, y)
+    return best[1], best[2]
+
+
+MEGA_MACHINE = _mega_machine_spot()      # top-left tile of the 2x2 secret Mega Machine
 CREATURE_OF = {name: critter for name, wld, r, theme, tier, dark, critter, guard in WD.NEW_REGIONS}
 NEW_WORLD_GUARDIANS = {guard for *_, guard in WD.NEW_REGIONS}
 

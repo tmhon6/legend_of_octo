@@ -167,6 +167,16 @@ class _FusedPalettes(dict):
 
     def __missing__(self, mood):
         import forms
+        if forms.is_mega(mood):                  # mega forms: both fused parents, with a golden shine
+            m = forms.register_mega(mood)
+            pa, pb = self[m['parents'][0]], self[m['parents'][1]]
+            pal = {k: tuple((x + y) // 2 for x, y in zip(pa.get(k, pb.get(k)), pb.get(k, pa.get(k))))
+                   for k in set(pa) | set(pb)}
+            pal['P'] = (255, 215, 80)
+            pal['H'] = tuple(min(255, c + 40) for c in pal['H'])
+            pal['w'] = (255, 255, 255)
+            self[mood] = pal
+            return pal
         f = forms.FUSIONS.get(mood)
         if not f:
             raise KeyError(mood)
@@ -238,6 +248,8 @@ def _octo_face(rows, mood, facing):
         rows[10][mx] = 'k'
         rows[10][mx + 1] = 'k'
         return
+    if mood.startswith('mega:'):     # mega: wear the first parent's face
+        mood = mood[5:].split('|')[0]
     if '+' in mood:                 # fused: wear a parent's face
         a, b = mood.split('+')
         mood = 'mad' if {'mad', 'spiky', 'stony'} & {a, b} else 'ghost' if 'ghost' in (a, b) else 'blue'
@@ -1992,9 +2004,29 @@ def _critter_frames(kind):
     return out
 
 
+def _hybrid_frames(fa, fb):
+    """A fused creature: the head of one with the body of the other, and a glint of fusion light."""
+    out = []
+    for i in range(2):
+        s = fb[i].copy()
+        top = fa[i].subsurface((0, 0, 16, 8)).copy()
+        s.fill((0, 0, 0, 0), (0, 0, 16, 8))
+        s.blit(top, (0, 0))
+        for x in range(16):                    # a seam where the two halves meet
+            if s.get_at((x, 8)).a:
+                s.set_at((x, 8), (255, 220, 255))
+        out.append(s)
+    return out
+
+
 def make_critters():
     import entities
-    return {k: _critter_frames(k) for k in entities.CRITTERS}
+    out = {k: _critter_frames(k) for k, c in entities.CRITTERS.items() if not c.get('hybrid')}
+    for k, c in entities.CRITTERS.items():
+        if c.get('hybrid'):
+            a, b = c['hybrid']
+            out[k] = _hybrid_frames(out[a], out[b])
+    return out
 
 
 def load():

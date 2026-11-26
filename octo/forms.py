@@ -292,3 +292,71 @@ def stat(form, key, default):
 
 def is_fused(form):
     return form in FUSIONS
+
+
+# ---------------------------------------------------------------------------- mega fusions
+# The secret Mega Machine (deep in the Ancient Ruins) wakes once Octo has made every fusion.
+# It fuses two FUSED forms into a mega form: one of six huge attacks carrying BOTH parents' elements.
+MEGA_SHAPES = {
+    'supernova': ("NOVA", "SUPERNOVA", "A HUGE BLAST RINGS OUT ACROSS THE SCREEN"),
+    'tsunami': ("WAVE", "TSUNAMI", "THREE GIANT WAVES SURGE OUT AHEAD OF YOU"),
+    'meteor': ("METEOR", "METEOR STORM", "METEORS SMASH DOWN ON EVERY ENEMY IN SIGHT"),
+    'blackhole': ("HOLE", "BLACK HOLE", "A BLACK HOLE DRAGS EVERYTHING IN AND CRUSHES IT"),
+    'prism': ("PRISM", "PRISM STORM", "SEVEN BEAMS FAN OUT AT ONCE"),
+    'titan': ("TITAN", "TITAN SLAM", "YOU SLAM DOWN WITH TITANIC FORCE, SHAKING THE GROUND"),
+}
+MEGA_COST = 100
+MEGAS = {}
+
+
+def mega_id(a, b):
+    a, b = sorted((a, b))
+    return f"mega:{a}|{b}"
+
+
+def is_mega(form):
+    return isinstance(form, str) and form.startswith('mega:')
+
+
+def register_mega(mid):
+    """Make the names, attack and strengths of a mega form (they're built the first time they're needed)."""
+    if mid in MEGAS:
+        return MEGAS[mid]
+    import zlib
+    a, b = mid[5:].split('|')
+    fa, fb = FUSIONS[a], FUSIONS[b]
+    shape = list(MEGA_SHAPES)[zlib.crc32(mid.encode()) % len(MEGA_SHAPES)]
+    ea, eb = fa['element'], fb['element']
+    elems = (ea, eb) if ea != eb else (ea, 'heavy' if ea != 'heavy' else 'stun')
+    na, nb = fa['name'], fb['name']
+    name = _squash(na[:(len(na) + 1) // 2] + nb[len(nb) // 2:])[:9]
+    m = {'parents': (a, b), 'name': name, 'shape': shape, 'elements': elems,
+         'attack': f"{ELEMENTS[elems[0]][0]}-{ELEMENTS[elems[1]][0]} {MEGA_SHAPES[shape][1]}",
+         'label': MEGA_SHAPES[shape][0],
+         'desc': f"{MEGA_SHAPES[shape][2]}. {ELEMENTS[elems[0]][0]} + {ELEMENTS[elems[1]][0]} POWER."}
+    MEGAS[mid] = m
+    sa, sb = STRENGTHS[a][2], STRENGTHS[b][2]
+    stats = {}
+    for k in set(sa) | set(sb):
+        va, vb = sa.get(k), sb.get(k)
+        vals = [v for v in (va, vb) if v]
+        if k in ('jet', 'regen'):
+            stats[k] = min(vals) * 0.8
+        elif k in ('power', 'thorns', 'armor'):
+            stats[k] = min(3, sum(vals))
+        elif k in ('dodge', 'crit'):
+            stats[k] = min(0.5, sum(vals))
+        else:
+            stats[k] = max(vals)
+    sa_name, sb_name = STRENGTHS[a][0].split(' /')[0], STRENGTHS[b][0].split(' /')[0]
+    STRENGTHS[mid] = ("MEGA " + sa_name + ("" if sa_name == sb_name else " / " + sb_name),
+                      "EVERY STRENGTH OF BOTH FUSED FORMS, PUSHED EVEN FURTHER.", stats)
+    NAMES[mid] = name
+    ATTACKS[mid] = m['attack']
+    return m
+
+
+def mega_of(a, b):
+    mid = mega_id(a, b)
+    register_mega(mid)
+    return mid
