@@ -63,7 +63,8 @@ def main():
 
 def write_launcher(versions, dev):
     rows = []
-    for i, v in enumerate(versions):
+    # the two newest releases get big buttons; everything else goes in a small dropdown
+    for i, v in enumerate(versions[:2]):
         badge = '<span class="badge">LATEST</span>' if i == 0 else ''
         note = f'<div class="note">{html.escape(v["note"])}</div>' if v['note'] else ''
         rows.append(f'''<a class="ver{' first' if i == 0 else ''}" href="{v['tag']}/">
@@ -71,9 +72,14 @@ def write_launcher(versions, dev):
           <div class="date">{v['date']}</div>{note}</a>''')
     if not rows:
         rows.append('<div class="empty">No released versions yet.</div>')
-    rows.append(f'''<a class="ver dev" href="dev/">
-          <div class="name">Development build</div>
-          <div class="date">{html.escape(dev['label'])} &middot; {dev['date']} &middot; newest, may be unfinished</div></a>''')
+    opts = [f'<option value="{v["tag"]}/">{html.escape(v["tag"])} ({v["date"]})</option>' for v in versions[2:]]
+    opts.append(f'<option value="dev/">Development build ({html.escape(dev["label"])}, may be unfinished)</option>')
+    rows.append('''<div class="older">
+          <select aria-label="Older versions" onchange="if (this.value) location.href = this.value">
+            <option value="">Older versions...</option>
+            ''' + '\n            '.join(opts) + '''
+          </select>
+        </div>''')
     page = TEMPLATE.replace('%ROWS%', '\n'.join(rows)).replace('%DATA%', json.dumps(
         [v['tag'] for v in versions]))
     with open(os.path.join(SITE, 'index.html'), 'w') as f:
@@ -120,6 +126,11 @@ TEMPLATE = '''<!doctype html>
   .note { font-size: 13px; margin-top: 6px; color: #d8e2ff; }
   .dev { opacity: .8; border-style: dashed; }
   .empty { color: #9fb0d8; margin-bottom: 10px; }
+  .older { margin-top: 4px; text-align: right; }
+  .older select { font: inherit; font-size: 12px; color: #9fb0d8; background: transparent; border: none;
+                  border-bottom: 1px dashed #5b74b8; padding: 2px 0; cursor: pointer; }
+  .older select:focus { outline: none; color: #e8eeff; }
+  .older option { color: #e8eeff; background: #0b1b40; }
   footer { font-size: 12px; color: #8fa2d0; margin-top: 22px; line-height: 1.6; }
   footer a { color: #b9cffb; }
 </style>
