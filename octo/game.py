@@ -11,6 +11,7 @@ import pygame
 import gfx
 import sound
 import world
+from title import TitleScene
 from entities import (DIRS, ENEMY_TYPES, MiniBoss, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
                       EnemyShot, Hermie, Particle, Pickup, Player, Puff, Shelly, Urchin)
 from settings import FPS, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
@@ -145,6 +146,8 @@ class Game:
         self.play_surf = pygame.Surface((PLAY_W, PLAY_H))
         self.rays = self._make_rays()
         self.title_bg = self._make_gradient((10, 30, 90), (2, 8, 30))
+        self.title_scene = TitleScene()
+        self.title_sel = 0
         self.state = 'title'
         sound.music('title')
         self.t = 0
@@ -862,8 +865,15 @@ class Game:
     def on_key(self, k):
         st = self.state
         if st == 'title':
-            if k in CONFIRM_KEYS or k in ACTION_KEYS:
-                self.new_game()
+            menu = self.title_menu()
+            if k in (pygame.K_UP, pygame.K_w, pygame.K_DOWN, pygame.K_s) and len(menu) > 1:
+                self.title_sel = (self.title_sel + 1) % len(menu)
+                sound.play('text')
+            elif k in CONFIRM_KEYS or k in ACTION_KEYS:
+                if menu[self.title_sel] == 'CONTINUE':
+                    self.load_game()
+                else:
+                    self.new_game()
             elif k == pygame.K_l and save_exists():
                 self.load_game()
         elif st == 'play':
@@ -1753,7 +1763,25 @@ class Game:
         tmp = pygame.transform.scale(tmp, (w * scale, 9 * scale))
         scr.blit(tmp, (cx - w * scale // 2, y))
 
+    def title_menu(self):
+        if self.t % 30 == 1 or not hasattr(self, 'has_save'):
+            self.has_save = save_exists()
+        return ['CONTINUE', 'NEW GAME'] if self.has_save else ['NEW GAME']
+
     def draw_title(self, scr):
+        menu = self.title_menu()
+        self.title_sel = min(self.title_sel, len(menu) - 1)
+        cycle = (self.t // 240) % 2
+        mood = 'blue' if cycle == 0 else 'mad'
+        phase = self.t % 240
+        w = 1.0
+        if phase > 225:
+            w = abs(math.cos((phase - 225) / 15 * math.pi / 2))
+        elif phase < 15 and self.t > 15:
+            w = abs(math.sin(phase / 15 * math.pi / 2))
+        self.title_scene.draw(scr, self.t, menu, self.title_sel, mood, w)
+
+    def draw_title_old(self, scr):
         scr.blit(self.title_bg, (0, 0))
         for b in self.bubbles:
             b.draw(scr)
