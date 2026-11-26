@@ -344,6 +344,68 @@ def _boss_song():
     return render_song(mel, bass, 0.1, mel_wave='saw', mel_duty=0.5, mel_vol=0.12, bass_vol=0.34)
 
 
+# ---- tunes for the new regions, written by a little composer --------------------
+SCALES = {'major': (0, 2, 4, 5, 7, 9, 11), 'minor': (0, 2, 3, 5, 7, 8, 10), 'dorian': (0, 2, 3, 5, 7, 9, 10),
+          'mixo': (0, 2, 4, 5, 7, 9, 10), 'phryg': (0, 1, 3, 5, 7, 8, 10), 'penta': (0, 2, 4, 7, 9, 12, 14),
+          'lydian': (0, 2, 4, 6, 7, 9, 11)}
+PROGRESSIONS = {'major': (0, 5, 3, 4), 'minor': (0, 5, 3, 6), 'dorian': (0, 3, 0, 4), 'mixo': (0, 6, 3, 0),
+                'phryg': (0, 1, 0, 6), 'penta': (0, 3, 4, 0), 'lydian': (0, 1, 4, 0)}
+# theme: (key root, scale, step length, melody wave, arpeggio?, seed)
+REGION_TUNES = {
+    'glass': (64, 'lydian', 0.17, 'tri', True, 11), 'siren': (62, 'dorian', 0.2, 'sine', False, 12),
+    'whale': (50, 'phryg', 0.32, 'sine', False, 13), 'thunder': (57, 'minor', 0.12, 'saw', False, 14),
+    'rainbow': (67, 'major', 0.15, 'square', True, 15), 'starfall': (62, 'lydian', 0.24, 'tri', True, 16),
+    'beach': (65, 'major', 0.16, 'square', True, 17), 'meadow': (67, 'penta', 0.18, 'tri', False, 18),
+    'jungle': (60, 'mixo', 0.13, 'square', False, 19), 'desert': (57, 'phryg', 0.17, 'saw', False, 20),
+    'volcano': (52, 'minor', 0.12, 'saw', False, 21), 'crystal': (69, 'lydian', 0.22, 'sine', True, 22),
+    'fungus': (60, 'dorian', 0.2, 'tri', False, 23), 'bone': (52, 'phryg', 0.28, 'square', False, 24),
+    'ruins': (57, 'dorian', 0.26, 'sine', False, 25), 'magma': (50, 'phryg', 0.11, 'saw', False, 26),
+}
+
+
+def _compose(root, scale, step, wave, arp, seed):
+    """Four phrases (A A' B A'') over a four-chord loop; the melody walks the scale and lands home."""
+    rnd = random.Random(seed)
+    sc = SCALES[scale]
+    prog = PROGRESSIONS[scale]
+
+    def note(deg):
+        octave, i = divmod(deg, len(sc))
+        return root + sc[i] + 12 * octave
+
+    def motif(start):
+        out, d = [], start
+        for i in range(8):
+            if i in (3, 7) and rnd.random() < 0.6:
+                out.append(0)                     # hold
+                continue
+            if rnd.random() < 0.12:
+                out.append(None)                  # rest
+                continue
+            d += rnd.choice((-2, -1, -1, 1, 1, 2, 0, 3))
+            d = max(-3, min(9, d))
+            out.append(note(d))
+        return out, d
+    a1, end = motif(2)
+    a2, _ = motif(end)
+    b1, _ = motif(4)
+    b2, _ = motif(5)
+    a_var = a1[:4] + [note(rnd.choice((1, 3, 4))) if x not in (0, None) else x for x in a2[4:]]
+    ending = a1[:4] + [note(2), note(1), note(0), 0]
+    mel = a1 + a2 + a_var + a2 + b1 + b2 + a1 + ending
+    bass, arps = [], []
+    for bar in range(16):
+        chord = prog[bar % 4] if bar < 15 else 0
+        r = root - 24 + sc[chord % len(sc)]
+        bass += [r, 0, r + 7, 0] if step > 0.2 else [r, r + 12, r, r + 12]
+        third = sc[(chord + 2) % len(sc)] - sc[chord % len(sc)]
+        third += 12 if third < 0 else 0
+        arps += [r + 24, r + 24 + third, r + 31, r + 24 + third]
+    vol = {'saw': 0.12, 'square': 0.16, 'tri': 0.3, 'sine': 0.32}[wave]
+    return render_song(mel, bass, step, mel_wave=wave, mel_duty=0.25 if wave == 'square' else 0.5, mel_vol=vol,
+                       bass_vol=0.28, arp=arps if arp else None)
+
+
 def init():
     global enabled, SR, _channels, _music_channel
     if WEB:
@@ -486,6 +548,8 @@ def _synth(S, M):
                        ('abyss', _abyss_song), ('wreck', _wreck_song), ('palace', _palace_song),
                        ('temple', _temple_song), ('boss', _boss_song)):
         M[name] = _to_sound(song())
+    for theme, spec in REGION_TUNES.items():
+        M['r_' + theme] = _to_sound(_compose(*spec))
 
 
 def play(name):

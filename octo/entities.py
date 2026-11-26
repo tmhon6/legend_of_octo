@@ -8,7 +8,12 @@ import forms
 import fx
 import gfx
 import sound
-from settings import PLAYER_SPEED
+from settings import PLAYER_SPEED, TILE
+
+
+def world_of(px, py):
+    import world
+    return world.world_at(int(px) // TILE, int(py) // TILE)
 
 DIRS = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}
 
@@ -20,7 +25,7 @@ SLAP_AIM_RANGE = 32      # px between centres: about the slap's real reach
 # attacks that STRONG forms (and fused forms) power up
 PLAYER_HIT_KINDS = {'ink', 'slap', 'zap', 'ice', 'wisp', 'spike', 'glow', 'bubble', 'bomb', 'thorns',
                     'hail', 'whip', 'roll', 'quake', 'lantern', 'whirl', 'trap', 'chain', 'nova', 'shell',
-                    'star', 'mine', 'boulder'}
+                    'star', 'mine', 'boulder', 'beam', 'orb', 'rain'}
 INK_AIM_RANGE = 200      # px: ink homes its launch angle on enemies this close (on screen)
 
 
@@ -261,7 +266,7 @@ class Player(Entity):
             f = forms.FUSIONS[self.mood]
             self.cast(game, f['shape'], f['element'], cx, cy)
         else:
-            self.cast(game, forms.OWN_SHAPE[self.mood], 'pull' if self.mood == 'magnet' else None, cx, cy)
+            self.cast(game, forms.OWN_SHAPE[self.mood], forms.OWN_ELEMENT.get(self.mood), cx, cy)
 
     def cast(self, game, shape, elem, cx, cy):
         col = forms.ELEMENTS[elem][2] if elem in forms.ELEMENTS else None
@@ -365,6 +370,26 @@ class Player(Entity):
             game.shots.append(Mine(cx - 5, cy - 5, elem))
             self.shoot_cd = 24
             sound.play('bubble')
+        elif shape == 'beam':
+            dx, dy = self.aim(game, cx, cy, 220)
+            game.shots.append(Beam(cx, cy, dx, dy, elem))
+            self.shoot_cd = 45
+            sound.play('zap')
+        elif shape == 'orbit':
+            if any(isinstance(s, Orb) for s in game.shots):
+                sound.play('nope')
+                return
+            for i in range(3):
+                game.shots.append(Orb(self, i * math.tau / 3, elem))
+            self.shoot_cd = 40
+            sound.play('wisp')
+        elif shape == 'rain':
+            if any(isinstance(s, RainCloud) for s in game.shots):
+                sound.play('nope')
+                return
+            game.shots.append(RainCloud(self, elem))
+            self.shoot_cd = 40
+            sound.play('whoosh')
         elif shape == 'boulder':
             if any(isinstance(s, Boulder) for s in game.shots):
                 sound.play('nope')
@@ -468,6 +493,11 @@ class Player(Entity):
     def hurt(self, game, dmg, src):
         if self.invuln or self.dash_t or self.bubble_t or self.tumble or self.roll_t or dmg <= 0:
             return
+        if self.stat('dodge', 0) and random.random() < self.stat('dodge', 0):
+            self.invuln = 30                      # Sandy side-steps the hit
+            game.toast = ("DODGED!", 40)
+            game.burst(self.rect.center, (240, 220, 160), 6)
+            return
         dmg = max(1, dmg - self.stat('armor', 0) - (1 if 'armor' in self.items else 0))
         if self.in_sky and self.sphere > 0:
             # the water sphere takes the hit instead of Octo
@@ -504,7 +534,8 @@ class Player(Entity):
         cx, cy = self.rect.center
         moving = bool(move_dir or self.analog or self.dash_t)
         self.moving = moving
-        if moving and not self.in_sky and self.idle_t % 11 == 0:
+        if moving and not self.in_sky and self.idle_t % 11 == 0 and \
+                world_of(cx, cy) != 'land':                     # no bubbles on dry land
             game.effects.append(fx.SwimBubble(cx + random.uniform(-3, 3), cy - 6))
         elem = fx.element_of(self.mood)
         if elem and self.idle_t % 5 == 0:
@@ -816,6 +847,31 @@ class Enemy(Entity):
             return
         if self.hurt_t:
             self.hurt_t -= 1
+        if getattr(self, 'poison', 0):
+            self.poison -= 1
+            if self.poison % 50 == 0:
+                self.hurt_t = 0
+                self.hit(game, 1, 'poison', (self.rect.centerx, self.rect.bottom))
+                game.effects.append(Particle(self.rect.centerx, self.rect.top, 0, -0.5, (150, 230, 80), 16))
+                if self.dead:
+                    return
+        if getattr(self, 'weak', 0):
+            self.weak -= 1
+        if getattr(self, 'slow', 0):
+            self.slow -= 1
+            if self.slow % 2:
+                return                              # sludge: it only acts every other frame
+        if getattr(self, 'dizzy', 0) and not getattr(self, 'boss', False):
+            self.dizzy -= 1
+            if self.dizzy % 40 == 0:
+                self.dizzy_dir = random.choice(list(DIRS.values()))
+            dx, dy = getattr(self, 'dizzy_dir', (1, 0))
+            if not self.move(dx * 0.5, dy * 0.5, game.level):
+                self.dizzy_dir = (-dx, -dy)
+            if self.t % 10 == 0:
+                game.effects.append(Particle(self.rect.centerx, self.rect.top, random.uniform(-0.5, 0.5), -0.4,
+                                             (255, 160, 230), 12))
+            return
         if self.chill_t:
             self.chill_t -= 1
         if self.burn:
@@ -873,6 +929,11 @@ class Enemy(Entity):
             return False
         if kind in PLAYER_HIT_KINDS:
             dmg += game.player.stat('power', 0)
+            if game.player.stat('crit', 0) and random.random() < game.player.stat('crit', 0):
+                dmg *= 2                             # Crysty: a sharp, critical hit
+                game.spark(self.rect.center)
+        if getattr(self, 'weak', 0):
+            dmg += 1
         self.hp -= dmg
         self.hurt_t = 18
         sound.play('hit')
@@ -1268,6 +1329,28 @@ MINIBOSS_STYLES = {
                     moves=('charge', 'spread', 'charge'), minion='lavacrab', shot='spine'),
 }
 TEMPLE_BOSS_HP = 2.0          # temple bosses are tougher than any mini-boss
+# guardians of the new regions: big, fierce versions of each region's own creature
+#   (each drops a spirit pearl -- see Game.guardian_beaten)
+_G = lambda name, base, tint, hp, dmg, speed, moves, minion, shot, **kw: dict(
+    name=name, base=base, tint=tint, hp=hp, dmg=dmg, speed=speed, moves=moves, minion=minion, shot=shot, **kw)
+MINIBOSS_STYLES.update({
+    'glassking': _G("GLASS KING", 'glassfish', (220, 245, 255), 22, 2, 1.0, ('charge', 'spread', 'ring'), 'glassfish', 'spine', fly=True),
+    'sirenqueen': _G("SIREN QUEEN", 'seahorse', (255, 190, 230), 22, 2, 0.8, ('teleport', 'spread', 'summon'), 'seahorse', 'bubble', fly=True),
+    'gulper': _G("THE GULPER", 'hagfish', (200, 150, 170), 26, 3, 0.7, ('charge', 'summon', 'charge'), 'hagfish', 'bubble'),
+    'thunderhawk': _G("THUNDERHAWK", 'sparkbird', (180, 200, 255), 24, 2, 1.1, ('charge', 'spread', 'ring'), 'sparkbird', 'spine', fly=True),
+    'prismlord': _G("PRISM LORD", 'prism', (255, 220, 255), 24, 2, 0.7, ('ring', 'teleport', 'ring'), 'prism', 'spine', fly=True),
+    'comet': _G("COMET", 'starling', (255, 240, 170), 24, 2, 1.0, ('teleport', 'ring', 'charge'), 'starling', 'spine', fly=True),
+    'hopperking': _G("SAND KING", 'sandhopper', (255, 230, 170), 20, 2, 0.9, ('charge', 'summon', 'charge'), 'sandhopper', 'spine'),
+    'stagbeetle': _G("STAG BEETLE", 'beetle', (170, 255, 200), 26, 2, 0.8, ('charge', 'ring', 'charge'), 'beetle', 'spine'),
+    'kingkong': _G("BIG BANANA", 'monkey', (255, 210, 160), 24, 2, 0.9, ('spread', 'summon', 'spread'), 'monkey', 'spine'),
+    'deathstalker': _G("DUNE STALKER", 'scorpion', (255, 200, 120), 26, 3, 0.8, ('charge', 'spread', 'charge'), 'scorpion', 'spine'),
+    'lavaboss': _G("MAGMA MAW", 'magmite', (255, 170, 120), 28, 3, 0.8, ('charge', 'ring', 'summon'), 'magmite', 'spine'),
+    'geode': _G("GEODE", 'crystalbug', (190, 230, 255), 28, 2, 0.7, ('ring', 'summon', 'ring'), 'crystalbug', 'spine'),
+    'mushking': _G("KING TOADSTOOL", 'sporeling', (255, 170, 210), 28, 2, 0.6, ('summon', 'spread', 'ring'), 'sporeling', 'bubble'),
+    'bonelord': _G("BONE LORD", 'skullfish', (240, 235, 220), 30, 3, 0.8, ('charge', 'teleport', 'spread'), 'skullfish', 'spine', phase=True),
+    'colossus': _G("COLOSSUS", 'golem', (170, 255, 230), 36, 3, 0.6, ('charge', 'ring', 'charge'), 'golem', 'spine'),
+    'pyrosaur': _G("PYROSAUR", 'salamander', (255, 160, 90), 32, 3, 0.9, ('charge', 'spread', 'ring'), 'salamander', 'spine'),
+})
 
 
 class MiniBoss(Enemy):
@@ -2046,6 +2129,251 @@ class CloudPuff(Enemy):
         return gfx.SPR['cloudlet' if self.small else 'cloud'][(self.t // 18) % 2]
 
 
+
+# ---------------------------------------------------------------------------
+# Creatures of the new regions: one configurable class, sixteen kinds
+# ---------------------------------------------------------------------------
+#   move:   wander | chase | hop | glide | orbit | burrow | phase | blink | crawl
+#   attack: None | aimed | spread | ring | trail | lunge | split
+CRITTERS = {
+    # the eastern sea
+    'glassfish': dict(name="GLASSFISH", region='GLASS REEF', hp=3, dmg=2, move='glide', speed=1.2, attack='aimed',
+                      shot='ice', every=110, fly=True, doc="DARTS IN STRAIGHT LINES AND SPITS GLASS SHARDS."),
+    'seahorse': dict(name="SEAHORSE", region='SIREN SHOALS', hp=3, dmg=1, move='hop', speed=1.6, attack='spread',
+                     shot='bubble', every=130, fly=True, doc="BOUNCES ABOUT AND BLOWS FANS OF BUBBLES."),
+    'hagfish': dict(name="HAGFISH", region='WHALE FALL', hp=5, dmg=2, move='burrow', speed=0.5, attack='lunge',
+                    doc="SLITHERS UNDER THE MUD, THEN LUNGES OUT WITH ITS SLIMY JAWS."),
+    # the sky
+    'sparkbird': dict(name="SPARKBIRD", region='THUNDERHEADS', hp=3, dmg=2, move='orbit', speed=1.0, attack='aimed',
+                      shot='spine', every=90, fly=True, doc="CIRCLES YOU AND FIRES CRACKLING SPARKS."),
+    'prism': dict(name="PRISM", region='RAINBOW REACH', hp=4, dmg=1, move='glide', speed=0.8, attack='ring',
+                  shot='ice', every=150, fly=True, immune=('slap',), doc="A FLOATING CRYSTAL THAT SPLITS LIGHT INTO RINGS."),
+    'starling': dict(name="STARLING", region='STARFALL PEAKS', hp=3, dmg=2, move='blink', speed=0.4, attack='ring',
+                     shot='spine', every=200, fly=True, doc="BLINKS ACROSS THE SKY AND BURSTS INTO STAR SHARDS."),
+    # the surface
+    'sandhopper': dict(name="SANDHOPPER", region='SUNNY BEACH', hp=2, dmg=1, move='hop', speed=2.0, attack=None,
+                       doc="A JUMPY BEACH BUG THAT LEAPS AT YOU."),
+    'beetle': dict(name="SHELL BEETLE", region='TIDE MEADOWS', hp=4, dmg=2, move='wander', speed=0.6, attack='lunge',
+                   immune=('ink',), doc="INK SLIDES OFF ITS SHELL. IT CHARGES WHEN IT SPOTS YOU."),
+    'monkey': dict(name="COCONUT MONKEY", region='PALM JUNGLE', hp=3, dmg=1, move='wander', speed=0.8, attack='aimed',
+                   shot='spine', every=100, doc="SCAMPERS ABOUT, LOBBING COCONUTS."),
+    'scorpion': dict(name="SCORPION", region='DUNE DESERT', hp=4, dmg=2, move='chase', speed=0.55, attack='lunge',
+                     immune=('slap',), doc="STALKS YOU ACROSS THE DUNES, THEN STRIKES WITH ITS STINGER."),
+    'magmite': dict(name="MAGMITE", region='VOLCANO RIDGE', hp=4, dmg=2, move='hop', speed=1.4, attack='trail',
+                    immune=('burn',), doc="A HOPPING BLOB OF LAVA THAT LEAVES FIRE WHERE IT LANDS."),
+    # the underdeep
+    'crystalbug': dict(name="CRYSTAL BUG", region='CRYSTAL CAVES', hp=4, dmg=1, move='wander', speed=0.7,
+                       attack='ring', shot='ice', every=140, immune=('ink',), doc="SHOOTS SHARDS IN A RING. INK BOUNCES OFF."),
+    'sporeling': dict(name="SPORELING", region='FUNGUS GROTTO', hp=3, dmg=1, move='chase', speed=0.45, attack='split',
+                      doc="A WADDLING MUSHROOM. POP IT AND IT SPLITS INTO TWO."),
+    'skullfish': dict(name="SKULLFISH", region='BONE TRENCH', hp=4, dmg=2, move='phase', speed=0.6, attack='lunge',
+                      fly=True, doc="A BONY FISH THAT SWIMS THROUGH WALLS AND SNAPS."),
+    'golem': dict(name="RUIN GOLEM", region='ANCIENT RUINS', hp=9, dmg=3, move='crawl', speed=0.35, attack='lunge',
+                  knockback=False, doc="SLOW, HUGE AND HARD-HITTING. KEEP YOUR DISTANCE."),
+    'salamander': dict(name="SALAMANDER", region='MAGMA CORE', hp=5, dmg=2, move='glide', speed=1.0, attack='trail',
+                       immune=('burn',), doc="SWIMS THROUGH THE HEAT, LEAVING FLAMES IN ITS WAKE."),
+}
+
+
+class Critter(Enemy):
+    """A creature built from its CRITTERS entry: how it moves and how it attacks."""
+    hb = (2, 3, 12, 12)
+
+    def __init__(self, x, y, kind, small=False):
+        super().__init__(x, y)
+        cfg = CRITTERS[kind]
+        self.kind, self.cfg, self.small = kind, cfg, small
+        self.sprite = kind
+        self.max_hp = self.hp = 1 if small else cfg['hp']
+        self.damage = cfg['dmg']
+        self.immune = cfg.get('immune', ())
+        self.who = 'flyer' if cfg.get('fly') else 'walker'
+        self.knockback = cfg.get('knockback', True)
+        self.v = [random.choice((-1, 1)) * cfg['speed'], random.choice((-1, 1)) * cfg['speed'] * 0.7]
+        self.timer = random.randint(30, cfg.get('every', 120))
+        self.state, self.state_t = 'move', 0
+        self.ang = random.uniform(0, math.tau)
+        self.cycle = random.randint(0, 150)
+        if small:
+            self.spawn_t = 0
+            self.hb = (4, 6, 8, 8)
+
+    # hiding and phasing creatures can't be hit while they're away
+    @property
+    def active(self):
+        if self.spawn_t or self.dead:
+            return False
+        m = self.cfg['move']
+        if m == 'burrow':
+            return self.state != 'hidden'
+        if m == 'phase':
+            return self.cycle % 220 < 150
+        if m == 'blink':
+            return not (150 <= self.cycle % 200 < 172)
+        return True
+
+    def ai(self, game):
+        cfg = self.cfg
+        sp = cfg['speed'] * (1.3 if self.small else 1)
+        self.cycle += 1
+        vx, vy, d = _aim(self, game, 1.0)
+        # --- attacks that interrupt movement
+        if self.state == 'tell':
+            self.state_t -= 1
+            self.x += random.choice((-0.5, 0.5))
+            if self.state_t <= 0:
+                self.state, self.state_t = 'lunge', 16
+                sound.play('shoot')
+            return
+        if self.state == 'lunge':
+            self.state_t -= 1
+            self.move(self.v[0], self.v[1], game.level)
+            if self.state_t <= 0:
+                self.state, self.state_t = 'move', 60
+            return
+        if cfg['attack'] == 'lunge' and d < 56 and self.state_t <= 0 and self.active:
+            self.state, self.state_t = 'tell', 22
+            self.v = [vx * 2.8, vy * 2.8]
+            return
+        if self.state_t > 0:
+            self.state_t -= 1
+        self.timer -= 1
+        if self.timer <= 0 and self.active and d < 170:
+            self.timer = cfg.get('every', 120)
+            self.shoot(game, vx, vy)
+        if cfg['attack'] == 'trail' and self.t % 40 == 0 and d < 200:
+            cx, cy = self.rect.center
+            game.shots.append(EnemyShot(cx - 5, cy - 3, 0, 0, 'ember', life=160))
+        # --- movement
+        m = cfg['move']
+        if m == 'wander':
+            if self.t % 70 == 0:
+                a = random.uniform(0, math.tau)
+                self.v = [math.cos(a) * sp, math.sin(a) * sp]
+            if d < 90:
+                self.v = [vx * sp, vy * sp] if cfg['attack'] in ('lunge', None) else self.v
+            self._bounce(game)
+        elif m in ('chase', 'crawl'):
+            if d < 180:
+                self.move(vx * sp, 0, game.level) or self.move(0, (vy or 1) * sp, game.level)
+                self.move(0, vy * sp, game.level)
+        elif m == 'hop':
+            if self.t % 50 == 0:
+                if d < 160:
+                    self.v = [vx * sp, vy * sp]
+                else:
+                    a = random.uniform(0, math.tau)
+                    self.v = [math.cos(a) * sp, math.sin(a) * sp]
+            if self.t % 50 < 18:                      # mid-hop
+                self._bounce(game)
+        elif m == 'glide':
+            self._bounce(game)
+        elif m == 'orbit':
+            px, py = game.player.seen_pos()
+            self.ang += 0.03 * sp
+            tx, ty = px + math.cos(self.ang) * 56 - 8, py + math.sin(self.ang) * 40 - 8
+            self.move((tx - self.x) * 0.05, (ty - self.y) * 0.05, game.level)
+        elif m == 'burrow':
+            if self.state == 'hidden':
+                if d < 140:
+                    self.move(vx * sp, vy * sp, game.level)
+                if d < 36:
+                    self.state = 'move'
+                    self.cycle = 0
+                    game.splat(self.rect.center, (160, 140, 110))
+            elif self.cycle > 110:
+                self.state = 'hidden'
+            else:
+                self.move(vx * sp * 0.6, vy * sp * 0.6, game.level)
+        elif m == 'phase':
+            if d < 170:
+                nx, ny = self.x + vx * sp, self.y + vy * sp
+                if game.level.bounds.contains(pygame.Rect(nx + 3, ny + 3, 10, 10)):
+                    self.x, self.y = nx, ny
+        elif m == 'blink':
+            c = self.cycle % 200
+            if c == 160:
+                px, py = game.player.rect.center
+                for _ in range(10):
+                    a = random.uniform(0, math.tau)
+                    nx, ny = px + math.cos(a) * 60 - 8, py + math.sin(a) * 60 - 8
+                    r = pygame.Rect(nx + 3, ny + 3, 10, 10)
+                    if not game.level.blocked(r, 'flyer') and game.view_rect.contains(r):
+                        self.x, self.y = nx, ny
+                        break
+            elif c == 180:
+                self.shoot(game, vx, vy)
+            elif c < 150:
+                self.move(vx * sp, vy * sp, game.level)
+
+    def _bounce(self, game):
+        if not self.move(self.v[0], 0, game.level):
+            self.v[0] = -self.v[0]
+        if not self.move(0, self.v[1], game.level):
+            self.v[1] = -self.v[1]
+
+    def shoot(self, game, vx, vy):
+        cfg = self.cfg
+        kind = cfg.get('shot', 'spine')
+        a = cfg['attack']
+        if a == 'aimed':
+            _fire(game, self, vx * 1.8, vy * 1.8, kind)
+        elif a == 'spread':
+            for t in (-0.35, 0, 0.35):
+                c, sn = math.cos(t), math.sin(t)
+                _fire(game, self, (vx * c - vy * sn) * 1.6, (vx * sn + vy * c) * 1.6, kind)
+        elif a == 'ring':
+            n = 6
+            for i in range(n):
+                t = i * math.tau / n + self.t * 0.05
+                _fire(game, self, math.cos(t) * 1.4, math.sin(t) * 1.4, kind)
+        else:
+            return
+        sound.play('shoot')
+
+    def die(self, game):
+        if self.cfg['attack'] == 'split' and not self.small:
+            for dx in (-6, 6):
+                kid = Critter(self.x + dx, self.y, self.kind, small=True)
+                kid.damage = self.damage
+                kid.spawn = {'kind': self.kind, 'arena': 'trial', 'inst': None, 'killed': False}
+                kid.kb, kid.kb_t = (sign(dx), 0), 6
+                game.enemies.append(kid)
+        super().die(game)
+
+    def image(self):
+        frames = gfx.SPR[self.kind]
+        img = frames[(self.t // 12) % 2]
+        if self.small:
+            img = pygame.transform.scale(img, (10, 10))
+        return gfx.flipped(img) if self.v[0] < 0 else img
+
+    def draw(self, surf, ox=0, oy=0):
+        m = self.cfg['move']
+        if not self.spawn_t and not self.active:
+            if m == 'burrow':
+                cx, cy = self.rect.centerx + ox, self.rect.bottom + oy - 3
+                w = 8 + int(math.sin(self.t * 0.2) * 2)
+                pygame.draw.ellipse(surf, (120, 110, 90), (cx - w // 2, cy - 2, w, 4), 1)
+            elif m == 'blink' and self.cycle % 200 < 158:
+                pygame.draw.circle(surf, (255, 240, 160), (self.rect.centerx + ox, self.rect.centery + oy),
+                                   max(1, 158 - self.cycle % 200), 1)
+            elif m == 'phase':
+                img = self.image().copy()
+                img.set_alpha(70)
+                surf.blit(img, (round(self.x) + ox, round(self.y) + oy))
+            return
+        if self.state == 'tell' and (self.t // 3) % 2:
+            img = gfx.flash(self.image())
+            surf.blit(img, (round(self.x) + ox, round(self.y) + oy))
+            return
+        super().draw(surf, ox, oy)
+
+
+def _critter_factory(kind):
+    return lambda x, y: Critter(x, y, kind)
+
+
 def make_enemy(kind, x, y):
     if kind.startswith('mini:'):
         return MiniBoss(kind[5:], x, y, lurk=True)      # waits in its region until Octo comes close
@@ -2062,6 +2390,7 @@ ENEMY_TYPES = {'gull': Gull, 'crab': Crab, 'urchin': Urchin, 'jelly': Jelly, 'pu
                # one creature of its own for every region
                'eel': SandEel, 'clam': SnapjawClam, 'lionfish': Lionfish, 'ray': Stingray, 'angler': Anglerfish,
                'bilge': BilgeGhost, 'squid': IceSquid, 'slug': CinderSlug, 'wisp': LanternWisp, 'cloud': CloudPuff}
+ENEMY_TYPES.update({k: _critter_factory(k) for k in CRITTERS})
 
 
 # ===========================================================================
@@ -2146,6 +2475,14 @@ SHELLY_TALK = [
     "FAR TO THE EAST LIE THE FROZEN SHELF, THE EMBER VENTS AND THE DARK SUNKEN CITY. ICE, LAVA AND GHOSTLY WALLS "
     "BAR THE WAY... ZAPPY, CHILLY AND SPOOKY OCTO COULD GET THROUGH!",
     "SEE THAT BUBBLING GEYSER EAST OF THE TEMPLE? STEP IN AND IT'LL BLAST YOU UP TO THE SKY ISLANDS!",
+    "THERE ARE FOUR WORLDS, OCTO: THE SEA, THE SKY ABOVE IT, THE SURFACE AND THE UNDERDEEP BELOW. PRESS M AND "
+    "LEFT/RIGHT TO FLIP BETWEEN THE MAPS OF THE ONES YOU'VE SEEN.",
+    "WHITE SHORE STEPS IN THE LAGOON, THE REEF AND THE SIREN SHOALS LEAD UP ONTO THE SURFACE. PURPLE SINKHOLES "
+    "IN THE ABYSS, THE SHIP GRAVEYARD AND WHALE FALL DROP DOWN INTO THE UNDERDEEP.",
+    "FAR EAST, PAST THE FROZEN SHELF, THE EMBER VENTS AND THE SUNKEN CITY, THE SEA GOES ON: GLASS REEF, THE SIREN "
+    "SHOALS AND DARK WHALE FALL.",
+    "THE GUARDIANS OF THE NEW LANDS EACH CARRY A SPIRIT PEARL, AND THE NEW TRIALS TEACH NEW FORMS: SANDY, LEAFY, "
+    "CRYSTY, CLOUDY, SHROOMY AND MAGMY. CLOUDY FLOATS OVER GAPS, MAGMY WALKS ON LAVA!",
     "PRESS LEFT SHIFT ANY TIME TO SAVE YOUR GAME. PRESS P TO PAUSE.",
     "HERMIE THE HERMIT CRAB RUNS A PEARL SHOP JUST WEST OF THE TEMPLE. SAVE UP YOUR PEARLS!",
     "THE SHRINE PATH IS CHOKED WITH KELP. GO WEST, THEN NORTH, THEN SLAP YOUR WAY EAST.",
@@ -2476,7 +2813,7 @@ class EnemyShot(Entity):
         self.y += self.vy
         r = self.rect
         if self.kind == 'ember':                 # a patch of fire on the floor: only hurts if touched
-            if r.colliderect(game.player.rect) and self.t > 20:
+            if r.colliderect(game.player.rect) and self.t > 20 and not game.player.stat('heatproof', 0):
                 game.player.hurt(game, self.damage, r.center)
             return
         if game.level.blocked(r, 'shot') and self.kind != 'bubble' or not game.view_rect.colliderect(r):
@@ -2652,6 +2989,18 @@ def strike(game, e, dmg, kind, src, elem=None):
         if p.hp < p.max_hp:
             p.hp += 1
             game.burst(p.rect.center, (255, 110, 160), 5)
+    elif elem == 'poison' and not e.dead:
+        e.poison = 200
+    elif elem == 'slow' and not e.dead:
+        e.slow = 120 if boss else 240
+    elif elem == 'push' and not e.dead and not boss:
+        d = math.hypot(cx - src[0], cy - src[1]) or 1
+        for _ in range(10):
+            e.move((cx - src[0]) / d * 2.4, (cy - src[1]) / d * 2.4, game.level)
+    elif elem == 'confuse' and not e.dead:
+        e.dizzy = 60 if boss else 200
+    elif elem == 'weaken' and not e.dead:
+        e.weak = 300
     elif elem == 'loot' and random.random() < 0.4:
         it = Pickup(cx - 4, cy - 4, 'pearl', life=420)
         game.pickups.append(it)
@@ -2985,6 +3334,122 @@ class Bolt:
             pts.append((x1 + ox, y1 + oy))
             pygame.draw.lines(surf, self.col, False, pts, 3 if self.t > 8 else 1)
             pygame.draw.lines(surf, (255, 255, 255), False, pts, 1)
+
+
+class Beam:
+    """Beam: a piercing line of light straight out from Octo, hitting every enemy along it."""
+
+    def __init__(self, cx, cy, dx, dy, elem=None):
+        self.x0, self.y0 = cx, cy
+        self.dx, self.dy = dx, dy
+        self.t = 0
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (220, 240, 255)))[2]
+        self.dead = False
+        self.length = 0
+        self.hit = set()
+
+    def update(self, game):
+        self.t += 1
+        if self.t == 1:
+            # find where the beam stops: a wall, or 220px away
+            for step in range(0, 220, 4):
+                x, y = self.x0 + self.dx * step, self.y0 + self.dy * step
+                if game.level.blocked(pygame.Rect(x - 1, y - 1, 2, 2), 'shot'):
+                    break
+                self.length = step
+        if self.t <= 6:
+            for e in list(game.enemies):
+                if not e.active or e in self.hit:
+                    continue
+                ex, ey = e.rect.center
+                along = (ex - self.x0) * self.dx + (ey - self.y0) * self.dy
+                off = abs((ex - self.x0) * self.dy - (ey - self.y0) * self.dx)
+                if 0 <= along <= self.length + 6 and off < 10:
+                    self.hit.add(e)
+                    strike(game, e, 2, 'beam', (self.x0, self.y0), self.elem)
+        if self.t > 14:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        x0, y0 = self.x0 + ox, self.y0 + oy
+        x1, y1 = x0 + self.dx * self.length, y0 + self.dy * self.length
+        w = max(1, 6 - self.t // 3)
+        pygame.draw.line(surf, self.col, (x0, y0), (x1, y1), w + 2)
+        pygame.draw.line(surf, (255, 255, 255), (x0, y0), (x1, y1), max(1, w - 2))
+
+
+class Orb(Entity):
+    """Orbs: three glowing orbs that circle Octo for a few seconds."""
+    hb = (0, 0, 10, 10)
+
+    def __init__(self, owner, ang, elem=None):
+        super().__init__(owner.x, owner.y)
+        self.owner, self.ang, self.elem = owner, ang, elem
+        self.life = 300
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (255, 160, 80)))[2]
+
+    def update(self, game):
+        self.life -= 1
+        self.ang += 0.09
+        cx, cy = self.owner.rect.center
+        self.x = cx + math.cos(self.ang) * 22 - 5
+        self.y = cy + math.sin(self.ang) * 22 - 5
+        if self.life <= 0:
+            self.dead = True
+            return
+        for e in list(game.enemies):
+            if e.active and not e.hurt_t and self.rect.colliderect(e.rect):
+                strike(game, e, 1, 'orb', self.owner.rect.center, self.elem)
+
+    def draw(self, surf, ox=0, oy=0):
+        x, y = round(self.x) + ox + 5, round(self.y) + oy + 5
+        _glow(surf, x, y, 8, self.col, 60)
+        pygame.draw.circle(surf, self.col, (x, y), 4)
+        pygame.draw.circle(surf, (255, 255, 240), (x - 1, y - 1), 1)
+
+
+class RainCloud(Entity):
+    """Rain: a little cloud drifts over Octo and rains on the nearest enemies."""
+    hb = (0, 0, 24, 10)
+
+    def __init__(self, owner, elem=None):
+        super().__init__(owner.x - 4, owner.y - 22)
+        self.owner, self.elem = owner, elem
+        self.life = 360
+        self.drops = []
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (150, 200, 255)))[2]
+
+    def update(self, game):
+        self.life -= 1
+        cx, cy = self.owner.rect.center
+        self.x += (cx - 12 - self.x) * 0.1
+        self.y += (cy - 34 - self.y) * 0.1
+        if self.life <= 0:
+            self.dead = True
+            return
+        if self.life % 20 == 0:
+            target = game.nearest_enemy((cx, cy), 90)
+            if target:
+                tx, ty = target.rect.center
+                self.drops.append([tx + random.uniform(-4, 4), ty - 40, ty, target])
+        for d in self.drops:
+            d[1] += 5
+        for d in [d for d in self.drops if d[1] >= d[2]]:
+            self.drops.remove(d)
+            e = d[3]
+            if e.active and not e.dead:
+                e.hurt_t = 0
+                strike(game, e, 1, 'rain', (d[0], d[1] - 10), self.elem)
+            game.splat((d[0], d[2]), self.col)
+
+    def draw(self, surf, ox=0, oy=0):
+        x, y = round(self.x) + ox, round(self.y) + oy
+        for dx, r in ((5, 5), (12, 7), (19, 5)):
+            pygame.draw.circle(surf, (120, 130, 160), (x + dx, y + 6), r)
+            pygame.draw.circle(surf, (230, 235, 250), (x + dx, y + 5), r - 1)
+        for d in self.drops:
+            pygame.draw.line(surf, self.col, (d[0] + ox, d[1] + oy), (d[0] + ox, d[1] + oy + 4))
 
 
 class Nova:

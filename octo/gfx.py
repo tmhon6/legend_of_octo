@@ -145,6 +145,21 @@ OCTO_PAL.update({
     'stony': _pal((50, 48, 44), (140, 135, 125), (190, 185, 175), (100, 96, 90), (220, 200, 140),
                   (20, 20, 20), (170, 160, 150), (200, 195, 185)),
 })
+# forms learned from the new worlds
+OCTO_PAL.update({
+    'sandy': _pal((90, 64, 30), (232, 196, 120), (255, 232, 170), (190, 150, 80), (120, 200, 230),
+                  (60, 40, 10), (240, 150, 110), (250, 220, 160)),
+    'leafy': _pal((20, 60, 20), (80, 180, 70), (170, 230, 130), (50, 130, 50), (250, 120, 160),
+                  (10, 40, 10), (255, 150, 170)),
+    'crysty': _pal((40, 50, 100), (150, 200, 255), (235, 250, 255), (100, 140, 220), (255, 150, 250),
+                   (20, 20, 70), (210, 170, 255)),
+    'cloudy': _pal((80, 90, 120), (236, 240, 250), (255, 255, 255), (190, 198, 220), (255, 200, 120),
+                   (40, 50, 90), (255, 190, 210)),
+    'shroomy': _pal((90, 20, 30), (220, 70, 80), (255, 170, 170), (170, 40, 60), (255, 250, 235),
+                    (60, 10, 20), (255, 240, 220)),
+    'magmy': _pal((50, 10, 0), (60, 40, 40), (110, 80, 70), (30, 20, 20), (255, 150, 30),
+                  (255, 200, 60), (255, 110, 30), (255, 140, 40)),
+})
 
 
 class _FusedPalettes(dict):
@@ -1157,6 +1172,53 @@ THEME_SPECS = {
              None, (90, 130, 110), None),
     'sky': ((112, 190, 90), (86, 160, 70), (150, 214, 120),
             ((80, 80, 90), (140, 140, 150), (180, 180, 190), (220, 220, 230)), (250, 230, 90), None),
+    # the eastern sea
+    'glass': ((206, 226, 232), (180, 204, 214), (236, 248, 252),
+              ((70, 110, 130), (130, 180, 200), (190, 230, 240), (240, 255, 255)), (120, 200, 210),
+              ((200, 240, 255), (160, 220, 250), (230, 200, 255))),
+    'siren': ((230, 206, 214), (210, 180, 192), (248, 230, 236),
+              ((110, 70, 100), (170, 120, 160), (210, 160, 200), (240, 210, 236)), (200, 120, 170),
+              ((255, 140, 200), (250, 220, 120), (150, 230, 220))),
+    'whale': ((70, 76, 96), (52, 58, 76), (96, 100, 122),
+              None, (80, 90, 110), None),
+    # the sky
+    'thunder': ((150, 160, 180), (120, 130, 150), (190, 200, 220),
+                ((50, 54, 70), (90, 96, 120), (130, 136, 160), (190, 196, 220)), (220, 230, 120), None),
+    'rainbow': ((190, 230, 160), (160, 210, 130), (226, 248, 200),
+                ((110, 90, 150), (170, 140, 210), (210, 190, 240), (250, 240, 255)), (255, 150, 200), None),
+    'starfall': ((80, 80, 140), (60, 60, 112), (120, 120, 180),
+                 ((40, 40, 70), (80, 80, 120), (120, 120, 170), (230, 220, 160)), (255, 230, 120), None),
+    # the surface
+    'beach': ((240, 222, 160), (220, 198, 134), (252, 240, 196),
+              ((100, 90, 80), (160, 150, 130), (200, 190, 170), (235, 230, 215)), (150, 200, 90), None),
+    'meadow': ((120, 190, 80), (96, 166, 62), (156, 214, 110),
+               ((70, 80, 70), (120, 130, 115), (165, 175, 160), (210, 220, 200)), (250, 230, 110), None),
+    'jungle': ((70, 140, 60), (52, 112, 44), (100, 170, 84),
+               ((60, 60, 40), (100, 96, 70), (140, 134, 100), (180, 176, 140)), (30, 100, 40), None),
+    'desert': ((236, 200, 130), (214, 174, 104), (250, 224, 170),
+               ((130, 80, 50), (180, 120, 80), (215, 160, 110), (240, 200, 150)), (150, 160, 80), None),
+    'volcano': ((80, 60, 56), (60, 44, 42), (110, 86, 80),
+                ((20, 16, 16), (44, 34, 34), (70, 56, 54), (120, 70, 50)), (200, 90, 40), None),
+    # the underdeep
+    'crystal': ((84, 90, 130), (64, 70, 108), (114, 120, 164),
+                ((40, 44, 80), (80, 90, 140), (130, 150, 200), (200, 230, 255)), (120, 200, 230), None),
+    'fungus': ((96, 74, 96), (76, 56, 78), (124, 100, 124),
+               ((50, 34, 50), (90, 66, 90), (130, 100, 130), (180, 150, 180)), (160, 220, 120), None),
+    'bone': ((120, 110, 100), (96, 88, 80), (150, 140, 128),
+             ((210, 204, 190), (230, 224, 210), (245, 240, 230), (255, 255, 250)), (110, 120, 90), None),
+    'ruins': ((110, 106, 90), (88, 84, 70), (140, 136, 116),
+              None, (90, 130, 90), None),
+    'magma': ((70, 44, 36), (52, 30, 24), (100, 64, 50),
+              ((24, 12, 10), (50, 26, 20), (80, 40, 30), (140, 70, 40)), (220, 100, 40), None),
+}
+# what the solid decorations and pools look like in each newer theme
+THEME_DECOR = {
+    'glass': ('coral', 'pool_glass', None), 'siren': ('coral', 'pool_siren', None), 'whale': ('bones', 'chasm', None),
+    'thunder': ('rockspire', 'sky', None), 'rainbow': ('tree', 'sky', None), 'starfall': ('crystal', 'sky', None),
+    'beach': ('palm', 'pool_sea', 'bush'), 'meadow': ('tree', 'pool_pond', 'bush'), 'jungle': ('palm', 'pool_pond', 'bush'),
+    'desert': ('cactus', 'pool_oasis', 'bush'), 'volcano': ('rockspire', 'chasm', None),
+    'crystal': ('crystal', 'chasm', 'shroom'), 'fungus': ('mushroom', 'pool_slime', 'shroom'),
+    'bone': ('bones', 'chasm', None), 'ruins': ('statue', 'chasm', None), 'magma': ('rockspire', 'chasm', None),
 }
 
 
@@ -1204,6 +1266,142 @@ def _geyser(rnd, base, sky=False):
     return s
 
 
+
+def _palm(rnd, base):
+    s = base.copy()
+    pygame.draw.line(s, (90, 60, 30), (8, 15), (9, 5), 3)
+    pygame.draw.line(s, (150, 110, 60), (8, 15), (9, 5), 1)
+    for a in (-2.6, -1.9, -1.2, -0.5, 0.2):
+        ex, ey = 9 + math.cos(a) * 7, 5 + math.sin(a) * 4 + 2
+        pygame.draw.line(s, (30, 100, 40), (9, 5), (ex, ey), 3)
+        pygame.draw.line(s, (80, 170, 70), (9, 5), (ex, ey), 1)
+    pygame.draw.circle(s, (100, 70, 30), (8, 6), 1)
+    return s
+
+
+def _cactus(rnd, base):
+    s = base.copy()
+    g, d, l = (70, 150, 70), (30, 80, 40), (130, 200, 110)
+    pygame.draw.rect(s, d, (6, 2, 5, 14))
+    pygame.draw.rect(s, g, (7, 3, 3, 12))
+    pygame.draw.rect(s, d, (2, 6, 4, 3))
+    pygame.draw.rect(s, d, (2, 3, 3, 5))
+    pygame.draw.rect(s, d, (11, 8, 4, 3))
+    pygame.draw.rect(s, d, (12, 5, 3, 5))
+    pygame.draw.line(s, l, (8, 4), (8, 13))
+    return s
+
+
+def _crystal(rnd, base):
+    s = base.copy()
+    for x, h, c in ((4, 9, (150, 200, 255)), (9, 13, (200, 170, 255)), (13, 7, (140, 240, 230))):
+        dark = tuple(max(0, v - 90) for v in c)
+        pygame.draw.polygon(s, dark, [(x - 3, 15), (x + 3, 15), (x + 1, 15 - h), (x - 1, 15 - h)])
+        pygame.draw.polygon(s, c, [(x - 2, 15), (x + 2, 15), (x, 15 - h + 1)])
+        s.set_at((x, 16 - h), (255, 255, 255))
+    return s
+
+
+def _mushroom(rnd, base):
+    s = base.copy()
+    cap = rnd.choice(((220, 70, 90), (150, 90, 220), (240, 160, 60)))
+    pygame.draw.rect(s, (200, 190, 170), (6, 8, 4, 8))
+    pygame.draw.ellipse(s, tuple(v // 2 for v in cap), (1, 2, 14, 9))
+    pygame.draw.ellipse(s, cap, (2, 2, 12, 7))
+    for x, y in ((5, 4), (10, 5), (8, 3)):
+        s.set_at((x, y), (255, 240, 230))
+    return s
+
+
+def _bones(rnd, base):
+    s = base.copy()
+    b, d = (235, 230, 215), (120, 115, 100)
+    pygame.draw.arc(s, d, (1, 2, 14, 16), 0.2, 2.9, 3)
+    pygame.draw.arc(s, b, (2, 3, 12, 14), 0.2, 2.9, 2)
+    for x in (4, 8, 12):
+        pygame.draw.line(s, b, (x, 4), (x, 14))
+    return s
+
+
+def _bush(rnd, base):
+    s = base.copy()
+    for x, y, r in ((5, 10, 5), (11, 10, 5), (8, 6, 5)):
+        pygame.draw.circle(s, (30, 90, 40), (x, y), r)
+        pygame.draw.circle(s, (70, 150, 60), (x - 1, y - 1), r - 2)
+    s.set_at((7, 5), (250, 120, 160))
+    s.set_at((11, 8), (250, 230, 110))
+    return s
+
+
+def _shroom_patch(rnd, base):
+    s = base.copy()
+    for x, y in ((4, 11), (10, 9), (7, 5)):
+        pygame.draw.rect(s, (210, 200, 180), (x, y, 2, 4))
+        pygame.draw.ellipse(s, (120, 220, 160), (x - 2, y - 3, 6, 4))
+    return s
+
+
+def _rockspire(rnd, base):
+    s = base.copy()
+    pygame.draw.polygon(s, (30, 26, 30), [(2, 16), (14, 16), (10, 1), (6, 3)])
+    pygame.draw.polygon(s, (80, 74, 80), [(4, 15), (12, 15), (9, 3), (7, 5)])
+    pygame.draw.line(s, (140, 130, 130), (8, 4), (6, 13))
+    return s
+
+
+def _statue_ruin(rnd, base):
+    s = base.copy()
+    pygame.draw.rect(s, (60, 60, 50), (3, 4, 10, 12))
+    pygame.draw.rect(s, (150, 146, 120), (4, 5, 8, 10))
+    pygame.draw.rect(s, (90, 220, 170), (6, 8, 4, 2))
+    pygame.draw.line(s, (60, 60, 50), (4, 11), (11, 11))
+    return s
+
+
+def _chasm(rnd):
+    s = pygame.Surface((TILE, TILE))
+    s.fill((10, 8, 16))
+    for _ in range(3):
+        s.set_at((rnd.randrange(16), rnd.randrange(16)), (40, 36, 60))
+    return s
+
+
+def _shore():
+    """Shore steps: where Octo climbs out of the sea onto the land (and back in)."""
+    s = pygame.Surface((TILE, TILE))
+    s.fill((60, 150, 200))
+    for y in range(0, 16, 4):
+        pygame.draw.rect(s, (230, 214, 160), (0, y, 16, 2))
+    pygame.draw.polygon(s, (255, 255, 255), [(8, 2), (12, 7), (4, 7)])
+    pygame.draw.rect(s, (255, 255, 255), (7, 7, 2, 6))
+    return s
+
+
+def _sinkhole():
+    """A sinkhole down into the Underdeep: a dark, swirling hole."""
+    s = pygame.Surface((TILE, TILE), pygame.SRCALPHA)
+    pygame.draw.circle(s, (40, 30, 50), (8, 8), 8)
+    pygame.draw.circle(s, (10, 6, 16), (8, 8), 6)
+    for a in range(0, 360, 60):
+        r = math.radians(a)
+        pygame.draw.line(s, (120, 90, 160), (8 + math.cos(r) * 2, 8 + math.sin(r) * 2),
+                         (8 + math.cos(r + 0.8) * 6, 8 + math.sin(r + 0.8) * 6))
+    return s
+
+
+def _decor(name, rnd, base):
+    return {'palm': _palm, 'cactus': _cactus, 'crystal': _crystal, 'mushroom': _mushroom, 'bones': _bones,
+            'rockspire': _rockspire, 'statue': _statue_ruin, 'tree': _tree}[name](rnd, base)
+
+
+POOLS = {'pool_glass': ((120, 190, 220), (170, 220, 240), (255, 255, 255)),
+         'pool_siren': ((130, 110, 190), (170, 150, 220), (255, 220, 250)),
+         'pool_sea': ((60, 150, 200), (110, 190, 230), (255, 255, 255)),
+         'pool_pond': ((50, 110, 170), (90, 150, 200), (220, 240, 255)),
+         'pool_oasis': ((40, 140, 160), (80, 190, 200), (230, 255, 250)),
+         'pool_slime': ((70, 140, 60), (110, 190, 90), (210, 255, 160))}
+
+
 def make_themes(rnd):
     out = {}
     for name, (fl, fd, flt, rock, grass, corals) in THEME_SPECS.items():
@@ -1233,6 +1431,22 @@ def make_themes(rnd):
             t['C'] = [_coral_on(rnd, t['.'][i % 4], c) for i, c in enumerate(corals)]
         if name == 'lagoon':
             t['v'] = [_pool(rnd, (40, 140, 170), (30, 110, 140), (140, 230, 240)) for _ in range(2)]
+        if name in THEME_DECOR:
+            c, v, k = THEME_DECOR[name]
+            if c != 'coral':
+                t['C'] = [_decor(c, rnd, t['.'][i]) for i in range(2)]
+            if v == 'sky':
+                t['v'] = [_sky_void(rnd) for _ in range(4)]
+                t['='] = [_planks(rnd)]
+                t['Y'] = [_geyser(rnd, t['.'][0], sky=True)]
+            elif v == 'chasm':
+                t['v'] = [_chasm(rnd) for _ in range(2)]
+            else:
+                t['v'] = [_pool(rnd, *POOLS[v]) for _ in range(2)]
+            if k == 'bush':
+                t['K'] = [_bush(rnd, t['.'][i]) for i in range(2)]
+            elif k == 'shroom':
+                t['K'] = [_shroom_patch(rnd, t['.'][i]) for i in range(2)]
         out[name] = t
     return out
 
@@ -1273,6 +1487,8 @@ def make_tiles():
         'G': [_ghostwall(rnd)],
         'l': [_lava(rnd), _lava(rnd)],
         'Y': [_geyser(rnd, _sand(rnd))],
+        'A': [_shore()],
+        'D': [_sinkhole()],
     }
     dg = {
         '=': [_dfloor(rnd) for _ in range(2)],
@@ -1635,6 +1851,152 @@ def make_regional_shots():
     return {'ice': ice, 'ember': ember}
 
 
+# --------------------------------------------------------------------------
+# Creatures of the new regions (sixteen kinds)
+# --------------------------------------------------------------------------
+def _outline_blob(s, rect, dark, fill, light=None):
+    pygame.draw.ellipse(s, dark, rect)
+    r = pygame.Rect(rect).inflate(-2, -2)
+    pygame.draw.ellipse(s, fill, r)
+    if light:
+        pygame.draw.ellipse(s, light, (r.x + 2, r.y + 1, max(2, r.w // 3), max(2, r.h // 3)))
+
+
+def _critter_frames(kind):
+    out = []
+    for f in range(2):
+        s = _canvas()
+        if kind == 'glassfish':
+            _outline_blob(s, (1, 5, 13, 7), (120, 170, 200), (200, 235, 255, 170), (255, 255, 255))
+            pygame.draw.polygon(s, (150, 200, 230), [(13, 8), (15, 5 + f), (15, 11 - f)])
+            pygame.draw.line(s, (120, 170, 200), (4, 6), (10, 11))
+            _eye(s, 3, 7, False)
+        elif kind == 'seahorse':
+            pygame.draw.circle(s, (120, 60, 20), (8, 4), 4)
+            pygame.draw.circle(s, (250, 170, 60), (8, 4), 3)
+            pygame.draw.line(s, (250, 170, 60), (11, 4), (14, 5))
+            pygame.draw.line(s, (120, 60, 20), (7, 7), (8, 13), 4)
+            pygame.draw.line(s, (250, 170, 60), (7, 7), (8, 13), 2)
+            pygame.draw.circle(s, (250, 170, 60), (6, 14), 2, 1)
+            pygame.draw.line(s, (255, 230, 150), (5, 4 + f), (4, 9))
+            _eye(s, 8, 3, False)
+        elif kind == 'hagfish':
+            pts = [(1, 9 + f), (5, 8), (9, 10 - f), (13, 8)]
+            pygame.draw.lines(s, (60, 40, 50), False, pts, 6)
+            pygame.draw.lines(s, (180, 130, 150), False, pts, 4)
+            pygame.draw.circle(s, (230, 200, 210), (13, 8), 2)
+            s.set_at((14, 7), (20, 20, 20))
+        elif kind == 'sparkbird':
+            wing = 3 if f else 0
+            pygame.draw.polygon(s, (40, 50, 90), [(1, 4 + wing), (8, 8), (15, 4 + wing), (8, 12)])
+            pygame.draw.polygon(s, (110, 140, 230), [(2, 5 + wing), (8, 8), (14, 5 + wing), (8, 11)])
+            pygame.draw.circle(s, (255, 250, 140), (8, 8), 2)
+            pygame.draw.line(s, (255, 255, 120), (5, 13), (7, 11))
+            pygame.draw.line(s, (255, 255, 120), (11, 13), (9, 11))
+        elif kind == 'prism':
+            pygame.draw.polygon(s, (90, 60, 140), [(8, 0), (15, 8), (8, 15), (1, 8)])
+            cols = [(255, 120, 120), (255, 220, 100), (120, 230, 140), (120, 170, 255)]
+            for i, c in enumerate(cols):
+                pygame.draw.line(s, c, (4 + i * 2 + f, 5), (4 + i * 2 + f, 11))
+            pygame.draw.polygon(s, (255, 255, 255), [(8, 2), (10, 6), (8, 5)])
+        elif kind == 'starling':
+            pts = [(8 + math.cos(a) * (7 if i % 2 == 0 else 3), 8 + math.sin(a) * (7 if i % 2 == 0 else 3))
+                   for i, a in enumerate([-math.pi / 2 + k * math.pi / 5 + f * 0.2 for k in range(10)])]
+            pygame.draw.polygon(s, (140, 100, 20), pts)
+            pygame.draw.polygon(s, (255, 230, 120), [(8 + (x - 8) * 0.75, 8 + (y - 8) * 0.75) for x, y in pts])
+            _eye(s, 6, 7, False)
+            _eye(s, 10, 7, False)
+        elif kind == 'sandhopper':
+            _outline_blob(s, (3, 6, 10, 7), (110, 80, 40), (220, 190, 120), (250, 230, 170))
+            for x in (3, 6, 9, 12):
+                pygame.draw.line(s, (110, 80, 40), (x, 11), (x - 1 + 2 * f, 14))
+            pygame.draw.line(s, (110, 80, 40), (11, 6), (14, 2))
+            _eye(s, 10, 8, False)
+        elif kind == 'beetle':
+            _outline_blob(s, (2, 3, 12, 12), (20, 40, 30), (40, 140, 90), (120, 220, 160))
+            pygame.draw.line(s, (20, 40, 30), (8, 4), (8, 14))
+            for y in (6, 10):
+                pygame.draw.line(s, (20, 40, 30), (1, y + f), (3, y))
+                pygame.draw.line(s, (20, 40, 30), (13, y), (15, y + f))
+            pygame.draw.line(s, (20, 40, 30), (6, 3), (4, 0))
+            pygame.draw.line(s, (20, 40, 30), (10, 3), (12, 0))
+        elif kind == 'monkey':
+            pygame.draw.circle(s, (70, 40, 20), (8, 7), 6)
+            pygame.draw.circle(s, (150, 90, 50), (8, 7), 5)
+            pygame.draw.ellipse(s, (230, 190, 150), (5, 6, 6, 5))
+            pygame.draw.circle(s, (150, 90, 50), (2, 6), 2)
+            pygame.draw.circle(s, (150, 90, 50), (14, 6), 2)
+            _eye(s, 6, 6, False)
+            _eye(s, 9, 6, False)
+            pygame.draw.line(s, (70, 40, 20), (5, 12), (4 - f, 15))
+            pygame.draw.line(s, (70, 40, 20), (11, 12), (12 + f, 15))
+            pygame.draw.circle(s, (100, 70, 30), (13, 12), 2)       # a coconut
+        elif kind == 'scorpion':
+            _outline_blob(s, (3, 8, 10, 6), (90, 40, 10), (200, 120, 40))
+            tail = [(11, 10), (14, 7), (13, 3), (10, 2 + f)]
+            pygame.draw.lines(s, (90, 40, 10), False, tail, 3)
+            pygame.draw.lines(s, (200, 120, 40), False, tail, 1)
+            s.set_at((10, 2 + f), (255, 240, 120))
+            pygame.draw.circle(s, (200, 120, 40), (2, 9), 2, 1)
+            pygame.draw.circle(s, (200, 120, 40), (5, 7), 2, 1)
+            _eye(s, 5, 10, False)
+        elif kind == 'magmite':
+            squash = 2 if f else 0
+            _outline_blob(s, (2 - squash // 2, 4 + squash, 12 + squash, 11 - squash), (80, 20, 0), (230, 90, 20),
+                          (255, 200, 80))
+            _eye(s, 5, 8 + squash // 2)
+            _eye(s, 9, 8 + squash // 2)
+        elif kind == 'crystalbug':
+            _outline_blob(s, (3, 6, 10, 8), (40, 40, 80), (90, 90, 150))
+            for x, h in ((5, 5), (8, 7), (11, 5)):
+                pygame.draw.polygon(s, (150, 220, 255), [(x - 2, 8), (x, 8 - h), (x + 2, 8)])
+                s.set_at((x, 9 - h), (255, 255, 255))
+            for x in (4, 8, 12):
+                pygame.draw.line(s, (40, 40, 80), (x, 13), (x - 1 + 2 * f, 15))
+        elif kind == 'sporeling':
+            pygame.draw.ellipse(s, (90, 20, 50), (1, 1, 14, 9))
+            pygame.draw.ellipse(s, (200, 70, 130), (2, 2, 12, 7))
+            for x, y in ((5, 4), (10, 3), (8, 6)):
+                pygame.draw.circle(s, (255, 230, 240), (x, y), 1)
+            pygame.draw.rect(s, (230, 220, 190), (5, 9, 6, 5))
+            pygame.draw.line(s, (120, 100, 80), (5, 14), (4 + f, 15))
+            pygame.draw.line(s, (120, 100, 80), (10, 14), (11 - f, 15))
+            _eye(s, 6, 10, False)
+            _eye(s, 9, 10, False)
+        elif kind == 'skullfish':
+            pygame.draw.ellipse(s, (60, 60, 60), (1, 3, 11, 10))
+            pygame.draw.ellipse(s, (235, 230, 215), (2, 4, 9, 8))
+            pygame.draw.circle(s, (20, 20, 20), (5, 7), 2)
+            pygame.draw.line(s, (20, 20, 20), (3, 10), (9, 10))
+            for x in range(11, 15):
+                pygame.draw.line(s, (220, 215, 200), (x, 6 + (x + f) % 2), (x, 10 - (x + f) % 2))
+        elif kind == 'golem':
+            pygame.draw.rect(s, (50, 45, 60), (2, 2, 12, 13))
+            pygame.draw.rect(s, (120, 115, 130), (3, 3, 10, 11))
+            pygame.draw.rect(s, (150, 145, 160), (3, 3, 10, 2))
+            pygame.draw.rect(s, (90, 255, 200), (5, 6, 2, 2))
+            pygame.draw.rect(s, (90, 255, 200), (9, 6, 2, 2))
+            pygame.draw.line(s, (50, 45, 60), (4, 11), (12, 11))
+            pygame.draw.rect(s, (50, 45, 60), (0, 6 + f, 2, 5))
+            pygame.draw.rect(s, (50, 45, 60), (14, 7 - f, 2, 5))
+        elif kind == 'salamander':
+            body = [(1, 9), (5, 8 + f), (9, 9 - f), (13, 8)]
+            pygame.draw.lines(s, (90, 20, 0), False, body, 6)
+            pygame.draw.lines(s, (240, 110, 30), False, body, 4)
+            for x in (5, 9):
+                pygame.draw.line(s, (90, 20, 0), (x, 10), (x - 1 + 2 * f, 13))
+            pygame.draw.circle(s, (255, 200, 80), (13, 8), 2)
+            s.set_at((14, 7), (20, 20, 20))
+            s.set_at((7, 8), (255, 230, 120))
+        out.append(s)
+    return out
+
+
+def make_critters():
+    import entities
+    return {k: _critter_frames(k) for k in entities.CRITTERS}
+
+
 def load():
     global OCTO, SLAP, TILES, SPR
     OCTO = make_octo()
@@ -1666,6 +2028,7 @@ def load():
         'eel': make_eel(), 'clam': make_clam(), 'lionfish': make_lionfish(), 'ray': make_ray(),
         'angler': make_angler(), 'bilge': make_bilge_ghost(), 'squid': make_squid(), 'slug': make_slug(),
         'wisp': make_wisp(), 'cloud': make_cloud(), 'cloudlet': make_cloud(small=True),
+        **make_critters(),
         'items': make_items(),
         'orb': make_pearl((120, 255, 200), (230, 255, 245), size=10),
     }

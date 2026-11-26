@@ -2,8 +2,8 @@
 
 Every form has a passive STRENGTH that is on while Octo is in that form.
 
-The Fusion Machine (next to the Pearl Shop) can fuse ANY two base forms. Each of the 91 possible pairs
-makes its own fused form with a brand-new attack: one of 13 attack shapes powered by one of 7 elements,
+The Fusion Machine (next to the Pearl Shop) can fuse ANY two base forms. Each of the 190 possible pairs
+makes its own fused form with a brand-new attack: one of 16 attack shapes powered by one of 12 elements,
 and no two pairs share the same combination. A fused form also gets boosted versions of both parents'
 strengths.
 """
@@ -11,12 +11,16 @@ import itertools
 
 # base forms, in the order they're listed everywhere
 BASE = ['blue', 'mad', 'zap', 'ice', 'ghost', 'bubble', 'spiky', 'glow', 'air',
-        'magnet', 'clammy', 'starry', 'wobbly', 'stony']
+        'magnet', 'clammy', 'starry', 'wobbly', 'stony',
+        # learned from the new worlds: the Surface, the Sky and the Underdeep
+        'sandy', 'leafy', 'crysty', 'cloudy', 'shroomy', 'magmy']
 ALTAR_FORMS = BASE[2:]          # what the temple altar teaches (Happy and Grumpy you start with)
 
 NAMES = {'blue': 'HAPPY', 'mad': 'GRUMPY', 'zap': 'ZAPPY', 'ice': 'CHILLY', 'ghost': 'SPOOKY',
          'bubble': 'BUBBLY', 'spiky': 'SPIKY', 'glow': 'GLOWY', 'air': 'AIRY', 'magnet': 'MAGNETY',
-         'clammy': 'CLAMMY', 'starry': 'STARRY', 'wobbly': 'WOBBLY', 'stony': 'STONY'}
+         'clammy': 'CLAMMY', 'starry': 'STARRY', 'wobbly': 'WOBBLY', 'stony': 'STONY',
+         'sandy': 'SANDY', 'leafy': 'LEAFY', 'crysty': 'CRYSTY', 'cloudy': 'CLOUDY', 'shroomy': 'SHROOMY',
+         'magmy': 'MAGMY'}
 
 # form -> (strength name, what it does, stats)
 #   speed: swim-speed multiplier      power: extra damage on every attack
@@ -28,6 +32,8 @@ NAMES = {'blue': 'HAPPY', 'mad': 'GRUMPY', 'zap': 'ZAPPY', 'ice': 'CHILLY', 'gho
 #   steady: never knocked back         magnet: pickups this close fly to Octo
 #   shield: blocks shots from the front  pearls: pearl value multiplier
 #   stingproof: jellies and urchins can't hurt Octo
+#   dodge: chance a hit misses Octo   crit: chance an attack deals double damage
+#   hover: floats over pits, trenches, ponds and sky gaps   heatproof: walks on lava, fire can't hurt
 STRENGTHS = {
     'blue': ("SPEEDY", "SWIMS 20% FASTER.", {'speed': 1.2}),
     'mad': ("STRONG", "EVERY ATTACK DEALS +1 DAMAGE.", {'power': 1}),
@@ -45,13 +51,21 @@ STRENGTHS = {
     'wobbly': ("STINGPROOF", "JELLIES AND URCHINS CAN'T HURT YOU.", {'stingproof': 1}),
     'stony': ("HEAVY", "HITS HURT LESS AND NOTHING KNOCKS YOU BACK, BUT YOU SWIM A BIT SLOWER.",
               {'armor': 1, 'steady': 1, 'speed': 0.9}),
+    'sandy': ("DODGY", "ONE HIT IN FOUR MISSES YOU COMPLETELY.", {'dodge': 0.25}),
+    'leafy': ("OVERGROWN", "HEALS HALF A HEART EVERY 10 SECONDS, AND ENEMIES THAT TOUCH YOU GET PRICKED.",
+              {'regen': 600, 'thorns': 1}),
+    'crysty': ("SHARP", "ONE ATTACK IN FOUR DEALS DOUBLE DAMAGE.", {'crit': 0.25}),
+    'cloudy': ("FLOATY", "FLOATS OVER PITS, TRENCHES, PONDS AND GAPS IN THE SKY.", {'hover': 1}),
+    'shroomy': ("FORAGER", "TREASURE DROPS MORE OFTEN AND PEARLS COUNT EXTRA.", {'luck': 1.5, 'pearls': 1.5}),
+    'magmy': ("HEATPROOF", "WALKS ON LAVA, AND FIRE CAN'T HURT YOU.", {'heatproof': 1}),
 }
 
 # the Z attack of each base form (for menus)
 ATTACKS = {'blue': "INK", 'mad': "SLAP", 'zap': "ZAP RING", 'ice': "ICE SHARD", 'ghost': "WISPS",
            'bubble': "BUBBLE SHIELD", 'spiky': "SPINES", 'glow': "FLASH", 'air': "FOG CLOAK",
            'magnet': "MAGNET PULSE", 'clammy': "SHELL BOOMERANG", 'starry': "SEEKER STARS",
-           'wobbly': "STING MINES", 'stony': "BOULDER"}
+           'wobbly': "STING MINES", 'stony': "BOULDER", 'sandy': "SAND QUAKE", 'leafy': "VINE LASH",
+           'crysty': "PRISM BEAM", 'cloudy': "RAIN CLOUD", 'shroomy': "SPORE BURST", 'magmy': "MAGMA ORBS"}
 
 # ---------------------------------------------------------------------------- fused attacks
 # shape -> (short HUD label, noun, what it does)
@@ -69,6 +83,9 @@ SHAPES = {
     'seekers': ("STARS", "STARS", "THREE STARS HUNT DOWN THE NEAREST ENEMIES"),
     'mines': ("MINES", "MINES", "DROP MINES THAT BURST WHEN AN ENEMY TOUCHES THEM"),
     'boulder': ("ROCK", "BOULDER", "A BOULDER ROLLS OUT AND CRUSHES EVERYTHING IN ITS PATH"),
+    'beam': ("BEAM", "BEAM", "A BEAM OF LIGHT SHOOTS STRAIGHT AHEAD, PIERCING EVERY ENEMY IN LINE"),
+    'orbit': ("ORBS", "ORBS", "THREE ORBS CIRCLE YOU FOR A WHILE, HITTING WHAT THEY TOUCH"),
+    'rain': ("RAIN", "RAIN", "A CLOUD FOLLOWS YOU AND RAINS DOWN ON NEARBY ENEMIES"),
 }
 # element -> (name prefix, what it adds, colour)
 ELEMENTS = {
@@ -79,13 +96,24 @@ ELEMENTS = {
     'drain': ("LEECH", "AND HEALS YOU A LITTLE", (255, 110, 160)),
     'loot': ("GOLD", "AND SHAKES PEARLS LOOSE", (255, 215, 90)),
     'spark': ("VOLT", "AND ARCS LIGHTNING TO A NEIGHBOUR", (255, 255, 120)),
+    'poison': ("VENOM", "AND POISONS THEM", (150, 230, 80)),
+    'slow': ("SLUDGE", "AND SLOWS THEM DOWN", (140, 120, 200)),
+    'push': ("GUST", "AND BLASTS THEM AWAY", (220, 240, 255)),
+    'confuse': ("DIZZY", "AND MAKES THEM WANDER IN A DAZE", (255, 160, 230)),
+    'weaken': ("CRACK", "AND CRACKS THEIR ARMOR SO EVERY HIT HURTS MORE", (230, 200, 255)),
 }
 # each base form's favourite element (fusions lean towards their parents' elements)
 LEANS = {'blue': 'loot', 'mad': 'heavy', 'zap': 'spark', 'ice': 'freeze', 'ghost': 'drain', 'bubble': 'drain',
          'spiky': 'burn', 'glow': 'stun', 'air': 'stun', 'magnet': 'loot', 'clammy': 'heavy',
-         'starry': 'spark', 'wobbly': 'stun', 'stony': 'heavy'}
+         'starry': 'spark', 'wobbly': 'stun', 'stony': 'heavy', 'sandy': 'push', 'leafy': 'poison',
+         'crysty': 'weaken', 'cloudy': 'slow', 'shroomy': 'confuse', 'magmy': 'burn'}
 # the base forms whose own attack already is one of the shapes (a fusion never just copies a parent)
-OWN_SHAPE = {'magnet': 'nova', 'clammy': 'boomerang', 'starry': 'seekers', 'wobbly': 'mines', 'stony': 'boulder'}
+OWN_SHAPE = {'magnet': 'nova', 'clammy': 'boomerang', 'starry': 'seekers', 'wobbly': 'mines', 'stony': 'boulder',
+             'sandy': 'quake', 'leafy': 'whip', 'crysty': 'beam', 'cloudy': 'rain', 'shroomy': 'nova',
+             'magmy': 'orbit'}
+# the element a base form's own attack carries
+OWN_ELEMENT = {'magnet': 'pull', 'sandy': 'push', 'leafy': 'poison', 'crysty': 'weaken', 'cloudy': 'slow',
+               'shroomy': 'confuse', 'magmy': 'burn'}
 
 # hand-named fusions (the first eight the machine ever made)
 NAMED = {('zap', 'ice'): ('stormy', 'STORMY', 'hail', 'freeze'),
@@ -114,19 +142,41 @@ def _squash(name):
     return out
 
 
-def _build():
-    pairs = list(itertools.combinations(BASE, 2))
-    used, out = set(), {}
-    for (a, b), (fid, name, shape, elem) in NAMED.items():
-        used.add((shape, elem))
-        out[fid] = {'parents': (a, b), 'name': name, 'shape': shape, 'element': elem}
-    shapes, elems = list(SHAPES), list(ELEMENTS)
-    names = {v['name'] for v in out.values()}
+OLD_BASE = BASE[:14]          # the first fourteen forms keep the fusions they always had
+OLD_SHAPES = 13
+OLD_ELEMENTS = 7
+VOWELS = set('AEIOU')
+BLOCKED_NAMES = {'SONY'}          # real brand names are never used
+
+
+def _blend(a, b):
+    """A rhyming name for the newer fusions: the first sounds of one name, the ending of the other
+    (ZAPPY + SHROOMY -> ZOOMY, GRUMPY + SANDY -> GRANDY)."""
+    na, nb = NAMES[a], NAMES[b]
+    i = 0
+    while i < len(na) and na[i] not in VOWELS and not (na[i] == 'Y' and i > 0):
+        i += 1
+    onset = na[:i]
+    if not onset:
+        return ''                        # AIRY etc: let the other order make the name
+    body = nb[:-1] if nb.endswith('Y') else nb
+    j = len(body) - 1
+    while j > 0 and body[j] not in VOWELS and body[j] != 'Y':
+        j -= 1
+    while j > 0 and (body[j - 1] in VOWELS or body[j - 1] == 'Y'):
+        j -= 1
+    k = 0
+    while k < len(nb) and nb[k] not in VOWELS and not (nb[k] == 'Y' and k > 0):
+        k += 1
+    rhyme = nb[min(j, k):] if nb[min(j, k):] else nb
+    return _squash(onset + rhyme)
+
+
+def _pick(pairs, shapes, elems, used, start_mul=5):
+    out = []
     for i, (a, b) in enumerate(pairs):
-        if (a, b) in NAMED:
-            continue
         prefer = [LEANS[a], LEANS[b]] + elems
-        start = (i * 5) % len(shapes)
+        start = (i * start_mul) % len(shapes)
         pick = None
         for e in prefer:
             for k in range(len(shapes)):
@@ -136,13 +186,58 @@ def _build():
                     break
             if pick:
                 break
-        if pick is None:                        # (never happens, but stay safe)
-            pick = next((s, e) for s in shapes for e in elems if (s, e) not in used)
+        if pick is None:                        # every combination near its parents is taken
+            pick = next(((s, e) for e in elems for s in shapes if (s, e) not in used
+                         and s not in (OWN_SHAPE.get(a), OWN_SHAPE.get(b))), None) or \
+                next((s, e) for s in shapes for e in elems if (s, e) not in used)
+        used.add(pick)
+        out.append(((a, b), pick))
+    return out
+
+
+def _build():
+    used, out = set(), {}
+    for (a, b), (fid, name, shape, elem) in NAMED.items():
+        used.add((shape, elem))
+        out[fid] = {'parents': (a, b), 'name': name, 'shape': shape, 'element': elem}
+    names = {v['name'] for v in out.values()}
+    shapes, elems = list(SHAPES), list(ELEMENTS)
+    # 1) the original 91 pairs, exactly as before
+    old = [p for p in itertools.combinations(OLD_BASE, 2)]
+    for i, (a, b) in enumerate(old):
+        if (a, b) in NAMED:
+            continue
+        prefer = [LEANS[a], LEANS[b]] + elems[:OLD_ELEMENTS]
+        osh = shapes[:OLD_SHAPES]
+        start = (i * 5) % len(osh)
+        pick = None
+        for e in prefer:
+            for k in range(len(osh)):
+                sh = osh[(start + k) % len(osh)]
+                if (sh, e) not in used and sh not in (OWN_SHAPE.get(a), OWN_SHAPE.get(b)):
+                    pick = (sh, e)
+                    break
+            if pick:
+                break
+        if pick is None:
+            pick = next((sh, e) for sh in osh for e in elems[:OLD_ELEMENTS] if (sh, e) not in used)
         used.add(pick)
         na, nb = NAMES[a], NAMES[b]
         for name in (_portmanteau(a, b), _portmanteau(b, a), _squash(na[:3] + nb[-3:]), _squash(nb[:3] + na[-3:]),
                      _squash(na[:2] + nb[-4:]), _squash(nb[:2] + na[-4:]), _squash(na[0] + nb[1:])):
             if name not in names and name not in NAMES.values():
+                break
+        names.add(name)
+        out[f'{a}+{b}'] = {'parents': (a, b), 'name': name, 'shape': pick[0], 'element': pick[1]}
+    # 2) every pair with a newer form: any of the 16 shapes and 12 elements
+    new = [p for p in itertools.combinations(BASE, 2) if p not in old]
+    for (a, b), pick in _pick(new, shapes, elems, used, start_mul=7):
+        for name in (_blend(a, b), _blend(b, a), _portmanteau(a, b), _portmanteau(b, a),
+                     _squash(NAMES[a][:3] + NAMES[b][-3:]), _squash(NAMES[b][:3] + NAMES[a][-3:])):
+            if name and name not in names and name not in NAMES.values() and 4 <= len(name) <= 8 and \
+                    name not in BLOCKED_NAMES and \
+                    not any(name.count(c * 2) and c * 2 in name[2:] and name.index(c * 2) != name.rindex(c * 2)
+                            for c in name):
                 break
         names.add(name)
         out[f'{a}+{b}'] = {'parents': (a, b), 'name': name, 'shape': pick[0], 'element': pick[1]}

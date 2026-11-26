@@ -150,6 +150,32 @@ Each temple is a multi-room dungeon of 9 to 14 rooms, seen one screen at a time:
 
 Beat Murk to win. Then press Enter for **Deep Tide**, a harder replay of the whole game.
 
+## Four worlds
+
+* **The Sea** (240×80 tiles). Far to the east, past the Frozen Shelf, Ember Vents and Sunken
+  City, lie **Glass Reef**, the **Siren Shoals** and dark **Whale Fall**.
+* **The Sky**, reached by geysers. It's four times bigger than before: the old Sky Islands plus
+  the **Thunderheads**, **Rainbow Reach** and **Starfall Peaks**, linked by plank bridges.
+* **The Surface**, up the white **shore steps** in the Lagoon, the Reef and the Siren Shoals:
+  **Sunny Beach**, **Tide Meadows**, **Palm Jungle**, **Dune Desert**, and **Volcano Ridge**
+  behind a ring of lava.
+* **The Underdeep**, down the purple **sinkholes** in the Abyss, the Ship Graveyard and Whale
+  Fall: **Crystal Caves**, **Fungus Grotto**, **Bone Trench**, the **Ancient Ruins**, and the
+  **Magma Core** (with a lava tube up to the volcano).
+
+Every new region has its own creature (16 new kinds), its own guardian (who drops a spirit pearl)
+and its own music. There are **74 trial portals** in all. Press **M**, then left/right, to flip
+between the maps of the worlds you've visited.
+
+### Six new forms and 190 fusions
+
+**Sandy** (sand quake; dodges one hit in four), **Leafy** (poison vine lash; heals and has
+thorns), **Crysty** (piercing prism beam; critical hits), **Cloudy** (rain cloud; *floats over
+pits, ponds and sky gaps*), **Shroomy** (dizzying spores; finds more treasure) and **Magmy**
+(magma orbs; *walks on lava*). With 20 base forms, the Fusion Machine can make **190** fusions,
+each with a different attack. There are 16 attack shapes (new: beam, orbs, rain) and 12 elements
+(new: venom, sludge, gust, dizzy, crack). The original 91 fusions are unchanged.
+
 The world map is 160×80 tiles, plus seven one-screen trial rooms and the Sky Islands:
 
 * **Coral Reef** (start, in the Octo Temple), **Kelp Woods**, **Coral Gardens**, **The Lagoon**,
@@ -173,6 +199,7 @@ a shell shield, deep ink and a heart shell. Bubble bombs blast open cracked rock
 
 * `settings.py`: screen size, speeds
 * `world.py`: the whole map as ASCII (sea, trial rooms and sky), spawns, arenas, trials, regions and themes, the `Level` class, and a validator that checks everything can be reached
+* `base_level.py`: the hand-made map rows. `tools/gen_worlds.py` grows them into the four worlds (`level_data.py`, `worlds_data.py`)
 * `temples.py`: builds the six deep temples (room tree, locks and keys, barriers, guardians) from fixed seeds
 * `entities.py`: Player (forms, jet, bombs), enemies and bosses, NPCs, projectiles, pickups, effects
 * `gfx.py`: every sprite, themed tileset and the bitmap font, drawn in code

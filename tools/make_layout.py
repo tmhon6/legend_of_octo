@@ -116,76 +116,84 @@ def draw_things(surf, rect, enemies=True):
                     ring(surf, cx, cy, 11, (255, 120, 150) if kind == 'container' else (255, 220, 80), 2)
 
 
-# ---------------------------------------------------------------- page: the sea
-def sea_page():
-    rect = (0, 0, world.LEVEL_W - 1, world.WORLD_H - 1)
-    surf = FULL.subsurface((0, 0, world.LEVEL_W * TILE, world.WORLD_H * TILE)).copy()
+# ---------------------------------------------------------------- pages: the four worlds
+WORLD_SUB = {'sea': "REGIONS, DUNGEON DOORS, GUARDIANS, TRIAL PORTALS, PASSAGES, HEART SHELLS AND ENEMIES",
+             'sky': "REACHED BY GEYSERS. OCTO ROLLS IN A BALL OF WATER UP HERE",
+             'land': "THE SURFACE: REACHED BY THE WHITE SHORE STEPS",
+             'under': "THE UNDERDEEP: REACHED BY THE PURPLE SINKHOLES"}
+
+
+def world_page(wld):
+    rect = world.WORLD_RECTS[wld]
+    x0, y0, x1, y1 = rect
+    surf = FULL.subsurface((x0 * TILE, y0 * TILE, (x1 - x0 + 1) * TILE, (y1 - y0 + 1) * TILE)).copy()
+    ox, oy = x0 * TILE, y0 * TILE
     shade = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
-    shade.fill((0, 0, 0, 60))
+    shade.fill((0, 0, 0, 50))
     surf.blit(shade, (0, 0))
     draw_things(surf, rect)
-    for name, r in world.REGIONS:          # region names
-        if r[1] < world.WORLD_H and not name.startswith(('TRIAL', 'BOSS')) and name not in ('PEARL SHOP',):
-            cx = (r[0] + r[2] + 1) * TILE // 2
-            y = r[1] * TILE + 22
-            if any(world.in_rect(*t['door'], (r[0], r[1], r[2], r[1] + 4)) for t in world.TEMPLES.values()):
-                y = (r[3] - 2) * TILE          # a temple door is up there: put the name at the bottom
-            label(surf, name, cx, y, (150, 220, 255), scale=3)
-    label(surf, 'CORAL REEF', 34 * TILE, 38 * TILE, (150, 220, 255), scale=3)
-    for name, t in world.TRIALS.items():   # trial portals
-        cx, cy = px(*t['portal'])
-        ring(surf, cx, cy, 10, t.get('color', INK))
-        label(surf, name.upper(), cx, cy + 12, t.get('color', INK), scale=1)
-    for a, b in world.GEYSERS:
-        cx, cy = px(*a)
-        ring(surf, cx, cy, 10, (200, 240, 255))
-        label(surf, 'GEYSER TO SKY', cx, cy + 12, (200, 240, 255), scale=1)
-    for bid, tx, ty in world.MINIBOSSES:   # guardians
-        cx, cy = px(tx, ty)
-        base = entities.MINIBOSS_STYLES[bid]['base']
-        blit_c(surf, gfx.tint(sprite(base), entities.MINIBOSS_STYLES[bid]['tint']), cx, cy, 2)
-        ring(surf, cx, cy, 20, (255, 80, 80))
-        opens = world.SIGIL_OF.get(bid)
-        txt = boss_name(bid) + (f" - SIGIL FOR {NAME[opens]}" if opens else " - HEART SHELL")
-        label(surf, txt, cx, cy + 24, (255, 140, 140), scale=1)
-    for tid, t in world.TEMPLES.items():   # temple doors
-        cx, cy = px(*t['door'])
-        blit_c(surf, gfx.SPR['bell'], cx, cy - 2, 2)
-        ring(surf, cx, cy, 18, (255, 210, 90))
-        label(surf, t['title'], cx, cy + 22, (255, 220, 120), scale=2)
-    for (tx, ty), what in (((47.5, 20), 'SUNKEN SHRINE GATE (BIG PINCH SIGIL)'),
-                           ((148.5, 77), 'MURK PALACE DOOR (7 TIDE BELLS)'),
-                           ((141.5, 60), 'MURK + THE GOLDEN PEARL'),
-                           ((47.5, 5), 'GRIMFIN + TIDE BELL 1'),
-                           (world.START, 'START (OCTO TEMPLE)'),
-                           ((30, 46), "HERMIE'S SHOP"), ((37, 46), 'FUSION MACHINE')):
-        cx, cy = px(tx, ty)
-        ring(surf, cx, cy, 14, (120, 255, 160))
-        label(surf, what, cx, cy + 16, (160, 255, 190), scale=2 if 'MURK' in what or 'START' in what else 1)
-    page("THE SEA", surf, "REGIONS, DUNGEON DOORS, GUARDIANS, TRIAL PORTALS, HEART SHELLS AND ENEMY SPAWNS")
 
-
-# ---------------------------------------------------------------- page: sky + trial rooms
-def sky_page():
-    x0, y0, x1, y1 = world.SKY_RECT
-    rect = (x0, y0, x1, y1)
-    surf = FULL.subsurface((x0 * TILE, y0 * TILE, (x1 - x0 + 1) * TILE, (y1 - y0 + 1) * TILE)).copy()
-    draw_things(surf, rect)
+    def here(tx, ty):
+        return world.in_rect(tx, ty, rect)
+    for name, r in world.REGIONS:                     # region names
+        if name.startswith(('TRIAL', 'BOSS')) or name in ('PEARL SHOP',) or not here(r[0], r[1]):
+            continue
+        cx = (r[0] + r[2] + 1) * TILE // 2 - ox
+        y = r[1] * TILE + 22 - oy
+        if any(world.in_rect(*t['door'], (r[0], r[1], r[2], r[1] + 4)) for t in world.TEMPLES.values()):
+            y = (r[3] - 2) * TILE - oy
+        label(surf, name, cx, y, (150, 220, 255), scale=3)
+    if wld == 'sea':
+        label(surf, 'CORAL REEF', 34 * TILE, 38 * TILE, (150, 220, 255), scale=3)
     for name, t in world.TRIALS.items():
-        if world.in_rect(*t['portal'], rect):
-            cx, cy = px(t['portal'][0], t['portal'][1], x0 * TILE, y0 * TILE)
+        if here(*t['portal']):
+            cx, cy = px(*t['portal'], ox, oy)
             ring(surf, cx, cy, 10, t.get('color', INK))
             label(surf, name.upper(), cx, cy + 12, t.get('color', INK), scale=1)
-    for bid, tx, ty in world.MINIBOSSES:
-        if world.in_rect(tx, ty, rect):
-            cx, cy = px(tx, ty, x0 * TILE, y0 * TILE)
-            ring(surf, cx, cy, 20, (255, 80, 80))
-            label(surf, boss_name(bid) + ' - HEART SHELL', cx, cy + 24, (255, 140, 140), scale=1)
     for a, b in world.GEYSERS:
-        cx, cy = px(b[0], b[1], x0 * TILE, y0 * TILE)
-        ring(surf, cx, cy, 10, (200, 240, 255))
-        label(surf, 'GEYSER DOWN', cx, cy + 12, (200, 240, 255), scale=1)
-    page("THE SKY ISLANDS", pygame.transform.scale2x(surf), "REACHED BY GEYSERS. OCTO ROLLS IN A BALL OF WATER UP HERE")
+        for (gx, gy), txt in ((a, 'GEYSER UP'), (b, 'GEYSER DOWN')):
+            if here(gx, gy):
+                cx, cy = px(gx, gy, ox, oy)
+                ring(surf, cx, cy, 10, (200, 240, 255))
+                label(surf, txt, cx, cy + 12, (200, 240, 255), scale=1)
+    for a, b, kind in world.PASSAGES:
+        for (gx, gy), other in ((a, b), (b, a)):
+            if here(gx, gy):
+                cx, cy = px(gx, gy, ox, oy)
+                col = (255, 255, 255) if kind == 'shore' else (200, 140, 255)
+                ring(surf, cx, cy, 12, col)
+                dest = world.WORLD_NAMES[world.world_at(*other)]
+                label(surf, ('SHORE STEPS TO ' if kind == 'shore' else 'SINKHOLE TO ') + dest, cx, cy + 14, col, scale=1)
+    for bid, tx, ty in world.MINIBOSSES:
+        if not here(tx, ty):
+            continue
+        cx, cy = px(tx, ty, ox, oy)
+        st = entities.MINIBOSS_STYLES[bid]
+        blit_c(surf, gfx.tint(sprite(st['base']), st['tint']), cx, cy, 2)
+        ring(surf, cx, cy, 20, (255, 80, 80))
+        opens = world.SIGIL_OF.get(bid)
+        reward = f" - SIGIL FOR {NAME[opens]}" if opens else \
+            (" - SPIRIT PEARL" if bid in world.NEW_WORLD_GUARDIANS else " - HEART SHELL")
+        label(surf, boss_name(bid) + reward, cx, cy + 24, (255, 140, 140), scale=1)
+    for tid, t in world.TEMPLES.items():
+        if here(*t['door']):
+            cx, cy = px(*t['door'], ox, oy)
+            blit_c(surf, gfx.SPR['bell'], cx, cy - 2, 2)
+            ring(surf, cx, cy, 18, (255, 210, 90))
+            label(surf, t['title'], cx, cy + 22, (255, 220, 120), scale=2)
+    if wld == 'sea':
+        for (tx, ty), what in (((47.5, 20), 'SUNKEN SHRINE GATE (BIG PINCH SIGIL)'),
+                               ((148.5, 77), 'MURK PALACE DOOR (7 TIDE BELLS)'),
+                               ((141.5, 60), 'MURK + THE GOLDEN PEARL'),
+                               ((47.5, 5), 'GRIMFIN + TIDE BELL 1'),
+                               (world.START, 'START (OCTO TEMPLE)'),
+                               ((30, 46), "HERMIE'S SHOP"), ((37, 46), 'FUSION MACHINE')):
+            cx, cy = px(tx, ty)
+            ring(surf, cx, cy, 14, (120, 255, 160))
+            label(surf, what, cx, cy + 16, (160, 255, 190), scale=2 if 'MURK' in what or 'START' in what else 1)
+    if wld == 'sky':
+        surf = pygame.transform.smoothscale(surf, (surf.get_width() * 3 // 2, surf.get_height() * 3 // 2))
+    page(world.WORLD_NAMES[wld], surf, WORLD_SUB[wld])
 
 
 def trials_page():
@@ -208,7 +216,7 @@ def trials_page():
         surf.blit(crop, (gx, gy + 30))
         kind = t['kind'] + (' / DARK' if t.get('dark') else '') + (' / CURRENT' if t.get('current') else '')
         label(surf, f"{t['title'][9:]} - {kind}", gx + cw // 2, gy + 6, t.get('color', INK), scale=2, box=False)
-    page("THE 41 TRIAL ROOMS", surf, "EACH WIN GIVES A SPIRIT PEARL. 3 PEARLS AT THE ALTAR TEACH A NEW FORM. GREEN RING = WHERE OCTO LANDS")
+    page(f"THE {len(world.TRIALS)} TRIAL ROOMS", surf, "EACH WIN GIVES A SPIRIT PEARL. 3 PEARLS AT THE ALTAR TEACH A NEW FORM. GREEN RING = WHERE OCTO LANDS")
 
 
 # ---------------------------------------------------------------- pages: temples
@@ -333,16 +341,35 @@ def creatures_page():
     for kind, cls in entities.ENEMY_TYPES.items():
         if kind in ('shark', 'murk'):
             continue
+        if kind in entities.CRITTERS:
+            c = entities.CRITTERS[kind]
+            rows.append((sprite(kind), f"{c['name']}  HP {c['hp']}  DMG {c['dmg']}  - {c['region']}", c['doc']))
+            continue
         doc = (cls.__doc__ or '').strip().split('\n')[0]
         where = CREATURE_OF.get(kind, 'EVERYWHERE')
         rows.append((sprite(kind), f"{kind.upper()}  HP {cls.max_hp}  DMG {cls.damage}  - {where}", doc))
     rows.append((None, "", ""))
     for bid, st in entities.MINIBOSS_STYLES.items():
         role = ('GUARDIAN - SIGIL FOR ' + NAME[world.SIGIL_OF[bid]]) if bid in world.SIGIL_OF else \
-            ('TEMPLE BOSS' if bid in [t['boss'] for t in world.TEMPLES.values()] else 'GUARDIAN - HEART SHELL')
+            ('TEMPLE BOSS' if bid in [t['boss'] for t in world.TEMPLES.values()] else
+             'GUARDIAN - SPIRIT PEARL' if bid in world.NEW_WORLD_GUARDIANS else 'GUARDIAN - HEART SHELL')
+        where = next((x for b, *_r in world.MINIBOSSES if b == bid for x in [world.region_at(*_r)]), '')
+        role += f"  ({where})" if where and 'TEMPLE' not in role else ''
         rows.append((gfx.tint(sprite(st['base']), st['tint']), f"{st['name']}  HP {st['hp']}", role))
-    surf = pygame.Surface((1500, len(rows) * 40 + 20))
+    half = (len(rows) + 1) // 2
+    surf = pygame.Surface((1800, half * 40 + 20))
     surf.fill(BG)
+    for i, (img, a, b) in enumerate(rows):
+        y = 10 + (i % half) * 40
+        x_off = 0 if i < half else 900
+        if img is not None:
+            blit_c(surf, img, 30 + x_off, y + 14, 2)
+        label(surf, a, 64 + x_off, y + 2, (255, 220, 120), scale=2, center=False, box=False)
+        label(surf, b.upper()[:80], 64 + x_off, y + 22, (200, 210, 240), scale=1, center=False, box=False)
+    page("CREATURES AND BOSSES", surf, "HP AND DAMAGE ARE BASE VALUES - THEY GROW IN LATER REGIONS AND TEMPLES")
+
+
+def _unused_creature_rows(surf, rows):
     for i, (img, a, b) in enumerate(rows):
         y = 10 + i * 40
         if img is not None:
@@ -350,6 +377,38 @@ def creatures_page():
         label(surf, a, 64, y + 2, (255, 220, 120), scale=2, center=False, box=False)
         label(surf, b.upper()[:110], 64, y + 22, (200, 210, 240), scale=1, center=False, box=False)
     page("CREATURES AND BOSSES", surf, "HP AND DAMAGE ARE BASE VALUES - THEY GROW IN LATER REGIONS AND TEMPLES")
+
+
+# ---------------------------------------------------------------- page: forms and fusions
+def forms_page():
+    import forms
+    base = forms.BASE
+    cell = 64
+    surf = pygame.Surface((cell * (len(base) + 1) + 20, cell * (len(base) + 1) + 20 + 40 * 11))
+    surf.fill(BG)
+    for i, f in enumerate(base):
+        img = gfx.OCTO[f]['down'][0]
+        blit_c(surf, img, cell * (i + 1) + cell // 2 + 10, cell // 2 + 4, 2)
+        blit_c(surf, img, cell // 2 + 10, cell * (i + 1) + cell // 2 + 4, 2)
+        label(surf, forms.NAMES[f][:7], cell * (i + 1) + cell // 2 + 10, cell - 10, INK, scale=1, box=False)
+    for i, a in enumerate(base):
+        for j, b in enumerate(base):
+            if i == j:
+                continue
+            fid = forms.fusion_of(a, b)
+            d = forms.FUSIONS[fid]
+            x, y = cell * (j + 1) + 10, cell * (i + 1) + 4
+            pygame.draw.rect(surf, forms.ELEMENTS[d['element']][2], (x + 2, y + 2, cell - 4, cell - 4), 1)
+            label(surf, d['name'], x + cell // 2, y + 14, INK, scale=1, box=False)
+            label(surf, d['label'], x + cell // 2, y + 30, forms.ELEMENTS[d['element']][2], scale=1, box=False)
+    y = cell * (len(base) + 1) + 30
+    label(surf, "BASE FORMS: Z ATTACK - STRENGTH", 20, y, (255, 220, 120), scale=2, center=False, box=False)
+    for k, f in enumerate(base):
+        yy = y + 30 + (k % 10) * 36
+        xx = 20 + (k // 10) * (surf.get_width() // 2)
+        label(surf, f"{forms.NAMES[f]}: {forms.ATTACKS[f]} - {forms.STRENGTHS[f][0]}", xx, yy, INK, scale=2,
+              center=False, box=False)
+    page("FORMS AND ALL 190 FUSIONS", surf, "ROW + COLUMN = THE FUSED FORM, ITS ATTACK SHAPE, AND ITS ELEMENT COLOUR")
 
 
 # ---------------------------------------------------------------- PDF (JPEG pages, no extra libraries)
@@ -391,12 +450,15 @@ def write_pdf(path, images):
 
 def main():
     story_page()
-    sea_page()
+    world_page('sea')
     shrine_page()
     for tid in world.TEMPLES:
         temple_page(tid)
-    sky_page()
+    world_page('sky')
+    world_page('land')
+    world_page('under')
     trials_page()
+    forms_page()
     creatures_page()
     pics = os.path.join(OUT, 'layout')
     os.makedirs(pics, exist_ok=True)

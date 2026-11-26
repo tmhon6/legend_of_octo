@@ -108,10 +108,21 @@ THEME_FX = {
     'kelp': ((0, 40, 10), 30, None), 'garden': ((255, 120, 170), 18, None),
     'lagoon': ((120, 230, 255), 22, None), 'wreck': ((40, 30, 10), 40, 'dust'),
     'sky': ((255, 250, 220), 20, 'wind'),
+    'glass': ((200, 240, 255), 20, None), 'siren': ((255, 150, 220), 20, None), 'whale': ((0, 6, 30), 70, 'dust'),
+    'thunder': ((40, 40, 80), 40, 'wind'), 'rainbow': ((255, 220, 255), 16, 'wind'), 'starfall': ((20, 10, 60), 50, 'snow'),
+    'beach': ((255, 240, 200), 14, None), 'meadow': ((255, 255, 200), 10, None), 'jungle': ((0, 60, 10), 34, None),
+    'desert': ((255, 200, 120), 26, 'dust'), 'volcano': ((120, 20, 0), 46, 'embers'),
+    'crystal': ((40, 20, 90), 50, 'snow'), 'fungus': ((60, 0, 60), 46, 'dust'), 'bone': ((10, 6, 20), 60, 'dust'),
+    'ruins': ((20, 20, 10), 50, 'dust'), 'magma': ((140, 30, 0), 56, 'embers'),
 }
 THEME_MINI = {'reef': (196, 178, 128), 'kelp': (160, 170, 110), 'garden': (226, 186, 170),
               'lagoon': (230, 224, 200), 'abyss': (100, 106, 142), 'wreck': (140, 130, 108),
-              'frost': (220, 234, 244), 'vents': (90, 74, 72), 'city': (120, 122, 142)}
+              'frost': (220, 234, 244), 'vents': (90, 74, 72), 'city': (120, 122, 142),
+              'sky': (120, 190, 90), 'glass': (206, 226, 232), 'siren': (230, 206, 214), 'whale': (70, 76, 96),
+              'thunder': (150, 160, 180), 'rainbow': (190, 230, 160), 'starfall': (80, 80, 140),
+              'beach': (240, 222, 160), 'meadow': (120, 190, 80), 'jungle': (70, 140, 60), 'desert': (236, 200, 130),
+              'volcano': (80, 60, 56), 'crystal': (84, 90, 130), 'fungus': (96, 74, 96), 'bone': (120, 110, 100),
+              'ruins': (110, 106, 90), 'magma': (70, 44, 36)}
 FORM_INFO = {
     'zap': ["YOU UNLOCKED ZAPPY OCTO!", "PRESS X TO CYCLE YOUR FORMS. ZAPPY'S Z SENDS OUT A SHOCK RING "
             "THAT HITS EVERYTHING AROUND YOU - EVEN URCHINS AND JELLIES - AND FRIES ENEMY SHOTS."],
@@ -133,6 +144,12 @@ FORM_COLORS.update({'blue': (70, 120, 230), 'mad': (60, 60, 72), 'magnet': (230,
 FORM_BOX.update({'magnet': (140, 30, 40), 'clammy': (150, 100, 80), 'starry': (30, 30, 100),
                  'wobbly': (130, 60, 150), 'stony': (80, 76, 70)})
 FORM_LABEL.update({'magnet': "PULSE", 'clammy': "SHELL", 'starry': "STARS", 'wobbly': "MINES", 'stony': "ROCK"})
+FORM_COLORS.update({'sandy': (232, 196, 120), 'leafy': (80, 180, 70), 'crysty': (150, 200, 255),
+                    'cloudy': (236, 240, 250), 'shroomy': (220, 70, 80), 'magmy': (255, 120, 40)})
+FORM_BOX.update({'sandy': (150, 110, 50), 'leafy': (30, 100, 40), 'crysty': (60, 90, 170),
+                 'cloudy': (110, 120, 160), 'shroomy': (130, 30, 50), 'magmy': (90, 30, 10)})
+FORM_LABEL.update({'sandy': "QUAKE", 'leafy': "VINE", 'crysty': "BEAM", 'cloudy': "RAIN", 'shroomy': "SPORE",
+                   'magmy': "ORBS"})
 _NEW_ATTACK_TEXT = {
     'magnet': "MAGNETY'S Z SENDS OUT A MAGNET PULSE: IT YANKS ENEMIES IN, STUNS THEM, AND PULLS EVERY PEARL "
               "AND HEART ON SCREEN STRAIGHT TO YOU.",
@@ -140,6 +157,13 @@ _NEW_ATTACK_TEXT = {
     'starry': "STARRY'S Z LAUNCHES THREE SEEKER STARS THAT CURVE TOWARDS THE NEAREST ENEMIES.",
     'wobbly': "WOBBLY'S Z DROPS A STING MINE (UP TO THREE). ENEMIES THAT BUMP INTO ONE GET BLASTED.",
     'stony': "STONY'S Z ROLLS A BOULDER THAT CRUSHES EVERYTHING IN ITS PATH AND CRACKS ROCK WALLS.",
+    'sandy': "SANDY'S Z SENDS SAND QUAKES RUNNING FOUR WAYS THAT BLAST ENEMIES BACK.",
+    'leafy': "LEAFY'S Z LASHES A THORNY VINE IN A WIDE ARC. IT POISONS WHAT IT HITS.",
+    'crysty': "CRYSTY'S Z FIRES A PRISM BEAM THAT PIERCES EVERY ENEMY IN A LINE AND CRACKS THEIR ARMOR.",
+    'cloudy': "CLOUDY'S Z CALLS A LITTLE RAIN CLOUD THAT FOLLOWS YOU AND RAINS SLUDGE ON NEARBY ENEMIES. "
+              "CLOUDY CAN ALSO FLOAT OVER PITS, PONDS AND GAPS IN THE SKY!",
+    'shroomy': "SHROOMY'S Z PUFFS A BURST OF SPORES ALL AROUND YOU: ENEMIES WANDER OFF IN A DIZZY DAZE.",
+    'magmy': "MAGMY'S Z SETS THREE MAGMA ORBS CIRCLING YOU. MAGMY CAN ALSO WALK ON LAVA, AND FIRE CAN'T HURT IT!",
 }
 for _f, _t in _NEW_ATTACK_TEXT.items():
     FORM_INFO[_f] = [f"YOU LEARNED {forms.NAMES[_f]} OCTO!", _t,
@@ -172,6 +196,7 @@ MINIMAP_COLORS = {
     'L': (220, 170, 40), 'X': (150, 150, 170), 'R': (86, 90, 128),
     'I': (170, 220, 255), 'G': (150, 100, 220), 'l': (240, 110, 30),
     'P': (150, 128, 92), 'Q': (184, 162, 118), 'H': (196, 176, 132),
+    'A': (255, 255, 255), 'D': (180, 120, 255), 'Y': (220, 250, 255),
 }
 MINIMAP_SIZE = (52, 26)
 
@@ -183,7 +208,7 @@ def tile_to_px(tx, ty):
 
 class Game:
     def __init__(self):
-        problems = world.validate()
+        problems = [] if WEB else world.validate()     # a developer check: skipped in the browser to load faster
         if problems:
             raise SystemExit("Map errors:\n  " + "\n  ".join(problems))
         pygame.init()
@@ -252,8 +277,10 @@ class Game:
         self.level = Level()
         lv = self.level
         self.seen = [[False] * lv.w for _ in range(lv.h)]
-        self.minimap = pygame.Surface((lv.w, world.WORLD_H))
-        self.minimap.fill((0, 0, 0))
+        self.minimaps = {}
+        for wld, (x0, y0, x1, y1) in world.WORLD_RECTS.items():
+            self.minimaps[wld] = pygame.Surface((x1 - x0 + 1, y1 - y0 + 1))
+            self.minimaps[wld].fill((0, 0, 0))
         self.spawns = []
         for kind, tx, ty in world.ENEMIES:
             x, y = tile_to_px(tx, ty)
@@ -564,6 +591,7 @@ class Game:
         for y, row in enumerate(data.get('seen', [])[:len(self.seen)]):
             for x, c in enumerate(row[:len(self.seen[y])]):
                 self.seen[y][x] = c == '1'
+        self.rebuild_minimaps()
         p.x, p.y = tile_to_px(*data['pos'])
         if self.level.blocked(p.rect, 'player'):     # the map changed under an old save
             p.x, p.y = tile_to_px(*world.START)
@@ -775,7 +803,7 @@ class Game:
                  SCREEN_W // 2, box.y + 15, (170, 180, 220), center=True)
         for i, f in enumerate(base):
             col, row = divmod(i, 7)
-            x, y = box.x + 10 + col * 118, box.y + 28 + row * 11
+            x, y = box.x + 10 + col * 80, box.y + 28 + row * 11
             on = i == self.fuse_i
             picked = f == self.fuse_a
             if on:
@@ -1073,6 +1101,11 @@ class Game:
             pages = [f"{name} DROPPED A GLOWING SIGIL!",
                      f"FAR AWAY, THE SEAL ON THE {t['title']} CRUMBLES. ITS CAVE MOUTH {self.dungeon_place(did)} "
                      "IS OPEN NOW (IT'S MARKED ON YOUR MAP)."]
+        elif gid in world.NEW_WORLD_GUARDIANS:
+            p.spirit += 1
+            region = next(n for n, w, r, th, ti, dk, cr, g in world.WD.NEW_REGIONS if g == gid)
+            pages = [f"{name} DROPPED A SPIRIT PEARL! YOU HAVE {p.spirit}.",
+                     f"THE {region} IS SAFER NOW. BRING THREE SPIRIT PEARLS TO THE ALTAR FOR A NEW FORM."]
         else:
             p.max_hp = min(40, p.max_hp + 2)
             p.hp = p.max_hp
@@ -1099,6 +1132,42 @@ class Game:
         n = len(self.bells())
         self.say([f"THE PALACE DOOR IS SEALED BY SEVEN TIDE BELLS. YOU HAVE RUNG {n}.",
                   "OLD SHELLY KNOWS WHERE THE BELLS ARE HIDDEN."])
+
+    WORLD_INTRO = {
+        'land': ["OCTO HAULS HIMSELF UP THE SHORE STEPS... AND OUT OF THE SEA! THIS IS THE SURFACE.",
+                 "SAND, MEADOWS, JUNGLE, DESERT AND A SMOKING VOLCANO. EVERY PART OF IT HAS ITS OWN CREATURES, A "
+                 "GUARDIAN AND TRIAL PORTALS.",
+                 "THE VOLCANO IS RINGED BY LAVA: CHILLY CAN COOL IT, AND MAGMY CAN WALK RIGHT OVER IT. "
+                 "STEP ON THE SHORE STEPS AGAIN TO DIVE BACK INTO THE SEA."],
+        'under': ["DOWN, DOWN, DOWN... OCTO SLID THROUGH THE SINKHOLE INTO THE UNDERDEEP, THE CAVES BENEATH "
+                  "THE SEA FLOOR.",
+                  "CRYSTALS, GIANT MUSHROOMS, OLD BONES AND RUINS - AND A CORE OF MAGMA. PARTS OF IT ARE PITCH DARK, "
+                  "SO GLOWY WILL HELP.",
+                  "THE GUARDIANS DOWN HERE ARE THE TOUGHEST OF ALL. STEP INTO A SINKHOLE AGAIN TO GO BACK UP."],
+    }
+
+    def check_passages(self):
+        """Shore steps (up to the Surface) and sinkholes (down to the Underdeep): step in to cross."""
+        p = self.player
+        tx, ty = p.rect.centerx // TILE, p.rect.centery // TILE
+        if self.level.tile(tx, ty) not in ('A', 'D'):
+            self.passage_armed = True
+            return
+        if not getattr(self, 'passage_armed', True):
+            return
+        for a, b, kind in world.PASSAGES:
+            if (tx, ty) in (a, b):
+                dest = b if (tx, ty) == a else a
+                self._clear_field()
+                self.passage_armed = False
+                sound.play('whoosh' if kind == 'shore' else 'warp')
+                self._move_player(dest[0], dest[1] + 1, 'down')
+                self.checkpoint = (dest[0], dest[1] + 1)
+                wld = world.world_at(*dest)
+                if wld in self.WORLD_INTRO and not self.flags.get('intro_' + wld):
+                    self.flags['intro_' + wld] = True
+                    self.say(self.WORLD_INTRO[wld])
+                return
 
     def check_geysers(self):
         p = self.player
@@ -1127,6 +1196,7 @@ class Game:
                 self.update_camera()
                 self.area = self.region = None
                 self.update_area()
+                self.checkpoint = (dest[0], dest[1] + 1)
                 if going_up and not self.flags.get('sky_intro'):
                     self.flags['sky_intro'] = True
                     self.say(["WHOOSH! THE GEYSER BLASTED OCTO RIGHT OUT OF THE SEA, UP TO THE FLOATING SKY ISLANDS!",
@@ -1648,7 +1718,10 @@ class Game:
                 sound.play('pause')
             elif k in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_a, pygame.K_d) and self.sky_seen() and \
                     self.map_page != 'temple':
-                self.map_page = 'sky' if self.map_page == 'sea' else 'sea'
+                pages = self.worlds_seen()
+                i = pages.index(self.map_page) if self.map_page in pages else 0
+                step = -1 if k in (pygame.K_LEFT, pygame.K_a) else 1
+                self.map_page = pages[(i + step) % len(pages)]
                 self.map_cache = None
                 sound.play('text')
         elif st == 'warp':
@@ -1805,16 +1878,17 @@ class Game:
                 x = old[0] + max(-12, min(12, x - old[0]))
                 y = old[1] + max(-9, min(9, y - old[1]))
             self.cam_snap = False
-        elif cy >= world.SKY_Y * TILE:
-            x0, y0, x1, y1 = world.SKY_RECT
+        else:
+            wld = world.world_at(cx // TILE, cy // TILE) or 'sea'
+            x0, y0, x1, y1 = world.WORLD_RECTS[wld]
             x = max(x0 * TILE, min((x1 + 1) * TILE - PLAY_W, cx - PLAY_W // 2))
             y = max(y0 * TILE, min((y1 + 1) * TILE - PLAY_H, cy - PLAY_H // 2))
-        else:
-            x = max(0, min(lv.px_w - PLAY_W, cx - PLAY_W // 2))
-            y = max(0, min(world.WORLD_H * TILE - PLAY_H, cy - PLAY_H // 2))
         self.cam = (x, y)
         self.view_rect = pygame.Rect(x, y, PLAY_W, PLAY_H)
-        # reveal the minimap
+        # reveal the map
+        wld = world.world_at((x + PLAY_W // 2) // TILE, (y + PLAY_H // 2) // TILE)
+        mm = self.minimaps.get(wld) if wld else None
+        wx, wy = world.WORLD_RECTS[wld][:2] if wld else (0, 0)
         for ty in range(y // TILE, min(lv.h, (y + PLAY_H) // TILE + 1)):
             if world.WORLD_H <= ty < world.SKY_Y:
                 continue                # trial rooms aren't on the map
@@ -1822,6 +1896,8 @@ class Game:
             for tx in range(x // TILE, min(lv.w, (x + PLAY_W) // TILE + 1)):
                 if not row[tx]:
                     row[tx] = True
+                    if mm is not None:
+                        mm.set_at((tx - wx, ty - wy), self.tile_color(tx, ty))
 
     def update_area(self):
         cx, cy = self.player.rect.center
@@ -1873,13 +1949,9 @@ class Game:
                 e.dead = True
                 sp['inst'] = None
 
-    REGION_TIER = {'KELP WOODS': 1, 'CORAL GARDENS': 1, 'THE LAGOON': 1, 'SUNKEN SHRINE': 1,
-                   'THE ABYSS': 2, 'SHIP GRAVEYARD': 2, 'SKY ISLANDS': 2, 'FROZEN SHELF': 3, 'EMBER VENTS': 3,
-                   'SUNKEN CITY': 4, 'MURK PALACE': 4}
-
     def tier_at(self, tx, ty):
         tid = world.temple_at(tx, ty)
-        tier = world.TEMPLES[tid]['tier'] if tid else self.REGION_TIER.get(world.region_at(tx, ty), 0)
+        tier = world.TEMPLES[tid]['tier'] if tid else world.REGION_TIER.get(world.region_at(tx, ty), 0)
         return tier + (2 if self.flags.get('deep') else 0)
 
     def toughen(self, e):
@@ -1942,6 +2014,14 @@ class Game:
         p = self.player
         move_dir = self.held[-1] if self.held else self.touch.dir
         self.level.ghost_ok = p.mood == 'ghost'
+        self.level.hover_ok = bool(p.stat('hover', 0))
+        self.level.lava_ok = bool(p.stat('heatproof', 0))
+        under = {ch for _, _, ch in self.level.tiles_in(p.rect)}
+        if not (under & set('vl')):
+            p.safe_pos = (p.x, p.y)               # last spot on solid ground
+        elif self.level.blocked(p.rect, 'player') and getattr(p, 'safe_pos', None):
+            p.x, p.y = p.safe_pos                 # changed form over a pit or lava: hop back to safety
+            self.burst(p.rect.center, (200, 220, 255), 8)
         if p.tumble:
             self.update_tumble()
             return
@@ -1964,6 +2044,7 @@ class Game:
             self.update_spawns()
             self.check_portals()
             self.check_geysers()
+            self.check_passages()
             self.check_temple_doors()
             if self.trial:
                 return
@@ -2184,8 +2265,9 @@ class Game:
         self.level.draw_view(ps, gfx.TILES, self.view_rect)
         ox, oy = -self.cam[0], -self.cam[1]
         theme0 = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
+        p_ = self.player.rect.center
         if self.area == 'overworld' and theme0 not in ('abyss', 'city') and \
-                self.region not in world.DARK_REGIONS:
+                self.region not in world.DARK_REGIONS and world.world_at(p_[0] // TILE, p_[1] // TILE) == 'sea':
             fx.caustics(ps, self.cam, self.t)
         vis = self.view_rect.inflate(32, 32)
         for it in self.pickups:
@@ -2448,25 +2530,37 @@ class Game:
     def tile_color(self, tx, ty):
         lv = self.level
         ch = lv.tiles[ty][tx]
+        wld = world.world_at(tx, ty)
         if ch == 'v':
-            if ty >= world.SKY_Y:
+            if wld == 'sky':
                 return (150, 200, 245)
+            if wld == 'land':
+                return (70, 140, 200)
+            if wld == 'under':
+                return (8, 6, 14)
             return (10, 10, 20) if world.area_at(tx, ty) == 'dungeon' else (30, 52, 112)
         if ch in '.,':
             return THEME_MINI.get(lv.themes[ty][tx], (196, 178, 128))
-        if ch == '=' and ty >= world.SKY_Y:
+        if ch == '=' and wld == 'sky':
             return (150, 110, 60)          # sky bridges
         return MINIMAP_COLORS.get(ch, (0, 0, 0))
 
+    def worlds_seen(self):
+        out = []
+        for wld, (x0, y0, x1, y1) in world.WORLD_RECTS.items():
+            if any(any(self.seen[ty][x0:x1 + 1]) for ty in range(y0, y1 + 1, 2)):
+                out.append(wld)
+        return out or ['sea']
+
     def sky_seen(self):
-        x0, y0, x1, y1 = world.SKY_RECT
-        return any(any(self.seen[ty][x0:x1 + 1]) for ty in range(y0, y1 + 1))
+        return len(self.worlds_seen()) > 1
 
     def open_map(self):
         if self.trial or self.bossfight:
             sound.play('nope')
             return
-        self.map_page = 'sky' if self.area == 'sky' else 'sea'
+        p = self.player
+        self.map_page = world.world_at(p.rect.centerx // TILE, p.rect.centery // TILE) or 'sea'
         if self.current_temple():
             self.map_page = 'temple'
         self.map_cache = None
@@ -2474,10 +2568,9 @@ class Game:
         sound.play('pause')
 
     def map_layout(self):
-        if self.map_page == 'sky':
-            x0, y0, x1, y1 = world.SKY_RECT
-            return x0, y0, x1 - x0 + 1, y1 - y0 + 1, 4
-        return 0, 0, self.level.w, world.WORLD_H, 1.5
+        x0, y0, x1, y1 = world.WORLD_RECTS.get(self.map_page, world.WORLD_RECTS['sea'])
+        w, h = x1 - x0 + 1, y1 - y0 + 1
+        return x0, y0, w, h, min((SCREEN_W - 8) / w, (PLAY_H - 34) / h)
 
     def current_temple(self):
         p = self.player
@@ -2578,7 +2671,7 @@ class Game:
                     if row[tx]:
                         surf.set_at((tx - x0, ty - y0), self.tile_color(tx, ty))
             self.map_cache = pygame.transform.scale(surf, (mw, mh))
-        title = "SKY ISLANDS" if self.map_page == 'sky' else "THE SEA"
+        title = world.WORLD_NAMES.get(self.map_page, "THE SEA")
         gfx.text(scr, "MAP - " + title, SCREEN_W // 2, HUD_H + 4, (255, 220, 120), center=True)
         pygame.draw.rect(scr, (90, 100, 150), (ox - 2, oy - 2, mw + 4, mh + 4), 1)
         scr.blit(self.map_cache, (ox, oy))
@@ -2613,6 +2706,14 @@ class Game:
                 c = (110, 110, 120) if bid in beaten else (255, 80, 80)
                 pygame.draw.polygon(scr, c, [(sx - 3, sy + 2), (sx - 3, sy - 2), (sx - 1, sy),
                                              (sx, sy - 3), (sx + 1, sy), (sx + 3, sy - 2), (sx + 3, sy + 2)])
+        # passages between worlds: shore steps (white) and sinkholes (purple)
+        for a, b, kind in world.PASSAGES:
+            for gx, gy in (a, b):
+                if inside(gx, gy):
+                    sx, sy = spot(gx, gy)
+                    c = (255, 255, 255) if kind == 'shore' else (190, 130, 255)
+                    pygame.draw.rect(scr, (0, 0, 0), (sx - 2, sy - 2, 5, 5))
+                    pygame.draw.rect(scr, c, (sx - 1, sy - 1, 3, 3))
         # temple doors: a bell, grey once it has rung
         for tid, t in world.TEMPLES.items():
             dx, dy = t['door']
@@ -2645,8 +2746,19 @@ class Game:
         pygame.draw.polygon(scr, (255, 80, 80), [(82, ly + 4), (82, ly), (84, ly + 2), (85, ly - 1),
                                                  (86, ly + 2), (88, ly), (88, ly + 4)])
         gfx.text(scr, f"BOSS {len(beaten)}/{len(world.MINIBOSSES)}", 92, ly - 1, (220, 220, 230))
-        hint = "<> SKY/SEA" if self.sky_seen() else "M: CLOSE"
+        hint = "<> WORLDS" if self.sky_seen() else "M: CLOSE"
         gfx.text(scr, hint, SCREEN_W - 6 - gfx.text_width(hint), ly - 1, (150, 160, 200))
+
+    def rebuild_minimaps(self):
+        for wld, (x0, y0, x1, y1) in world.WORLD_RECTS.items():
+            mm = self.minimaps[wld]
+            mm.fill((0, 0, 0))
+            for ty in range(y0, y1 + 1):
+                row = self.seen[ty]
+                for tx in range(x0, x1 + 1):
+                    if row[tx]:
+                        mm.set_at((tx - x0, ty - y0), self.tile_color(tx, ty))
+        self._mini_scaled = None
 
     def draw_minimap(self, scr, x, y):
         lv = self.level
@@ -2659,37 +2771,30 @@ class Game:
             self.draw_temple_grid(scr, tid, x + (mw - cw * temples.GW) // 2, y + (mh - ch * temples.GH) // 2,
                                   cw, ch, big=False)
             return
-        if self.t % 20 == 0 or not hasattr(self, '_mini_scaled'):
-            mm = self.minimap
-            for ty in range(world.WORLD_H):
-                row = self.seen[ty]
-                for tx in range(lv.w):
-                    if row[tx]:
-                        ch = lv.tiles[ty][tx]
-                        if ch == 'v':
-                            c = (10, 10, 20) if world.area_at(tx, ty) == 'dungeon' else (30, 52, 112)
-                        elif ch in '.,':
-                            c = THEME_MINI.get(lv.themes[ty][tx], (196, 178, 128))
-                        else:
-                            c = MINIMAP_COLORS.get(ch, (0, 0, 0))
-                        mm.set_at((tx, ty), c)
-            self._mini_scaled = pygame.transform.smoothscale(mm, MINIMAP_SIZE)
+        p = self.player
+        wld = world.world_at(p.rect.centerx // TILE, p.rect.centery // TILE) or getattr(self, '_mini_world', 'sea')
+        self._mini_world = wld
+        x0, y0, x1, y1 = world.WORLD_RECTS[wld]
+        if self.t % 20 == 0 or getattr(self, '_mini_scaled', None) is None or self._mini_key != wld:
+            self._mini_scaled = pygame.transform.smoothscale(self.minimaps[wld], MINIMAP_SIZE)
+            self._mini_key = wld
         pygame.draw.rect(scr, (40, 44, 70), (x - 1, y - 1, MINIMAP_SIZE[0] + 2, MINIMAP_SIZE[1] + 2), 1)
         scr.blit(self._mini_scaled, (x, y))
-        kx, ky = MINIMAP_SIZE[0] / lv.w, MINIMAP_SIZE[1] / world.WORLD_H
+        kx, ky = MINIMAP_SIZE[0] / (x1 - x0 + 1), MINIMAP_SIZE[1] / (y1 - y0 + 1)
         for name, t in world.TRIALS.items():
             px, py = t['portal']
-            if py < world.WORLD_H and self.seen[py][px]:
+            if world.in_rect(px, py, (x0, y0, x1, y1)) and self.seen[py][px]:
                 c = (120, 120, 130) if name in self.trials_done else self.portal_color(t)
-                pygame.draw.rect(scr, c, (x + int((px + 0.5) * kx) - 1, y + int((py + 0.5) * ky) - 1, 2, 2))
-        if (self.t // 12) % 2 and not self.trial and self.area != 'sky':
-            cx, cy = self.player.rect.center
-            pygame.draw.rect(scr, (255, 255, 255), (x + int(cx / TILE * kx) - 1, y + int(cy / TILE * ky) - 1, 3, 3))
-        for boss in ('throne', 'murk'):
-            if boss not in self.cleared and (self.t // 20) % 2:
-                x0, y0, x1, y1 = ARENAS[boss]['rect']
-                bx, by = (x0 + x1 + 1) / 2, (y0 + y1 + 1) / 2
-                pygame.draw.rect(scr, (230, 60, 60), (x + int(bx * kx) - 1, y + int(by * ky) - 1, 2, 2))
+                pygame.draw.rect(scr, c, (x + int((px - x0 + 0.5) * kx) - 1, y + int((py - y0 + 0.5) * ky) - 1, 2, 2))
+        if (self.t // 12) % 2 and not self.trial and not self.bossfight:
+            cx, cy = p.rect.center
+            pygame.draw.rect(scr, (255, 255, 255), (x + int((cx / TILE - x0) * kx) - 1, y + int((cy / TILE - y0) * ky) - 1, 3, 3))
+        if wld == 'sea':
+            for boss in ('throne', 'murk'):
+                if boss not in self.cleared and (self.t // 20) % 2:
+                    bx0, by0, bx1, by1 = ARENAS[boss]['rect']
+                    bx, by = (bx0 + bx1 + 1) / 2, (by0 + by1 + 1) / 2
+                    pygame.draw.rect(scr, (230, 60, 60), (x + int(bx * kx) - 1, y + int(by * ky) - 1, 2, 2))
 
     def draw_hud(self, scr):
         pygame.draw.rect(scr, (0, 0, 0), (0, 0, SCREEN_W, HUD_H))

@@ -25,160 +25,9 @@ import temples
 
 from settings import TILE
 
-LEVEL = [
-    "######################################WWWWWWWWWWWWWWWWWWWW######################################################################################################",
-    "#...........................##########W==================W##########...........................#...............................................................#",
-    "#.,.K.K.KK.,K..K.,..K.,..KK.##########W==S============S==W##########.......CC.....#..,.........#.....................,,,............,....................,,,...#",
-    "#.KKKKK..KKK#KK.KKKK..K..#K.##########W==================W##########.......CC..CC..,...,,......#......................,............,,,.....,..............,....#",
-    "#...K.KK,.KKK..,K..KK.K.KK..##########W==================W##########...,CC....CC...CCC......#..#.,.........C...C............,.......,....,.......,..#####......#",
-    "#.KK.K,K.#.KKKK.KKKKK,KK....##########W==================W##########...CCC....CC...CC..........#.,,,..........,,,..........,,,###,C....CC,,....#....#...#......#",
-    "#......KKK...K,K..KKK.......##########W==================W##########....CC..,...........,......#.,.............,............,#####C......,....###,..#...#,C....#",
-    "#..KKKK...#######..K.#K..KK.##########W==================W##########.........CC................#..,....C.....................#####...#.......#####,##...#......#",
-    "#..K.K...K#K.K.K#K..K.K...K.##########W==S============S==W##########...#..#.C.............CC...#..............C#...,..C......##########......#########I###.....#",
-    "#..K.K.,K,#.K.K.#K.K#K..KK..##########W==================W##########.........C............C.C..I........C.........,,,,........###..#.#.......#######....###..,.#",
-    "#.K.KK..#K#K...K#.....KK.K..##########WWWWWWWWWXXWWWWWWWWW##########...,......CC........#.CCC..I...................,C###..,.........,.........######....###.,,.#",
-    "#.K.K.K#,K#.K.K.#K,.K...,,K.WWWWWWWWWWWWWWWWWWWLLWWWWWWWWWWWWWWWWWWW..........CCC..............I...###..............######,,.......,,,#...,....#####C.#####..,.#",
-    "#.K,....,K#K.K.K#K...K......W=========W==================W=========W.........CCCC..............#...####.,..,.#..###.#######.........,.,.,,,,....###....###.....#",
-    "#..K..KK.K###K###...KKKK.K..W=vv===vv=W==================W==vv==vv=W.........CCC.....,.........#..#####...,,##.####.######...........,,,..,.............###....#",
-    "#.K.K.K.K....K..KK.K##,KKK,.W=v=====v=W===S==========S===W=========W.,.......C.C.,.............#..#####....,.#.vvvv.,###....#.........,.........###....#####,..#",
-    "#..#.K.K.,K,.K..KK,.KKK...K.W=========X==================X====S====W..C.............,.......#..#...###.......vvvvvvvvv..,..###.........,...C...#####.,.#####,,.#",
-    "#.,........,.K...K.KK..KKKK.W=========X==================X=========W.CC...................C.C..#.............vvvvvvvvv....,##.........,,,,...C######...#####,..#",
-    "#.KKKK#KK..KKKKKKKKK.K...K..W=========X==================X====S====W.CC..........#........C.C..#.............vvvvvvvvv.....,...........,.......#####....###....#",
-    "#.#KK..K.,..........K..K.,..W=v=====v=W===S==========S===W=========W...,.,,..,.,...........CC..#............C..vvvvv###..,.....C.,..........Y...###..........C.#",
-    "#.......K..K....KKKKKK.K,.K.W=vv===vv=W==================W==vv==vv=W.,.......,......#.,........#..................######,,,.,................,.................#",
-    "#..K..K..KKK.,.#...K.KK.K#K.W=========W==================W=========W...........................#..............,#########.,,,.,,....,...........................#",
-    "#...........................WWWWWWWWWWWWWWWWWW====WWWWWWWWWWWWWWWWWW...........................#..............###########.,#.,,,..#............................#",
-    "#####....######....######..............#######....#######..............#########.....###########....,..,......#####.#####.....,........#..............#....CC..#",
-    "#.......................#..............##....,.........##,...........,.#ddddddddddddddddddddddd#...,,,........#####,#####.....,....,.CC........................#",
-    "#...#,...........,......#.KK.....,.....##,.............##..............#ddddddddddddddddddddddd#...............###...###.........,,,,.......#..................#",
-    "#.......C...........,...#.K..K...KK.KKKKKKK............##.....CC.CC,...#ddddddddddddddddd#ddddd#...............................................................#",
-    "#..,.,..#...............#..K.K..,K.K.KKKKKK.......,....##.....C...C....#ddddddddddddddddddddddd#####II##########################################################",
-    "#.....................,...K.........KKKKKKK............##......C.......#dddvvvdddddddd#######dd#.................ll.....................ll.....................#",
-    "#....C....Y.,.....,...C..........,...KKKKKK............##.....C...C....#ddvvdddddddddd#ddddd#dd#.,,...............ll,,,,,,..v...........ll..................,..#",
-    "#......,..............C...........KK...##..............##.....CC.CC....#ddvvdddddddddv#ddddd#dd#.,................ll.,,.,..#####........ll....v............,,,.#",
-    "#.....,..,..,C,.........#.K.......K....##..............##.,............#dddddddddvvvvv#ddddd#dd#...........,......ll.......#...#.......ll...#vvv....###..###,..#",
-    "#.....,........,........#........K....#vvvvvvvvvvvvvvvvvv#......,......#dddddddddddddd#ddddd#dd#.......#..,,,....ll,.......#...#.......ll..###v....##########..#",
-    "#..........C.......C....#..KKK...K.KK.#vvvvvvvvvvvvvvvvvv#.,...,.......#dddddddddddddd###R###dd#......###..,.v...ll........#...##.......ll..#......##########..#",
-    "#......,.vvvvv.....,....#......,......#vvvvvvvvvvvvvvvvvv#####.,..######ddddddddddddddddddddddd#.......#....vvv..ll.....v..##.##........ll..,......##########..#",
-    "#..,...vvvvvvvvv........#......,.....,.................,##.............#dddddddddddddddddddvvvd#.............v...ll..#.............#....ll.,,#,.....###..###...#",
-    "#.....vvvvvvvvvvv...#...#.........................C.....##.,...........#dddddvvvvvvdddddddd#ddd#..........###.....ll...................ll,..###,.....#.........#",
-    "#....vvvvvvvvvvvvv..,...#.............CC....C,..........##........,.....dddvvvddddddddddddddddd#.........#####....ll...#..###.........#ll,,.###......#.........#",
-    "#..#.vvvvvvvvvvvvv...,................CC......................,.........ddvvvdddddddd#vvddddddd#.....,..,#####....ll..########..,......#ll,######..............#",
-    "#....vvvvv...vvvvv........C.............................................dvvdddddddddddvvdddddddd....,,,,,#####...ll....#.#####v........,ll,#######.........###.#",
-    "#....vvvvvvvvvvvvv,C.,......................,,...................vvvv...dddddddd#ddddddvvddddddd....,,###..##....ll....,.#####..,.......llv########.......####.#",
-    "#....vvvvvvvvvvvvv.,........................,..........................#dddddddddddddddvvddddddd.....#####.......ll.......###..,,,.....llv,########.......####.#",
-    "#....,vvvvvvvvvvv.,C....#.............CC.....,......C,..##.............#dddddd#ddddddd#vvvdddddd....,#####.......ll.....,.......,.#....ll,,########.......####.#",
-    "#......vvvvvvvvv........#.......,.....CC....,.....,.....##.............#dddddddddddddvvvddddddd#.....#####........ll....................ll,#######........####.#",
-    "#........vvvvv....C.....#....,........CC..C..........,..##.............#ddddddd#ddddddddddddddd#......###..#....,.ll....................ll,.###..........###...#",
-    "#..,....#.C..........C..#####.....##########........##########,....#####ddddddddddddd#dvvvddddd#..........###..,,,ll....................ll,#..............#....#",
-    "#.,.,C............#####.#..........,...#..........,.....#.......,...vvv#dddddddddddddd#vvdddddd#.###.....#....#.,ll..........v.........ll,,......#.............#",
-    "#....,............#...#.#.WWWWWWWWW....#...PPPPPPPP.....#...........vvv#dddddddddddddddvvdddddd#.####...###....#.ll...................,ll,......###............#",
-    "#...,....C,C.....,#...#.#.W=======W....#...PQQQQQQP.....................dddddddddddddddvvdddddd#.####....#.......ll......v.......,.....,ll.,..,..#......###....#",
-    "#.....C..,.......,##R##.#.W=======W.....,..PQ====QP...,.....vv.....,....ddddddddddddddddddddddd#.####............ll.....vvv.....,,,.....ll,,,,,,......######...#",
-    "#.....,C....,...........#.W=======W........PQ====QP..Y......vv..........ddddddddddddddddddddddd#.####........#....ll.....v......,,,.....ll.,..,..v....,#####...#",
-    "#..#............,....,..#.W=======W.....,..PQ====QP.....C...vv..........ddddddddddddddddddddddd#.###........###...ll.....#.......v.....ll..............#####...#",
-    "#..C......,.C...........#.WWWW=WWWW........PQ====QP.,...#...vv.........#dd#dddd#ddddddddddddddd#..........v..#....ll.........,..vvv....ll........#.....,###....#",
-    "#....,..................#...C..........#...PQQHHQQP.....#.,..........vv#ddddddddddddddddddddddd#.................ll.....................ll.....................#",
-    "#......C...C...C..,.....#..............#...PPPHHPPP.....#vv,.,...,...vv#ddddddddddddddddddddddd#################################################################",
-    "#.......................#..............#.....S..S.......#vv..........vv#ddddddddddddddddddddddd#...............................................................#",
-    "#########.....################....############....############....##################.....#######........C..,......C.......C...WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW.#",
-    "#..............................................................................................#.....C....................C...W==============================W.#",
-    "#..,.....................#C#...............,.,.........,..#..............,........,........,...#.#.........C.#.C...#.....#,...W===S==================S=======W.#",
-    "#............C...................,........,.....................,.........,....................#..C.................,..#......W==============================W.#",
-    "#...##########.....C.C.,....,...............,......,.......#........###########...C............#..C................,,,###.....W==============================W.#",
-    "#.#.#........#....................,...##########.......,.........C..#..,..,..#.........,.C.....#....................,..#...C..W==============================W.#",
-    "#...#....#...#.............#..,.......#.,......#....,.,...C...,.....#..,.....#.....C.........,.#..............................W==============================W.#",
-    "#.,.#........#......,..,..........#...#......,C#.....,............C.#........#,,...............#......C,,,,.............,.....W===S==================S=======W.#",
-    "#...#..C.....#....C...#.C.....,..,....#........#.................,..#....C...#C.C........,.....#.#.....#,,,,.#...C.#.,.,,#....W==============================W.#",
-    "#...######..##........................#..#######..........C.#.......###..#####.................#..,.......,.........,,,.,.....W==============================W.#",
-    "#........C..,..........,...........................................C........C......C.........C.#...,.................,........WWWWWWWWWWWWWWWLLWWWWWWWWWWWWWWW.#",
-    "#..........#......#C############.#....,..C,....#.,...,...................,...C.C......,........G...,C...C....,...C.......C.C..W=============W================W.#",
-    "#....,..,.C.........#..........#............,....C....,.......#......C.........C..##########...G...,........,,,.......#.......W=============W================W.#",
-    "#..,,.........C.....#..........#....................############.#...........#...##...,....#...G.............,...,..,###,.....W==S======S===W===S======S=====W.#",
-    "#.,C...,............#..........#...................,#.C........#..C.#C..........,.##......##...#.....,.##....#..,,,#,,#,,#,...W=============W================W.#",
-    "#.....,.........,..,#.........C#C.........C.........#C....C....#.,.........#.....C#........#C..#....,#,###....#####..,..,#....W=============W================W.#",
-    "#.......########..#.#########..#..,.....,...........#..,.......#........,.........#...C.,..#C..#.....,..#.....#...#.....###...W=============X================W.#",
-    "#..,....#......#C..............,......#.,...........#....C...,.#........#######...#.C#######...#...........,..#...R....,.#....W=============W================W.#",
-    "#.....#.#......#.......#......,.,....,.......C......#..#########C.#,..,.#.....#...,..,.....C#..#....,.....,,,.#...#...,,,.....W==S======S===W===S======S=====W.#",
-    "#.......#...,C.#C.......,......#............,..#...........C.....#.C....#.....##....#..,.......#....,......,..#####,,,.,.#.,..W=============W================W.#",
-    "#.......#,..#..#......................,.C.........#,............,......,#.....#................#.#.,,,.#.....#.,...#,...###...W=============W================W.#",
-    "#......,####..##.....C............,......C.#..,..,C.......,.,...........###..##................#....,.........#,,........#.#..W=============W================W.#",
-    "#.....,.,......C....,...............,.,...........C.#..,....,......C.....,........,......C..,,.#.......#.......,.,............WWWWWWWWWWWWWWWWWWWWWW==WWWWWWWW.#",
-    "#..............................................................................................#...............................................................#",
-    "################################################################################################################################################################",
-    "WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####",
-    "W==============W####W==============W####W==============W####W==============W####W==============W####W==============W####W==============W####W==============W####",
-    "W==============W####W=vvv==vv==vvv=W####W==============W####W==============W####W=vv========vv=W####W=WWW=WWWW=WWW=W####W==v========v==W####W==W========W==W####",
-    "W===S======S===W####W=v====vv====v=W####W===v======v===W####W===S======S===W####W=v==========v=W####W=W==========W=W####W==============W####W==============W####",
-    "W==============W####W===vv====vv===W####W==============W####W==============W####W======SS======W####W=W=WWW==WWW=W=W####W======vv======W####W=====W==W=====W####",
-    "W==============W####W==============W####W==============W####W==============W####W==============W####W==============W####W==============W####W==============W####",
-    "W==============W####W===vv====vv===W####W==============W####W==============W####W======SS======W####W=W=WWW==WWW=W=W####W======vv======W####W=====W==W=====W####",
-    "W===S======S===W####W=v====vv====v=W####W===v======v===W####W===S======S===W####W=v==========v=W####W=W==========W=W####W==============W####W==============W####",
-    "W==============W####W=vvv==vv==vvv=W####W==============W####W==============W####W=vv========vv=W####W=WWW=WWWW=WWW=W####W==v========v==W####W==W========W==W####",
-    "W==============W####W==============W####W==============W####W==============W####W==============W####W==============W####W==============W####W==============W####",
-    "WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####WWWWWWWWWWWWWWWW####",
-    "################################################################################################################################################################",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvWWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvW==============W#W==============W#W==============W#W==============W#W==============WW==============W",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv..vvvvvvvvvvvvvvvvvvvvvvvW=WWWWW==WWWWW=W#W==W========W==W#W======WW======W#W=W==W====W==W=W#W===vvvvvvvv===WW==W========W==W",
-    "vvvvvvvvvvvvvvvvvvvvvv..vvvvvvvvvv.....vvvvvvvvvvvvvvvvvvvvvW==============W#W==============W#W======WW======W#W=W==W====W==W=W#W==v========v==WW==============W",
-    "vvvvvvvvvvvvvvvvvv........vvvvvvv.......vvvvvvvvvvvvvvvvvvvvW==============W#W=====W==W=====W#W==============W#W==============W#W==============WW=====W==W=====W",
-    "vvvvvvvvvvvvvvvvvv..........vvvvvv.....vvvvvvvvvvvvvv.vvvvvvW==============W#W==============W#W=WW========WW=W#W==WW======WW==W#W==============WW==============W",
-    "vvvvvvv.,vvvvvvvvv.........==========.vvvvvvvvvvv....,.CvvvvW==============W#W=====W==W=====W#W==============W#W==============W#W==============WW=====W==W=====W",
-    "vvvvv.......vvvvv.,........vvv=vvvvvvvvvvvv..vvvv.......vvvvW==============W#W==============W#W======WW======W#W=W==W====W==W=W#W==v========v==WW==============W",
-    "vvvv..........vvvvv.......vvvv=vvvvvvvvvv......vv...Y....vvvW=WWWWW==WWWWW=W#W==W========W==W#W======WW======W#W=W==W====W==W=W#W===vvvvvvvv===WW==W========W==W",
-    "vvv............vvvvvvv.vvvvvvv=vvvvvvvvv................vvvvW==============W#W==============W#W==============W#W==============W#W==============WW==============W",
-    "vv......Y......========vvvvvvv=vvvvvvvv................vvvvvWWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
-    "vvv........C..vvvvvvvvvvvvvvvv=vvvvvvv............vv..vvvvvv####################################################################################################",
-    "vvv..........vvvvvvvvvvvvvvvvv=vvvvvvvv...........===vvvvvvvWWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
-    "vvvvv.,.....vvvvvvvvvvvvvvvvvv=vvvvvvv.............vvvvvvvvvW==============W#W==============W#W==============W#W==============W#W==============WW==============W",
-    "vvvvvvvv.vvvvvvvvvvvvvvvvvvvvv=vvvvvvvvv..........vvvvvvvvvvW=WWWWW==WWWWW=W#W=vv========vv=W#W======WW======W#W==W========W==W#W===vvvvvvvv===WW==W========W==W",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv=vvvvvvvvv.........vvvvvvvvvvvW==============W#W=vv========vv=W#W======WW======W#W==============W#W==v========v==WW==============W",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv=vvvvvvvvvv.......vvvvvvvvvvvvW==============W#W==============W#W==============W#W=====W==W=====W#W==============WW=====W==W=====W",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvv..vv.vvvvvvvvvv..vvvvvvvvvvvvvvW==============W#W==============W#W=WW========WW=W#W==============W#W==============WW==============W",
-    "vvvvvvvvvvvvvvvvvvvvvvvvv.v.......v.vvvvvvvv=vvvvvvvvvvvvvvvW==============W#W==============W#W==============W#W=====W==W=====W#W==============WW=====W==W=====W",
-    "vvvvvvvvvvvvvvvvvvvvvvv.............vvvvvvvv=vvvvvvvvvvvvvvvW==============W#W=vv========vv=W#W======WW======W#W==============W#W==v========v==WW==============W",
-    "vvvvvvvvvvvvvvvvvvvvvv................vvvvvv=vvvvvvvvvvvvvvvW=WWWWW==WWWWW=W#W=vv========vv=W#W======WW======W#W==W========W==W#W===vvvvvvvv===WW==W========W==W",
-    "vvvvvvvvvvvvvvvvvvvvvvv...............vvvvvv=vvvvvvvvvvvvvvvW==============W#W==============W#W==============W#W==============W#W==============WW==============W",
-    "vvvvvvvvvvvvvvvvvvvvvv.................=========vvvvvvvvvvvvWWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
-    "vvvvvvvvvvvvvv.vvvvvvv................vvvvvvvvv=vvvvvvvvvvvv####################################################################################################",
-    "vvvvvvvvvv........vvvvv..............vvvvvvvvv.=vvvvvvvvvvvvWWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW##################################WWWWWWWWWWWWWWWW",
-    "vvvvvvvvvv..........vvv.v........C..v.vvvvvv......CvvvvvvvvvW==============W#W==============W#W==============W##################################W==============W",
-    "vvvvvvvvv...........vvvvv.........vvvvvvvvv.........vvvvvvvvW=WWWWW==WWWWW=W#W=vv========vv=W#W======WW======W##################################W==============W",
-    "vvvvvvvv......Y......vvvvvv.vv..vvvvvvvvvv............vvvvvvW==============W#W=vv========vv=W#W======WW======W##################################W==W========W==W",
-    "vvvvvvvv............vvvvvvvvvvvvvvvvvvvvv........C...vvvvvvvW==============W#W==============W#W==============W##################################W==============W",
-    "vvvvvvvvv..........vvvvvvvvvvvvvvvvvvvvvvv...........vvvvvvvW==============W#W==============W#W=WW========WW=W##################################W==============W",
-    "vvvvvvvvvvv.......vvvvvvvvvvvvvvvvvvvvvvvv.C.........vvvvvvvW==============W#W==============W#W==============W##################################W==============W",
-    "vvvvvvvvvvvvvv..vvvvvvvvvvvvvvvvvvvvvvvvvvvv........vvvvvvvvW==============W#W=vv========vv=W#W======WW======W##################################W==W========W==W",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv..vvvvvvvvvvvvW=WWWWW==WWWWW=W#W=vv========vv=W#W======WW======W##################################W==============W",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvW==============W#W==============W#W==============W##################################W==============W",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvWWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW##################################WWWWWWWWWWWWWWWW",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv####################################################################################################",
-    "################################################################################################################################################################",
-    "WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW########",
-    "W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W########",
-    "W==W========W==W#W=WWWWW==WWWWW=W#W==W========W==W#W======WW======W#W=W==W====W==W=W#W===vvvvvvvv===W#W==W========W==W#W=WWWWW==WWWWW=W#W==W========W==W########",
-    "W==============W#W==============W#W==============W#W======WW======W#W=W==W====W==W=W#W==v========v==W#W==============W#W==============W#W==============W########",
-    "W=====W==W=====W#W==============W#W=====W==W=====W#W==============W#W==============W#W==============W#W=====W==W=====W#W==============W#W=====W==W=====W########",
-    "W==============W#W==============W#W==============W#W=WW========WW=W#W==WW======WW==W#W==============W#W==============W#W==============W#W==============W########",
-    "W=====W==W=====W#W==============W#W=====W==W=====W#W==============W#W==============W#W==============W#W=====W==W=====W#W==============W#W=====W==W=====W########",
-    "W==============W#W==============W#W==============W#W======WW======W#W=W==W====W==W=W#W==v========v==W#W==============W#W==============W#W==============W########",
-    "W==W========W==W#W=WWWWW==WWWWW=W#W==W========W==W#W======WW======W#W=W==W====W==W=W#W===vvvvvvvv===W#W==W========W==W#W=WWWWW==WWWWW=W#W==W========W==W########",
-    "W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W########",
-    "WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW########",
-    "################################################################################################################################################################",
-    "WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW########",
-    "W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W########",
-    "W==W========W==W#W==W========W==W#W===vvvvvvvv===W#W==W========W==W#W==W========W==W#W==W========W==W#W======WW======W#W==W========W==W#W===vvvvvvvv===W########",
-    "W==============W#W==============W#W==v========v==W#W==============W#W==============W#W==============W#W======WW======W#W==============W#W==v========v==W########",
-    "W=====W==W=====W#W=====W==W=====W#W==============W#W=====W==W=====W#W=====W==W=====W#W=====W==W=====W#W==============W#W=====W==W=====W#W==============W########",
-    "W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W=WW========WW=W#W==============W#W==============W########",
-    "W=====W==W=====W#W=====W==W=====W#W==============W#W=====W==W=====W#W=====W==W=====W#W=====W==W=====W#W==============W#W=====W==W=====W#W==============W########",
-    "W==============W#W==============W#W==v========v==W#W==============W#W==============W#W==============W#W======WW======W#W==============W#W==v========v==W########",
-    "W==W========W==W#W==W========W==W#W===vvvvvvvv===W#W==W========W==W#W==W========W==W#W==W========W==W#W======WW======W#W==W========W==W#W===vvvvvvvv===W########",
-    "W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W#W==============W########",
-    "WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW########",
-]
+from level_data import LEVEL_ROWS  # noqa: E402  (generated by tools/gen_worlds.py)
+import worlds_data as WD  # noqa: E402
+LEVEL = list(LEVEL_ROWS)
 # the Murk Palace door is sealed until all seven Tide Bells have rung
 LEVEL[77] = LEVEL[77][:148] + 'BB' + LEVEL[77][150:]
 # the Sunken Shrine's gate is sealed with Big Pinch's sigil
@@ -209,8 +58,11 @@ QUEST = [('shrine', 'pinch'), ('snarl', 'wraith'), ('bloom', 'thorn'), ('tidepoo
          ('gloam', 'gloom'), ('rime', 'frostmaw'), ('cinder', 'magma')]
 SIGIL_OF = {g: d for d, g in QUEST}          # guardian -> the dungeon its sigil opens
 GUARDIAN_OF = {d: g for d, g in QUEST}
-SKY_Y = 92               # rows from here down are the Sky Islands
-SKY_RECT = (0, 92, 59, 127)
+# the four worlds: the Sea, the Sky, the Surface (land) and the Underdeep, as tile rects
+WORLD_RECTS = dict(WD.WORLD_RECTS)
+WORLD_NAMES = {'sea': 'THE SEA', 'sky': 'THE SKY', 'land': 'THE SURFACE', 'under': 'THE UNDERDEEP'}
+SKY_RECT = WORLD_RECTS['sky']
+SKY_Y = SKY_RECT[1]
 GEYSERS = [((53, 49), (8, 102)), ((10, 28), (14, 119)), ((140, 18), (52, 100))]   # (sea tile, sky tile) pairs
 # one mini-boss guards each region: (style id, tile x, tile y) -- see entities.MINIBOSS_STYLES
 MINIBOSSES = [('pinch', 48, 28), ('wraith', 13, 20), ('thorn', 83, 14), ('blowhard', 16, 31),
@@ -279,7 +131,6 @@ def _settle_trial_spots():
                 t[k] = (int(x), y)
 
 
-_settle_trial_spots()
 SHRINE_RECT = (28, 0, 67, 21)     # tiles (x0, y0, x1, y1) of the Sunken Shrine
 
 REGIONS = [   # (banner name, tile rect x0, y0, x1, y1); anywhere else is the Coral Reef
@@ -640,6 +491,47 @@ REGIONAL_ENEMIES = [
 ]
 ENEMIES += REGIONAL_ENEMIES
 
+
+def _move_old_sky():
+    """The Sky Islands used to sit beside the trial rooms; they now float in the corner of the much
+    bigger sky. Everything that lived up there moves with them."""
+    x0, y0, x1, y1 = WD.OLD_SKY
+    dy = WD.SKY_SHIFT
+
+    def mv(x, y):
+        return (x, y + dy) if x0 <= x <= x1 and y0 <= y <= y1 else (x, y)
+    for lst in (ENEMIES, ITEMS):
+        lst[:] = [(k, *mv(x, y)) for k, x, y in lst]
+    MINIBOSSES[:] = [(b, *mv(x, y)) for b, x, y in MINIBOSSES]
+    GEYSERS[:] = [(a, mv(*b)) for a, b in GEYSERS]
+    for t in TRIALS.values():
+        t['portal'] = mv(*t['portal'])
+    for i, (name, r) in enumerate(REGIONS):
+        if name == 'SKY ISLANDS':
+            REGIONS[i] = (name, (r[0], r[1] + dy, r[2], r[3] + dy))
+
+
+_move_old_sky()
+# the new parts of the worlds (generated by tools/gen_worlds.py)
+TRIALS.update(WD.NEW_TRIALS)
+_settle_trial_spots()
+MINIBOSSES += WD.NEW_GUARDIANS
+GEYSERS += WD.NEW_GEYSERS
+PASSAGES = list(WD.PASSAGES)          # (tile, tile, 'shore' | 'sinkhole'): walk in to cross between worlds
+ENEMIES += WD.NEW_ENEMIES
+ITEMS += WD.NEW_ITEMS
+REGIONS += [(name, r) for name, wld, r, *_ in WD.NEW_REGIONS]
+REGIONS += [(t['title'], t['room']) for t in WD.NEW_TRIALS.values()]
+THEMES.update({name: theme for name, wld, r, theme, *_ in WD.NEW_REGIONS})
+REGION_MUSIC.update({name: 'r_' + theme for name, wld, r, theme, *_ in WD.NEW_REGIONS})
+DARK_REGIONS |= {name for name, wld, r, theme, tier, dark, *_ in WD.NEW_REGIONS if dark}
+REGION_TIER = {'KELP WOODS': 1, 'CORAL GARDENS': 1, 'THE LAGOON': 1, 'SUNKEN SHRINE': 1,
+               'THE ABYSS': 2, 'SHIP GRAVEYARD': 2, 'SKY ISLANDS': 2, 'FROZEN SHELF': 3, 'EMBER VENTS': 3,
+               'SUNKEN CITY': 4, 'MURK PALACE': 4}
+REGION_TIER.update({name: tier for name, wld, r, theme, tier, *_ in WD.NEW_REGIONS})
+CREATURE_OF = {name: critter for name, wld, r, theme, tier, dark, critter, guard in WD.NEW_REGIONS}
+NEW_WORLD_GUARDIANS = {guard for *_, guard in WD.NEW_REGIONS}
+
 # arenas: interior rect in tiles (x0, y0, x1, y1 inclusive) + reward when cleared
 ARENAS = {
     'pool': {'rect': (29, 12, 37, 20), 'reward': ('container', 33, 16)},
@@ -666,9 +558,9 @@ def in_rect(tx, ty, r):
 def area_at(tx, ty):
     if ty >= TEMPLE_Y:
         return 'dungeon'
-    if SKY_Y <= ty <= SKY_RECT[3] and tx <= SKY_RECT[2]:
+    if in_rect(tx, ty, SKY_RECT):
         return 'sky'
-    if ty >= WORLD_H:
+    if WORLD_H <= ty < SKY_Y:
         return 'trial'
     return 'dungeon' if in_rect(tx, ty, SHRINE_RECT) else 'overworld'
 
@@ -696,14 +588,41 @@ def temple_door(tx, ty):
     return None
 
 
+_REGION_GRID = None
+
+
+def _region_grid():
+    """Which region every tile is in, painted once (the first region listed wins)."""
+    global _REGION_GRID
+    grid = [[None] * LEVEL_W for _ in range(TEMPLE_Y)]
+    defaults = {'sky': 'SKY ISLANDS', 'land': 'THE SURFACE', 'under': 'THE UNDERDEEP'}
+    for wld, (x0, y0, x1, y1) in WORLD_RECTS.items():
+        if wld in defaults:
+            for y in range(y0, min(y1 + 1, TEMPLE_Y)):
+                grid[y][x0:x1 + 1] = [defaults[wld]] * (x1 - x0 + 1)
+    for name, (x0, y0, x1, y1) in reversed(REGIONS):
+        for y in range(max(0, y0), min(y1 + 1, TEMPLE_Y)):
+            grid[y][x0:x1 + 1] = [name] * (x1 - x0 + 1)
+    _REGION_GRID = grid
+    return grid
+
+
 def region_at(tx, ty):
     if ty >= TEMPLE_Y:
         tid = temple_at(tx, ty)
         return TEMPLES[tid]['title'] if tid else 'CORAL REEF'
-    for name, r in REGIONS:
-        if in_rect(tx, ty, r):
-            return name
+    g = _REGION_GRID or _region_grid()
+    if 0 <= ty < TEMPLE_Y and 0 <= tx < LEVEL_W:
+        return g[ty][tx] or 'CORAL REEF'
     return 'CORAL REEF'
+
+
+def world_at(tx, ty):
+    """'sea', 'sky', 'land' or 'under' -- or None in the trial rooms, temples and the boss lair."""
+    for wld, r in WORLD_RECTS.items():
+        if in_rect(tx, ty, r):
+            return wld
+    return None
 
 
 def theme_at(tx, ty):
@@ -747,6 +666,8 @@ class Level:
             self.tiles[ty][tx] = floor_for(tx, ty)
         self.blockers = []
         self.ghost_ok = False          # True while Octo is in Spooky form
+        self.hover_ok = False          # Cloudy floats over pits, ponds and sky gaps
+        self.lava_ok = False           # Magmy walks on lava
         self.themes = [[theme_at(x, y) for x in range(self.w)] for y in range(self.h)]
         self.surface = None
         self.chunks = {}
@@ -770,6 +691,8 @@ class Level:
         if ch is None or ch in SOLID_ALL or ch == 'X':
             return True
         if ch in 'vl':
+            if who == 'player' and ((ch == 'v' and self.hover_ok) or (ch == 'l' and self.lava_ok)):
+                return False
             return who in ('player', 'walker')
         if ch == 'G':
             return not (who == 'player' and self.ghost_ok)
@@ -893,11 +816,14 @@ def validate():
         if LEVEL[int(ty)][int(tx)] not in FLOOR_CHARS:
             problems.append(f"{name} reward sits on {LEVEL[int(ty)][int(tx)]!r}")
     # can Octo reach everything? (kelp can be cut, doors unlocked, shutters open)
-    walk = FLOOR_CHARS | set('KLXRIGlYEBU')
+    walk = FLOOR_CHARS | set('KLXRIGlYEBUAD')
     links = {}
     for a, b in GEYSERS:
         links[a] = b
         links[b] = a     # R: cracked rock, bombs open it
+    for a, b, _kind in PASSAGES:
+        links[a] = b
+        links[b] = a
     for t in TEMPLES.values():
         inside = (int(t['entry'][0]), int(t['entry'][1]))
         links[t['door']] = inside
