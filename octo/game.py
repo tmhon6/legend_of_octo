@@ -8,12 +8,13 @@ import sys
 
 import pygame
 
+import forms
 import gfx
 import sound
 import world
 from title import TitleScene
 from touch import TouchControls, touch_device
-from entities import (DIRS, ENEMY_TYPES, MiniBoss, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
+from entities import (DIRS, ENEMY_TYPES, FusionMachine, MiniBoss, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
                       EnemyShot, Hermie, Particle, Pickup, Player, Puff, Shelly, Urchin)
 from settings import SAVE_SLOT, FPS, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
 from world import ARENAS, Level
@@ -32,7 +33,7 @@ JET_KEYS = {pygame.K_v}
 PAUSE_KEYS = {pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_p, pygame.K_ESCAPE}
 WARP_KEYS = {pygame.K_t}
 FORM_KEYS = {pygame.K_1: 0, pygame.K_2: 1, pygame.K_3: 2, pygame.K_4: 3, pygame.K_5: 4,
-             pygame.K_6: 5, pygame.K_7: 6, pygame.K_8: 7, pygame.K_9: 8}
+             pygame.K_6: 5, pygame.K_7: 6, pygame.K_8: 7, pygame.K_9: 8, pygame.K_0: 9}
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAVE_PATH = os.path.join(_ROOT, f'savegame_{SAVE_SLOT}.json')     # one save per version
 LEGACY_SAVE_PATH = os.path.join(_ROOT, 'savegame.json')            # saves from before versions existed
@@ -123,6 +124,20 @@ FORM_INFO = {
     'air': ["YOU UNLOCKED AIRY OCTO!", "AIRY'S Z WRAPS YOU IN A CLOUD OF FOG FOR FIVE SECONDS. ENEMIES LOSE "
             "SIGHT OF YOU AND ATTACK THE SPOT WHERE YOU VANISHED. SWITCH FORMS INSIDE THE FOG TO STRIKE UNSEEN!"],
 }
+# fused forms (made by the Fusion Machine)
+FORM_COLORS.update({'stormy': (150, 200, 255), 'whippy': (90, 70, 200), 'prickly': (255, 140, 120),
+                    'quaky': (170, 120, 70), 'wispy': (170, 255, 210), 'breezy': (150, 240, 230),
+                    'frosty': (200, 235, 255), 'sparky': (255, 240, 90)})
+FORM_BOX.update({'stormy': (50, 80, 150), 'whippy': (40, 30, 110), 'prickly': (170, 70, 70),
+                 'quaky': (100, 70, 40), 'wispy': (40, 110, 90), 'breezy': (40, 120, 120),
+                 'frosty': (90, 140, 190), 'sparky': (150, 130, 20)})
+for _f, (_a, _b, _attack, _desc) in forms.FUSIONS.items():
+    FORM_LABEL[_f] = _attack.split()[-1]
+    FORM_INFO[_f] = [f"THE MACHINE WHIRS AND BUBBLES... YOU MADE {gfx.MOOD_NAMES[_f]} OCTO!",
+                     f"{_attack}: {_desc}",
+                     f"STRENGTH: {forms.STRENGTHS[_f][0]}. {forms.STRENGTHS[_f][1]}"]
+FUSE_KEYS_CLOSE = {pygame.K_ESCAPE, pygame.K_t, pygame.K_m, pygame.K_x, pygame.K_p}
+
 MINIMAP_COLORS = {
     '.': (196, 178, 128), ',': (176, 172, 112), '#': (86, 90, 128), 'C': (226, 110, 100),
     'K': (50, 150, 80), '=': (72, 82, 132), 'd': (100, 106, 142), 'W': (30, 34, 64), 'S': (120, 120, 140),
@@ -224,7 +239,8 @@ class Game:
             self.place_item(kind, tx, ty, ('item', i))
         _, tx, ty = world.NPC
         hx, hy = world.SHOPKEEPER
-        self.npcs = [Shelly(tx * TILE, ty * TILE), Hermie(hx * TILE, hy * TILE)]
+        mx, my = world.FUSION_MACHINE
+        self.npcs = [Shelly(tx * TILE, ty * TILE), Hermie(hx * TILE, hy * TILE), FusionMachine(mx * TILE, my * TILE)]
         self.bought = set()
         self.shop_focus = None
         self.trial = None
@@ -306,6 +322,7 @@ class Game:
     def drop_loot(self, center, chance=1.0):
         if self.trial:
             chance *= 0.5           # trials are meant to be hard
+        chance *= self.player.stat('luck', 1.0)
         r = random.random() / chance
         kind = None
         if r < 0.30:
@@ -453,6 +470,79 @@ class Game:
                 px, py = t['portal']
                 spots.append((t['title'].replace('TRIAL OF ', '') + ' PORTAL', (px, py + 1)))
         return spots
+
+    # ---- the Fusion Machine ------------------------------------------------
+    def fuse_rows(self):
+        p = self.player
+        rows = []
+        for f, (a, b, attack, desc) in forms.FUSIONS.items():
+            if f in p.forms:
+                status = 'owned'
+            elif a in p.forms and b in p.forms:
+                status = 'ready'
+            else:
+                status = 'need'
+            rows.append((f, a, b, status))
+        return rows
+
+    def open_fuse(self):
+        self.fuse_i = 0
+        self.fuse_msg = ''
+        self.state = 'fuse'
+        sound.play('pause')
+
+    def fuse(self, row):
+        f, a, b, status = row
+        p = self.player
+        if status == 'owned':
+            self.fuse_msg = "YOU ALREADY HAVE THAT FORM."
+            sound.play('nope')
+        elif status == 'need':
+            missing = [gfx.MOOD_NAMES[x] for x in (a, b) if x not in p.forms]
+            self.fuse_msg = "YOU STILL NEED " + " AND ".join(missing) + "."
+            sound.play('nope')
+        elif p.pearls < forms.FUSION_COST:
+            self.fuse_msg = f"FUSING COSTS {forms.FUSION_COST} PEARLS."
+            sound.play('nope')
+        else:
+            p.pearls -= forms.FUSION_COST
+            p.forms.append(f)
+            p.next_mood = f
+            p.flip_t = 14
+            self.state = 'play'
+            sound.play('item')
+            self.burst(p.rect.center, FORM_COLORS[f], 18)
+            self.say(FORM_INFO[f])
+
+    def draw_fuse(self, scr):
+        rows = self.fuse_rows()
+        box = pygame.Rect(10, HUD_H + 4, SCREEN_W - 20, PLAY_H - 8)
+        self.draw_box(scr, box)
+        gfx.text(scr, "FUSION MACHINE", SCREEN_W // 2, box.y + 6, (255, 220, 120), center=True)
+        gfx.text(scr, f"FUSE TWO FORMS - {forms.FUSION_COST} PEARLS", SCREEN_W // 2, box.y + 16,
+                 (170, 180, 220), center=True)
+        for i, (f, a, b, status) in enumerate(rows):
+            y = box.y + 30 + i * 11
+            on = i == self.fuse_i
+            if on:
+                gfx.text(scr, ">", box.x + 5, y, (255, 220, 120))
+            col = {'owned': (120, 200, 140), 'ready': (255, 255, 255), 'need': (110, 115, 140)}[status]
+            known = status != 'need' or (a in self.player.forms or b in self.player.forms)
+            have = self.player.forms
+            left = f"{gfx.MOOD_NAMES[a] if a in have or status == 'owned' else '?????'}+" \
+                   f"{gfx.MOOD_NAMES[b] if b in have or status == 'owned' else '?????'}"
+            gfx.text(scr, left, box.x + 13, y, col)
+            right = gfx.MOOD_NAMES[f] if status != 'need' or known else '?????'
+            gfx.text(scr, ">" + right, box.x + 13 + 6 * 14, y, col)
+            tag = {'owned': "OWNED", 'ready': str(forms.FUSION_COST), 'need': ""}[status]
+            gfx.text(scr, tag, box.right - 6 - gfx.text_width(tag), y, col)
+        f, a, b, status = rows[self.fuse_i]
+        _, _, attack, desc = forms.FUSIONS[f]
+        info = self.fuse_msg or (f"{attack}: {desc}" if status != 'need' else
+                                 "GET BOTH FORMS FROM THE TRIALS TO FUSE THEM.")
+        for j, line in enumerate(gfx.wrap(info, 36)[:3]):
+            gfx.text(scr, line, box.x + 8, box.bottom - 34 + j * 10, (255, 220, 120) if self.fuse_msg else (200, 210, 240))
+        gfx.text(scr, "Z: FUSE   ESC: LEAVE", SCREEN_W // 2, box.bottom - 6 - 4, (140, 150, 190), center=True)
 
     def open_warp(self):
         if self.trial or self.active_arena:
@@ -937,6 +1027,21 @@ class Game:
                 self.save_game()
             elif k == pygame.K_q:
                 quit_game()
+        elif st == 'fuse':
+            rows = self.fuse_rows()
+            if k in (pygame.K_UP, pygame.K_w):
+                self.fuse_i = (self.fuse_i - 1) % len(rows)
+                self.fuse_msg = ''
+                sound.play('text')
+            elif k in (pygame.K_DOWN, pygame.K_s):
+                self.fuse_i = (self.fuse_i + 1) % len(rows)
+                self.fuse_msg = ''
+                sound.play('text')
+            elif k in ACTION_KEYS or k in CONFIRM_KEYS:
+                self.fuse(rows[self.fuse_i])
+            elif k in FUSE_KEYS_CLOSE:
+                self.state = 'play'
+                sound.play('pause')
         elif st == 'map':
             if k in MAP_KEYS or k in PAUSE_KEYS:
                 self.state = 'play'
@@ -985,6 +1090,9 @@ class Game:
         probe = p.rect.inflate(4, 4).move(dx * 6, dy * 6)
         for npc in self.npcs:
             if probe.colliderect(npc.rect):
+                if isinstance(npc, FusionMachine):
+                    self.open_fuse()
+                    return True
                 self.say(HERMIE_TALK if isinstance(npc, Hermie) else SHELLY_TALK[1:])
                 return True
         return False
@@ -1189,6 +1297,9 @@ class Game:
                 continue            # frozen while off-screen
             e.update(self)
             if e.active and not e.frozen and e.rect.colliderect(p.rect):
+                thorns = p.stat('thorns', 0)
+                if thorns and not e.hurt_t:
+                    e.hit(self, thorns, 'thorns', p.rect.center)
                 p.hurt(self, e.damage, e.rect.center)
         for s in self.shots:
             s.update(self)
@@ -1335,7 +1446,7 @@ class Game:
             veil.fill((255, 255, 255))
             veil.set_alpha(int(255 * self.flash_t / 20))
             scr.blit(veil, (0, HUD_H))
-        if st in ('warp', 'map'):
+        if st in ('warp', 'map', 'fuse'):
             veil = pygame.Surface((PLAY_W, PLAY_H))
             veil.fill((0, 0, 16))
             veil.set_alpha(150)
@@ -1345,6 +1456,8 @@ class Game:
             gfx.text(scr, "PAUSED", SCREEN_W // 2, SCREEN_H - 10, (150, 160, 200), center=True)
         elif st == 'map':
             self.draw_map(scr)
+        elif st == 'fuse':
+            self.draw_fuse(scr)
         if st == 'dialog':
             self.draw_dialog(scr)
         elif st == 'pause':
@@ -1526,7 +1639,7 @@ class Game:
     def draw_darkness(self, ps, ox, oy):
         """The Sunken City is pitch dark: Octo only sees a little circle - unless Glowy lights it up."""
         p = self.player
-        r = 120 if p.mood == 'glow' else 44
+        r = p.stat('light', 44)
         if self.light_mask[0] != r:
             m = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
             m.fill((0, 0, 12, 230))

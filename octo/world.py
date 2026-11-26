@@ -264,6 +264,7 @@ START = (46.5, 49.5)     # tile coords of Octo's spawn: the sanctuary on top of 
 SHRINE_CHECKPOINT = (47.5, 19)
 NPC = ('shelly', 43, 54)
 SHOPKEEPER = (30, 47)     # Hermie the hermit crab, behind the counter
+FUSION_MACHINE = (36, 47)  # top-left tile of the 2x2 Fusion Machine, just east of the shop
 SHOP_ROW = 49            # tile row the wares sit on
 
 # (kind, tile x, tile y)

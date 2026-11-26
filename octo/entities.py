@@ -4,6 +4,7 @@ import random
 
 import pygame
 
+import forms
 import gfx
 import sound
 from settings import PLAYER_SPEED
@@ -15,6 +16,9 @@ JET_FRAMES = 12          # speed-burst length
 JET_SPEED = 4            # px per frame while jetting
 JET_COOLDOWN = 40
 SLAP_AIM_RANGE = 32      # px between centres: about the slap's real reach
+# attacks that STRONG forms (and fused forms) power up
+PLAYER_HIT_KINDS = {'ink', 'slap', 'zap', 'ice', 'wisp', 'spike', 'glow', 'bubble', 'bomb', 'thorns',
+                    'hail', 'whip', 'roll', 'quake', 'lantern', 'whirl', 'trap', 'chain'}
 INK_AIM_RANGE = 200      # px: ink homes its launch angle on enemies this close (on screen)
 
 
@@ -87,6 +91,9 @@ class Player(Entity):
         self.bubble_t = 0
         self.fog_t = 0
         self.fog_cd = 0
+        self.regen_t = 0
+        self.roll_t = 0
+        self.roll_dir = (0, 0)
         self.decoy = (0.0, 0.0)
         self.sphere = 0          # water-sphere strength while in the sky (0 = popped / none)
         self.in_sky = False
@@ -109,7 +116,7 @@ class Player(Entity):
         if self.attack_t or self.flip_t or self.knock_t:
             return
         cx, cy = self.rect.center
-        if self.mood in ('zap', 'ice', 'ghost', 'bubble', 'spiky', 'glow', 'air'):
+        if self.mood not in ('blue', 'mad'):
             self.special(game, cx, cy)
             return
         if self.mood == 'mad':
@@ -169,6 +176,9 @@ class Player(Entity):
             return
         if self.shoot_cd:
             return
+        if self.mood in forms.FUSIONS:
+            self.fusion_attack(game, cx, cy)
+            return
         if self.mood == 'bubble':
             # bubble shield: nothing can hurt Octo for a few seconds, and it shoves enemies away
             self.bubble_t = 150
@@ -226,6 +236,107 @@ class Player(Entity):
             sound.play('wisp')
         self.attack_t = 8
 
+    def aim(self, game, cx, cy, reach=None):
+        """Unit vector towards the nearest enemy (or the way Octo faces)."""
+        target = game.nearest_enemy((cx, cy), reach or INK_AIM_RANGE)
+        if target:
+            tx, ty = target.rect.center
+            d = math.hypot(tx - cx, ty - cy) or 1
+            dx, dy = (tx - cx) / d, (ty - cy) / d
+            self.facing = cardinal(dx, dy)
+            return dx, dy
+        return DIRS[self.facing]
+
+    def fusion_attack(self, game, cx, cy):
+        """The brand-new attacks of the fused forms."""
+        m = self.mood
+        self.attack_t = 10
+        if m == 'stormy':
+            seen = [e for e in game.enemies if e.active and game.view_rect.colliderect(e.rect)]
+            seen.sort(key=lambda e: math.hypot(e.rect.centerx - cx, e.rect.centery - cy))
+            spots = [e.rect.center for e in seen[:6]] or \
+                [(cx + math.cos(a) * 40, cy + math.sin(a) * 40) for a in (0.5, 2.6, 4.7)]
+            for i, (tx, ty) in enumerate(spots):
+                game.shots.append(Hail(tx, ty, delay=i * 6))
+            self.shoot_cd = 75
+            sound.play('zap')
+        elif m == 'whippy':
+            dx, dy = self.aim(game, cx, cy, 60)
+            game.shots.append(InkWhip(self, math.atan2(dy, dx)))
+            self.shoot_cd = 26
+            sound.play('slap')
+        elif m == 'prickly':
+            self.roll_dir = self.aim(game, cx, cy)
+            self.roll_t = 34
+            self.attack_t = 0
+            self.roll_hits = set()
+            self.shoot_cd = 55
+            sound.play('jet')
+        elif m == 'quaky':
+            for d in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                game.shots.append(Quake(cx, cy, d))
+            game.shake = 10
+            self.shoot_cd = 60
+            sound.play('boom')
+        elif m == 'wispy':
+            if any(isinstance(s, Lantern) for s in game.shots):
+                sound.play('nope')
+                return
+            game.shots.append(Lantern(self))
+            self.shoot_cd = 40
+            sound.play('wisp')
+        elif m == 'breezy':
+            if any(isinstance(s, Whirlpool) for s in game.shots):
+                sound.play('nope')
+                return
+            dx, dy = self.aim(game, cx, cy)
+            game.shots.append(Whirlpool(cx, cy, dx, dy))
+            self.shoot_cd = 60
+            sound.play('whoosh')
+        elif m == 'frosty':
+            dx, dy = self.aim(game, cx, cy)
+            game.shots.append(TrapBubble(cx - 6 + dx * 8, cy - 6 + dy * 8, dx * 2.4, dy * 2.4))
+            self.shoot_cd = 40
+            sound.play('bubble')
+        elif m == 'sparky':
+            hit, (px, py) = [], (cx, cy)
+            for reach in (130, 90, 90, 90, 90):
+                best = None
+                for e in game.enemies:
+                    if e.active and e not in hit and game.view_rect.colliderect(e.rect):
+                        d = math.hypot(e.rect.centerx - px, e.rect.centery - py)
+                        if d < reach and (best is None or d < best[0]):
+                            best = (d, e)
+                if not best:
+                    break
+                hit.append(best[1])
+                px, py = best[1].rect.center
+            points = [(cx, cy)] + [e.rect.center for e in hit]
+            for e in hit:
+                e.hit(game, 2, 'chain', (cx, cy))
+            game.effects.append(Bolt(points if len(points) > 1 else
+                                     [(cx, cy), (cx + DIRS[self.facing][0] * 24, cy + DIRS[self.facing][1] * 24)]))
+            self.shoot_cd = 45
+            sound.play('zap')
+
+    def _roll_update(self, game):
+        """Prickly's spike roll: barrel along, bounce off walls, spike everything in the way."""
+        self.roll_t -= 1
+        dx, dy = self.roll_dir
+        for _ in range(3):
+            if not self.move(dx * 1.2, 0, game.level):
+                dx = -dx
+            if not self.move(0, dy * 1.2, game.level):
+                dy = -dy
+        self.roll_dir = (dx, dy)
+        r = self.rect.inflate(6, 6)
+        for e in game.enemies:
+            if e.active and e not in self.roll_hits and r.colliderect(e.rect):
+                self.roll_hits.add(e)
+                e.hit(game, 2, 'roll', self.rect.center)
+        if self.roll_t % 3 == 0:
+            game.effects.append(Particle(*self.rect.center, -dx * 0.6, -dy * 0.6, (255, 200, 120), 14))
+
     def jet(self, game, move_dir):
         """Speed burst: shoot backwards out of a puff of ink."""
         if self.dash_t or self.dash_cd or self.flip_t or self.knock_t:
@@ -235,7 +346,7 @@ class Player(Entity):
         self.facing = d
         self.dash_dir = DIRS[d]
         self.dash_t = JET_FRAMES + (4 if 'fins' in self.items else 0)
-        self.dash_cd = JET_COOLDOWN
+        self.dash_cd = int(JET_COOLDOWN * self.stat('jet', 1.0))
         cx, cy = self.rect.center
         game.shots.append(InkCloud(cx - self.dash_dir[0] * 4, cy - self.dash_dir[1] * 4))
         sound.play('jet')
@@ -255,8 +366,12 @@ class Player(Entity):
         game.shots.append(b)
         sound.play('shut')
 
+    def stat(self, key, default=0):
+        """This form's strength (see forms.py)."""
+        return forms.stat(self.mood, key, default)
+
     def speed(self):
-        return PLAYER_SPEED * (1.35 if 'fins' in self.items else 1.0)
+        return PLAYER_SPEED * (1.35 if 'fins' in self.items else 1.0) * self.stat('speed', 1.0)
 
     def toggle_ink(self):
         self.ink_mode = 'burst' if self.ink_mode == 'line' else 'line'
@@ -296,8 +411,9 @@ class Player(Entity):
         return self.mood == 'mad' and 3 <= self.attack_t <= 13
 
     def hurt(self, game, dmg, src):
-        if self.invuln or self.dash_t or self.bubble_t or self.tumble or dmg <= 0:
+        if self.invuln or self.dash_t or self.bubble_t or self.tumble or self.roll_t or dmg <= 0:
             return
+        dmg = max(1, dmg - self.stat('armor', 0))
         if self.in_sky and self.sphere > 0:
             # the water sphere takes the hit instead of Octo
             self.sphere -= 1
@@ -313,7 +429,7 @@ class Player(Entity):
             dmg = 0
         else:
             self.hp = max(0, self.hp - dmg)
-        self.invuln = 70
+        self.invuln = int(70 * self.stat('invuln', 1.0))
         sx, sy = src
         cx, cy = self.rect.center
         dx, dy = cx - sx, cy - sy
@@ -335,6 +451,16 @@ class Player(Entity):
             self.shoot_cd -= 1
         if self.fog_cd:
             self.fog_cd -= 1
+        regen = self.stat('regen', 0)
+        if regen and self.hp < self.max_hp and not game.trial:
+            self.regen_t += 1
+            if self.regen_t >= regen:
+                self.regen_t = 0
+                self.hp += 1
+                game.burst(self.rect.center, (255, 150, 200), 6)
+        if self.roll_t:
+            self._roll_update(game)
+            return
         if self.dash_cd and not self.dash_t:
             self.dash_cd -= 1
         if self.fog_t:
@@ -367,6 +493,9 @@ class Player(Entity):
             self.flip_t -= 1
             if self.flip_t == 7:
                 self.mood = self.next_mood
+                name, _, _ = forms.STRENGTHS.get(self.mood, ("", "", {}))
+                if name:
+                    game.toast = (f"{gfx.MOOD_NAMES[self.mood]}: {name}", 120)
                 game.burst(self.rect.center, gfx.OCTO_PAL[self.mood]['B'], 10)
         if self.knock_t:
             self.knock_t -= 1
@@ -492,6 +621,16 @@ class Player(Entity):
             w, h = img.get_size()
             surf.blit(img, (x + 8 - w // 2, y + 8 - h // 2 + t * t // 40))
             return
+        if self.roll_t:
+            cx, cy = x + 8, y + 8
+            spin = self.roll_t * 0.6
+            pygame.draw.circle(surf, (120, 60, 20), (cx, cy), 8)
+            pygame.draw.circle(surf, (250, 150, 60), (cx, cy), 7)
+            for i in range(8):
+                a = spin + i / 8 * math.tau
+                pygame.draw.line(surf, (255, 230, 150), (cx + math.cos(a) * 6, cy + math.sin(a) * 6),
+                                 (cx + math.cos(a) * 11, cy + math.sin(a) * 11), 2)
+            return
         if self.in_sky and self.sphere > 0:
             self._draw_sphere(surf, img, x, y)
             return
@@ -565,6 +704,7 @@ class Enemy(Entity):
         self.kb_t = 0
         self.last_slap = -1
         self.frozen = 0
+        self.trapped = 0
         self.t = random.randint(0, 100)
 
     @property
@@ -577,6 +717,16 @@ class Enemy(Entity):
             return
         if self.hurt_t:
             self.hurt_t -= 1
+        if self.trapped:
+            self.trapped -= 1
+            self.frozen = max(self.frozen, 1)
+            self.y -= 0.15                       # floats up inside the bubble
+            if self.trapped == 0:
+                game.splat(self.rect.center, (200, 240, 255))
+                sound.play('bubble')
+                self.frozen = 0
+                self.hit(game, 3, 'trap', (self.rect.centerx, self.rect.bottom))
+                return
         if self.frozen:
             self.frozen -= 1
             return
@@ -598,6 +748,8 @@ class Enemy(Entity):
             sound.play('tink')
             game.spark(self.rect.center)
             return False
+        if kind in PLAYER_HIT_KINDS:
+            dmg += game.player.stat('power', 0)
         self.hp -= dmg
         self.hurt_t = 18
         sound.play('hit')
@@ -634,6 +786,9 @@ class Enemy(Entity):
             img = gfx.flash(img)
         jx = 1 if self.frozen and self.frozen < 30 and self.frozen % 4 < 2 else 0
         surf.blit(img, (round(self.x) + ox + jx, round(self.y) + oy))
+        if self.trapped:
+            r = self.rect
+            pygame.draw.circle(surf, (200, 240, 255), (r.centerx + ox, r.centery + oy), max(r.w, r.h) // 2 + 4, 1)
         self.draw_hp(surf, ox, oy)
 
     def draw_hp(self, surf, ox, oy):
@@ -1196,6 +1351,8 @@ class Hermie(Shelly):
 
 HERMIE_TALK = [
     "HERMIE: WELCOME TO THE PEARL SHOP! STAND NEXT TO SOMETHING YOU LIKE AND PRESS Z TO BUY IT.",
+    "THAT RATTLING CONTRAPTION OUTSIDE? MY FUSION MACHINE! IT FUSES TWO OF YOUR FORMS INTO A NEW, "
+    "STRONGER ONE WITH ITS VERY OWN ATTACK. FACE IT AND PRESS Z.",
     "BUBBLE BOMBS GO OFF WITH B. THEY BLAST CRACKED ROCK - I HEAR THERE'S SOME JUST WEST OF HERE...",
     "AND IN THE ABYSS, A HEART SHELL SITS BEHIND A CRACKED WALL. HEH HEH.",
 ]
@@ -1679,3 +1836,320 @@ class Bubble:
             surf.set_at((x, y), (200, 230, 255))
         else:
             pygame.draw.circle(surf, (200, 230, 255), (x, y), 2, 1)
+
+
+# ===========================================================================
+# Fused-form attacks (see forms.FUSIONS)
+# ===========================================================================
+
+class Hail(Entity):
+    """Stormy: a crackling hailstone that drops out of the water above onto a target."""
+    FALL = 22
+
+    def __init__(self, tx, ty, delay=0):
+        super().__init__(tx, ty)
+        self.t = -delay
+
+    @property
+    def rect(self):
+        return pygame.Rect(self.x - 10, self.y - 10, 20, 20)
+
+    def update(self, game):
+        self.t += 1
+        if self.t == self.FALL:
+            game.shake = max(game.shake, 3)
+            sound.play('ice')
+            for e in game.enemies:
+                if e.active and self.rect.colliderect(e.rect):
+                    e.hit(game, 2, 'hail', (self.x, self.y - 20))
+                    if not e.dead:
+                        e.frozen = max(e.frozen, 30 if getattr(e, 'boss', False) else 90)
+            for i in range(10):
+                a = i / 10 * math.tau
+                game.effects.append(Particle(self.x, self.y, math.cos(a) * 1.6, math.sin(a) * 1.6,
+                                             (220, 245, 255), 16))
+        if self.t > self.FALL + 4:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        if self.t < 0:
+            return
+        x, y = round(self.x) + ox, round(self.y) + oy
+        k = min(1.0, self.t / self.FALL)
+        pygame.draw.ellipse(surf, (20, 40, 70), (x - 6 * k, y + 2, 12 * k + 1, 4))      # shadow
+        if self.t < self.FALL:
+            hy = y - int((1 - k) * 70)
+            pygame.draw.line(surf, (255, 255, 160), (x - 3, hy - 14), (x + 2, hy - 6))
+            pygame.draw.polygon(surf, (230, 250, 255), [(x, hy - 5), (x + 4, hy), (x, hy + 5), (x - 4, hy)])
+            pygame.draw.polygon(surf, (120, 190, 240), [(x, hy - 5), (x + 4, hy), (x, hy + 5), (x - 4, hy)], 1)
+
+
+class InkWhip:
+    """Whippy: an inky tentacle that sweeps a wide arc in front of Octo."""
+    SWEEP, REACH, TIME = 2.4, 40, 12
+
+    def __init__(self, owner, angle):
+        self.owner = owner
+        self.a0 = angle - self.SWEEP / 2
+        self.t = 0
+        self.hit = set()
+        self.dead = False
+
+    def tip_angle(self):
+        return self.a0 + self.SWEEP * min(1.0, self.t / self.TIME)
+
+    def update(self, game):
+        self.t += 1
+        cx, cy = self.owner.rect.center
+        swept = self.tip_angle()
+        for e in game.enemies:
+            if not e.active or e in self.hit:
+                continue
+            ex, ey = e.rect.center
+            d = math.hypot(ex - cx, ey - cy)
+            ang = math.atan2(ey - cy, ex - cx)
+            rel = (ang - self.a0) % math.tau
+            if d < self.REACH + 8 and rel <= swept - self.a0 + 0.2:
+                self.hit.add(e)
+                e.hit(game, 2, 'whip', (cx, cy))
+        if self.t >= self.TIME + 4:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        cx, cy = self.owner.rect.center
+        a = self.tip_angle()
+        pts = []
+        for i in range(9):
+            r = self.REACH * i / 8
+            bend = math.sin(i / 8 * math.pi) * 0.35
+            pts.append((cx + ox + math.cos(a - bend) * r, cy + oy + math.sin(a - bend) * r))
+        pygame.draw.lines(surf, (20, 16, 50), False, pts, 5)
+        pygame.draw.lines(surf, (70, 60, 150), False, pts, 2)
+        for p in pts[2::2]:
+            pygame.draw.circle(surf, (200, 190, 255), (int(p[0]), int(p[1])), 1)
+
+
+class Quake(Entity):
+    """Quaky: a shockwave rumbling along the sea floor. Cracks rock it passes over."""
+    hb = (0, 0, 12, 12)
+    who = 'shot'
+
+    def __init__(self, cx, cy, d):
+        super().__init__(cx - 6, cy - 6)
+        self.d = d
+        self.life = 30
+        self.hit = set()
+
+    def update(self, game):
+        self.life -= 1
+        self.x += self.d[0] * 3
+        self.y += self.d[1] * 3
+        r = self.rect
+        game.blast_tiles(r.centerx, r.centery, 8)
+        if self.life <= 0 or game.level.blocked(r, 'shot'):
+            self.dead = True
+            game.effects.append(Puff(self.x - 2, self.y - 2))
+            return
+        for e in game.enemies:
+            if e.active and e not in self.hit and r.inflate(8, 8).colliderect(e.rect):
+                self.hit.add(e)
+                e.hit(game, 2, 'quake', (r.centerx - self.d[0] * 10, r.centery - self.d[1] * 10))
+        if self.life % 2 == 0:
+            game.effects.append(Particle(r.centerx + random.uniform(-4, 4), r.centery + random.uniform(-4, 4),
+                                         random.uniform(-0.5, 0.5), -1.0, (150, 120, 80), 14, grav=0.1, size=2))
+
+    def draw(self, surf, ox=0, oy=0):
+        r = self.rect.move(ox, oy)
+        for i in range(3):
+            pygame.draw.circle(surf, (110, 90, 60), (r.centerx - self.d[0] * i * 5, r.centery - self.d[1] * i * 5),
+                               5 - i)
+        pygame.draw.circle(surf, (230, 200, 140), r.center, 3)
+
+
+class Lantern(Entity):
+    """Wispy: a spirit lantern that circles Octo for a while, burning what it touches."""
+    hb = (0, 0, 12, 12)
+
+    def __init__(self, owner):
+        super().__init__(owner.x, owner.y)
+        self.owner = owner
+        self.ang = 0.0
+        self.life = 420
+
+    def update(self, game):
+        self.life -= 1
+        self.ang += 0.11
+        cx, cy = self.owner.rect.center
+        self.x = cx + math.cos(self.ang) * 26 - 6
+        self.y = cy + math.sin(self.ang) * 26 - 6
+        if self.life <= 0:
+            self.dead = True
+            game.burst(self.rect.center, (180, 255, 200), 10)
+            return
+        for e in game.enemies:
+            if e.active and not e.hurt_t and self.rect.colliderect(e.rect):
+                e.hit(game, 2, 'lantern', self.owner.rect.center)
+        for sh in game.shots:
+            if isinstance(sh, EnemyShot) and self.rect.colliderect(sh.rect):
+                sh.dead = True
+                game.spark(sh.rect.center)
+
+    def draw(self, surf, ox=0, oy=0):
+        x, y = round(self.x) + ox + 6, round(self.y) + oy + 6
+        flick = 1 if (self.life // 4) % 2 else 0
+        glow = pygame.Surface((24, 24), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (160, 255, 200, 60), (12, 12), 11 + flick)
+        surf.blit(glow, (x - 12, y - 12))
+        pygame.draw.rect(surf, (60, 40, 90), (x - 4, y - 5, 8, 10))
+        pygame.draw.rect(surf, (200, 255, 210), (x - 3, y - 4, 6, 8))
+        pygame.draw.line(surf, (60, 40, 90), (x - 2, y - 7), (x + 2, y - 7))
+        if self.life < 60 and (self.life // 4) % 2:
+            pygame.draw.rect(surf, (255, 255, 255), (x - 3, y - 4, 6, 8))
+
+
+class Whirlpool(Entity):
+    """Breezy: a slow spinning whirlpool that drags nearby enemies in and churns them."""
+    hb = (0, 0, 16, 16)
+    who = 'shot'
+
+    def __init__(self, cx, cy, dx, dy):
+        super().__init__(cx - 8, cy - 8)
+        self.vx, self.vy = dx * 0.9, dy * 0.9
+        self.life = 210
+        self.t = 0
+
+    def update(self, game):
+        self.t += 1
+        self.life -= 1
+        if not self.move(self.vx, self.vy, game.level):
+            self.vx = self.vy = 0
+        if self.life <= 0:
+            self.dead = True
+            return
+        cx, cy = self.rect.center
+        for e in game.enemies:
+            if not e.active:
+                continue
+            ex, ey = e.rect.center
+            d = math.hypot(cx - ex, cy - ey)
+            if d < 52 and not getattr(e, 'boss', False) and d > 4:
+                e.move((cx - ex) / d * 0.7, (cy - ey) / d * 0.7, game.level)
+            if d < 16 and not e.hurt_t:
+                e.hit(game, 1, 'whirl', (cx, cy))
+
+    def draw(self, surf, ox=0, oy=0):
+        cx, cy = self.rect.center
+        cx, cy = cx + ox, cy + oy
+        for i in range(3):
+            r = 14 - i * 4
+            a = self.t * (0.25 + i * 0.1)
+            rect = pygame.Rect(cx - r, cy - r * 0.6, r * 2, r * 1.2)
+            pygame.draw.arc(surf, (200, 240, 255), rect, a, a + 3.6, 2 if i == 0 else 1)
+            pygame.draw.arc(surf, (120, 190, 240), rect, a + 3.14, a + 5.5, 1)
+
+
+class TrapBubble(Entity):
+    """Frosty: a freezing bubble. It traps an enemy, which floats helplessly, then pops for big damage."""
+    hb = (0, 0, 12, 12)
+    who = 'shot'
+
+    def __init__(self, x, y, vx, vy):
+        super().__init__(x, y)
+        self.vx, self.vy = vx, vy
+        self.life = 90
+
+    def update(self, game):
+        self.x += self.vx
+        self.y += self.vy
+        self.life -= 1
+        r = self.rect
+        if self.life <= 0 or game.level.blocked(r, 'shot'):
+            self.dead = True
+            game.splat(r.center, (200, 240, 255))
+            return
+        for e in game.enemies:
+            if e.active and not e.trapped and r.colliderect(e.rect):
+                self.dead = True
+                if getattr(e, 'boss', False):
+                    e.hit(game, 3, 'trap', r.center)
+                    if not e.dead:
+                        e.frozen = max(e.frozen, 40)
+                else:
+                    e.trapped = 150
+                    e.kb_t = 0
+                sound.play('ice')
+                return
+
+    def draw(self, surf, ox=0, oy=0):
+        x, y = round(self.x) + ox + 6, round(self.y) + oy + 6
+        pygame.draw.circle(surf, (180, 230, 255), (x, y), 6)
+        pygame.draw.circle(surf, (240, 250, 255), (x, y), 6, 1)
+        surf.set_at((x - 2, y - 2), (255, 255, 255))
+
+
+class Bolt:
+    """Sparky: a jagged chain of lightning between the enemies it struck."""
+
+    def __init__(self, points):
+        self.points = points
+        self.t = 14
+        self.dead = False
+
+    def update(self, game):
+        self.t -= 1
+        if self.t <= 0:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        for (x0, y0), (x1, y1) in zip(self.points, self.points[1:]):
+            pts = [(x0 + ox, y0 + oy)]
+            for i in range(1, 5):
+                k = i / 5
+                pts.append((x0 + (x1 - x0) * k + random.uniform(-4, 4) + ox,
+                            y0 + (y1 - y0) * k + random.uniform(-4, 4) + oy))
+            pts.append((x1 + ox, y1 + oy))
+            pygame.draw.lines(surf, (255, 255, 160), False, pts, 3 if self.t > 8 else 1)
+            pygame.draw.lines(surf, (255, 255, 255), False, pts, 1)
+
+
+# ===========================================================================
+# The Fusion Machine (next to the Pearl Shop)
+# ===========================================================================
+
+class FusionMachine(Entity):
+    hb = (0, 4, 32, 26)
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.t = 0
+
+    def update(self, game):
+        self.t += 1
+
+    def draw(self, surf, ox=0, oy=0):
+        x, y = round(self.x) + ox, round(self.y) + oy
+        t = self.t
+        # base and body
+        pygame.draw.rect(surf, (40, 44, 60), (x + 1, y + 24, 30, 8))
+        pygame.draw.rect(surf, (90, 100, 130), (x + 3, y + 10, 26, 16))
+        pygame.draw.rect(surf, (140, 150, 180), (x + 3, y + 10, 26, 3))
+        pygame.draw.rect(surf, (30, 30, 44), (x + 3, y + 10, 26, 16), 1)
+        # two glass tanks bubbling with colour
+        for i, col in enumerate(((250, 204, 40), (184, 228, 255))):
+            tx = x + 4 + i * 16
+            pygame.draw.rect(surf, (20, 30, 50), (tx, y, 8, 14))
+            lvl = 6 + int(math.sin(t * 0.05 + i * 2) * 2)
+            pygame.draw.rect(surf, col, (tx + 1, y + 14 - lvl, 6, lvl - 1))
+            if (t + i * 7) % 14 < 7:
+                surf.set_at((tx + 3, y + 14 - lvl - 2 + (t // 3) % 3), (255, 255, 255))
+            pygame.draw.rect(surf, (200, 220, 240), (tx, y, 8, 14), 1)
+        # mixing funnel and the result light
+        pygame.draw.polygon(surf, (70, 78, 100), [(x + 12, y + 4), (x + 20, y + 4), (x + 18, y + 10), (x + 14, y + 10)])
+        hue = (t // 8) % 3
+        light = ((255, 120, 200), (120, 255, 200), (200, 160, 255))[hue]
+        pygame.draw.circle(surf, light, (x + 16, y + 18), 4)
+        pygame.draw.circle(surf, (255, 255, 255), (x + 15, y + 17), 1)
+        # dials
+        for i in range(3):
+            pygame.draw.circle(surf, (230, 90, 70) if (t // 20 + i) % 3 == 0 else (60, 60, 70),
+                               (x + 7 + i * 9, y + 23), 1)

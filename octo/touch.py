@@ -253,6 +253,8 @@ class TouchControls:
             g.on_key(pygame.K_z)
         elif st == 'map':
             g.on_key(pygame.K_m)
+        elif st == 'fuse':
+            g.on_key(pygame.K_ESCAPE)
         elif st == 'pause':
             g.on_key(pygame.K_p)
         elif st in ('gameover', 'win'):

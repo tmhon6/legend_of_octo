@@ -51,7 +51,7 @@ In the browser, saves go to the browser's local storage instead of `savegame.jso
 | Arrows / WASD      | Move                                                |
 | Z / Space          | Attack (depends on form) · talk · buy in the shop   |
 | X / Right Shift    | Next form                                           |
-| 1-9                | Jump straight to a form                             |
+| 1-9, 0             | Jump straight to a form (X cycles through all of them) |
 | C                  | Happy ink style: long line <-> short wide burst     |
 | V                  | Ink jet: a quick dash that leaves a stinging ink cloud (you can't be hurt mid-jet) |
 | B                  | Drop a bubble bomb (buy them in the Pearl Shop)     |
@@ -64,19 +64,36 @@ In the browser, saves go to the browser's local storage instead of `savegame.jso
 
 ## Forms
 
-Octo starts with two forms. Each trial unlocks another.
+Octo starts with two forms. Each trial unlocks another. Every form also has its own **strength**,
+which is on while you're in that form.
 
-| Form    | Z does                                                     | From                      |
-|---------|------------------------------------------------------------|---------------------------|
-| Happy   | Ink, aimed at the nearest enemy (line or burst)            | start                     |
-| Grumpy  | Tentacle slap; cuts kelp, swats shots                      | start                     |
-| Zappy   | Shock ring that hits everything nearby; shatters ice walls | Trial of Storms           |
-| Chilly  | Ice shard that freezes enemies; cools lava into rock       | Trial of Currents         |
-| Spooky  | Two homing wisps that fly through walls; walks through ghost walls | Trial of Shadows  |
-| Bubbly  | Bubble shield: a few seconds of no damage                  | Trial of Frost            |
-| Spiky   | Spines in all eight directions                             | Trial of Embers           |
-| Glowy   | Flash that stuns the whole screen; lights up dark places   | Trial of Echoes           |
-| Airy    | Fog cloak: for 5 seconds enemies can't see you and attack the spot where you vanished | Trial of Winds |
+| Form    | Z does                                                     | Strength                                   | From              |
+|---------|------------------------------------------------------------|--------------------------------------------|-------------------|
+| Happy   | Ink, aimed at the nearest enemy (line or burst)            | Speedy: swims 20% faster                   | start             |
+| Grumpy  | Tentacle slap; cuts kelp, swats shots                      | Strong: every attack deals +1 damage       | start             |
+| Zappy   | Shock ring that hits everything nearby; shatters ice walls | Charged: ink jet recharges twice as fast   | Trial of Storms   |
+| Chilly  | Ice shard that freezes enemies; cools lava into rock       | Tough: big hits hurt half a heart less     | Trial of Currents |
+| Spooky  | Two homing wisps that fly through walls; walks through ghost walls | Slippery: twice as long invincible after a hit | Trial of Shadows |
+| Bubbly  | Bubble shield: a few seconds of no damage                  | Healing: half a heart every 8 seconds      | Trial of Frost    |
+| Spiky   | Spines in all eight directions                             | Thorns: enemies that touch you get hurt    | Trial of Embers   |
+| Glowy   | Flash that stuns the whole screen                          | Lucky: double treasure drops; lights the dark | Trial of Echoes |
+| Airy    | Fog cloak: enemies lose sight of you                       | Steady: never knocked back, a bit faster   | Trial of Winds    |
+
+### The Fusion Machine
+
+Next to Hermie's Pearl Shop. For 40 pearls it fuses two forms into a new one with **its own new
+attack** (not the two old attacks stuck together) and boosted versions of both parents' strengths.
+
+| Fusion  | Made from        | New attack                                                      |
+|---------|------------------|-----------------------------------------------------------------|
+| Whippy  | Happy + Grumpy   | Ink Whip: a long tentacle that sweeps a wide arc                |
+| Stormy  | Zappy + Chilly   | Hail: hailstones crash down on up to six enemies and freeze them |
+| Sparky  | Zappy + Airy     | Chain Bolt: lightning that jumps between up to five enemies     |
+| Quaky   | Grumpy + Spiky   | Quake: shockwaves run out four ways and crack rock              |
+| Prickly | Bubbly + Spiky   | Spike Roll: roll through enemies as an untouchable spiky ball   |
+| Wispy   | Spooky + Glowy   | Lantern: a spirit lantern circles you, burning what it touches  |
+| Breezy  | Happy + Airy     | Whirlpool: drags enemies in and churns them up                  |
+| Frosty  | Chilly + Bubbly  | Frost Trap: a bubble traps an enemy, then pops for big damage   |
 
 Jellies ignore ink, and slapping an urchin hurts *you*.
 
