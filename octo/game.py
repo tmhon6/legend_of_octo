@@ -14,7 +14,7 @@ import sound
 import world
 from title import TitleScene
 from touch import TouchControls, touch_device
-from entities import (Altar, DIRS, ENEMY_TYPES, FusionMachine, MiniBoss, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
+from entities import (Altar, DIRS, ENEMY_TYPES, FusionMachine, MiniBoss, Patroller, Thief, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
                       EnemyShot, Hermie, Jelly, Particle, Pickup, Player, Puff, Shelly, Urchin)
 from settings import SAVE_SLOT, FPS, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
 from world import ARENAS, Level
@@ -153,6 +153,7 @@ for _f, _d in forms.FUSIONS.items():
     FORM_INFO[_f] = [f"THE MACHINE WHIRS AND BUBBLES... YOU MADE {_d['name']} OCTO!",
                      f"{_d['attack']}: {_d['desc']}",
                      f"STRENGTH - {forms.STRENGTHS[_f][0]}: {forms.STRENGTHS[_f][1]}"]
+CLAM_HP = 12
 ALTAR_FORMS = forms.ALTAR_FORMS        # what the temple altar teaches
 FUSE_KEYS_CLOSE = {pygame.K_ESCAPE, pygame.K_t, pygame.K_m, pygame.K_x, pygame.K_p}
 
@@ -326,6 +327,9 @@ class Game:
                                          color, 14, size=2))
 
     def miniboss_defeated(self, boss):
+        if getattr(boss, 'in_trial', False):          # a trial duel, not the region's guardian
+            self.burst(boss.rect.center, (255, 220, 120), 20)
+            return
         beaten = self.flags.setdefault('minis', [])
         if boss.bid not in beaten:
             beaten.append(boss.bid)
@@ -872,12 +876,13 @@ class Game:
         p.facing = 'up'
         p.knock_t = p.attack_t = p.dash_t = 0
         p.hp = p.max_hp
-        self.trial = {'name': name, 't': -120, 'wave': 0, 'got': 0, 'between': 0, 'eye_angle': 0.0}
+        self.trial = {'name': name, 't': -120, 'wave': 0, 'got': 0, 'between': 0, 'eye_angle': 0.0,
+                      'clam': CLAM_HP}
         self.flash_t = 20
         self.update_camera()
         self.area = self.region = None
         self.update_area()
-        self.say([t['title'] + ": " + t['goal'],
+        self.say([t['title'] + ": " + (t.get('goal_text') or t['goal']),
                   "IF YOU FALL, YOU'LL BE SENT BACK OUTSIDE - YOU CAN ALWAYS TRY AGAIN."])
 
     def trial_spawn(self, kind, tx, ty):
@@ -897,6 +902,83 @@ class Game:
                 sound.play('tick')
             return
         kind = t['kind']
+        x0, y0 = t['room'][:2]
+        p = self.player
+        cur = t.get('current')
+        if cur and not p.dash_t and not p.roll_t:             # the current keeps pushing Octo
+            p.move(cur[0], cur[1], self.level)
+            if tr['t'] % 4 == 0:
+                rx = random.uniform(x0, x0 + 16) * TILE
+                ry = random.uniform(y0, y0 + 11) * TILE
+                self.effects.append(Particle(rx, ry, cur[0] * 5, cur[1] * 5, (200, 230, 255), 16))
+        if tr['t'] == 0 and kind in ('duel', 'chase', 'defend', 'race'):
+            sound.play('roar')
+            if kind == 'duel':
+                bx, by = t['boss_at']
+                e = MiniBoss(t['boss'], *tile_to_px(x0 + bx, y0 + by))
+                e.in_trial = True
+                e.home = (e.x, e.y)
+                e.spawn = {'kind': 'mini', 'arena': 'trial', 'inst': e, 'killed': False}
+                self.enemies.append(e)
+            elif kind == 'chase':
+                tx, ty = t['thief_at']
+                e = Thief(*tile_to_px(x0 + tx, y0 + ty))
+                e.spawn = {'kind': 'thief', 'arena': 'trial', 'inst': e, 'killed': False}
+                self.enemies.append(e)
+            elif kind == 'race':
+                for i, (px_, py_) in enumerate(t['sentries']):
+                    e = Patroller(*tile_to_px(x0 + px_, y0 + py_), speed=t.get('sentry_speed', 1.2) * (1 if i % 2 else -1))
+                    e.spawn = {'kind': 'sentry', 'arena': 'trial', 'inst': e, 'killed': False}
+                    self.enemies.append(e)
+            for ek, gx, gy in t.get('guards', []):
+                self.trial_spawn(ek, gx, gy)
+        if kind == 'duel':
+            if tr['t'] > 0 and not any(isinstance(e, MiniBoss) and not e.dead for e in self.enemies) \
+                    and not any(isinstance(f, Puff) and f.loud for f in self.effects):
+                self.finish_trial(True)
+            return
+        if kind == 'chase':
+            left = t['time'] * 60 - tr['t']
+            if tr['got'] >= 3:
+                self.finish_trial(True)
+            elif left <= 0:
+                self.finish_trial(False, "THE THIEF GOT AWAY!")
+            elif left <= 300 and left % 60 == 0:
+                sound.play('tick')
+            return
+        if kind == 'race':
+            left = t['time'] * 60 - tr['t']
+            gx, gy = t['goal']
+            goal = pygame.Rect((x0 + gx) * TILE - 6, (y0 + gy) * TILE - 6, 12, 12)
+            if goal.colliderect(p.rect):
+                self.finish_trial(True)
+            elif left <= 0:
+                self.finish_trial(False, "TOO SLOW!")
+            elif left <= 300 and left % 60 == 0:
+                sound.play('tick')
+            return
+        if kind == 'defend':
+            left = t['time'] * 60 - tr['t']
+            cx, cy = (x0 + t['clam_at'][0]) * TILE, (y0 + t['clam_at'][1]) * TILE
+            clam = pygame.Rect(cx - 12, cy - 9, 24, 18)
+            if tr['t'] > 0 and tr['t'] % t['every'] == 0 and left > 120:
+                sx, sy = random.choice(t['spots'])
+                e = self.trial_spawn(random.choice(t['raiders']), sx, sy)
+                e.goal = (cx, cy)
+            for e in self.enemies:
+                if e.goal and e.active and e.rect.colliderect(clam):
+                    tr['clam'] -= max(1, e.damage)
+                    e.dead = True
+                    self.effects.append(Puff(e.x, e.y))
+                    self.shake = 6
+                    sound.play('hurt')
+            if tr['clam'] <= 0:
+                self.finish_trial(False, "THE CLAM WAS CRACKED!")
+            elif left <= 0:
+                self.finish_trial(True)
+            elif left <= 300 and left % 60 == 0:
+                sound.play('tick')
+            return
         if tr['t'] == 0:
             sound.play('roar')
             if kind == 'collect':
@@ -1731,8 +1813,16 @@ class Game:
         if self.area in ('overworld', 'sky') and theme not in ('abyss', 'vents', 'city'):
             off = int(math.sin(self.t * 0.01) * 30) - 60
             ps.blit(self.rays, (off, 0))
-        if self.region in world.DARK_REGIONS and self.area == 'overworld' and not self.trial:
+        if self.trial:
+            self.draw_trial_props(ps, ox, oy)
+        if (self.region in world.DARK_REGIONS and self.area == 'overworld' and not self.trial) or \
+                (self.trial and world.TRIALS[self.trial['name']].get('dark')):
             self.draw_darkness(ps, ox, oy)
+            if self.trial:                           # orbs still glint in the dark
+                for it in self.pickups:
+                    if it.kind == 'orb' and not it.dead and (self.t // 10) % 2:
+                        c = it.rect.center
+                        pygame.draw.circle(ps, (150, 255, 210), (c[0] + ox, c[1] + oy), 2)
         if self.glow_flash:
             self.glow_flash -= 1
             v = pygame.Surface((PLAY_W, PLAY_H))
@@ -1787,8 +1877,19 @@ class Game:
             return
         if tr['t'] < 40:
             self.big_text(scr, "GO!", SCREEN_W // 2, HUD_H + 70, (160, 255, 160))
+        left = max(0, t.get('time', 0) * 60 - tr['t'])
+        secs = (left + 59) // 60
         if t['kind'] == 'waves':
             s = f"WAVE {max(1, tr['wave'])}/{len(t['waves'])}  FOES LEFT {len(self.enemies)}"
+        elif t['kind'] == 'duel':
+            boss = next((e for e in self.enemies if isinstance(e, MiniBoss)), None)
+            s = f"DEFEAT {boss.name}" if boss else "DEFEAT THE GUARDIAN"
+        elif t['kind'] == 'chase':
+            s = f"TAG THE THIEF {tr['got']}/3  0:{secs:02d}"
+        elif t['kind'] == 'defend':
+            s = f"CLAM {max(0, tr['clam'])}/{CLAM_HP}  HOLD ON 0:{secs:02d}"
+        elif t['kind'] == 'race':
+            s = f"REACH THE GOAL  0:{secs:02d}"
         else:
             left = max(0, t['time'] * 60 - tr['t'])
             secs = (left + 59) // 60
@@ -1832,6 +1933,30 @@ class Game:
         elif kind == 'dust' and random.random() < 0.15:
             self.motes.append([random.uniform(0, PLAY_W), random.uniform(0, PLAY_H), random.uniform(-0.15, 0.15),
                                random.uniform(-0.1, 0.1), 160, (170, 160, 190), False])
+
+    def draw_trial_props(self, ps, ox, oy):
+        t = world.TRIALS[self.trial['name']]
+        x0, y0 = t['room'][:2]
+        if t['kind'] == 'defend':
+            cx, cy = (x0 + t['clam_at'][0]) * TILE + ox, (y0 + t['clam_at'][1]) * TILE + oy
+            hp = max(0, self.trial['clam'])
+            open_ = (self.t // 40) % 3 == 0
+            pygame.draw.ellipse(ps, (20, 30, 60), (cx - 13, cy + 4, 26, 8))
+            pygame.draw.ellipse(ps, (230, 190, 200), (cx - 12, cy - 4, 24, 12))
+            pygame.draw.ellipse(ps, (250, 220, 230), (cx - 12, cy - 9 - (3 if open_ else 0), 24, 12))
+            for i in range(5):
+                pygame.draw.line(ps, (200, 150, 170), (cx, cy - 4), (cx - 10 + i * 5, cy - 9), 1)
+            if open_:
+                pygame.draw.circle(ps, (255, 255, 255), (cx, cy - 2), 3)
+            for i in range(CLAM_HP - hp):            # cracks
+                pygame.draw.line(ps, (90, 40, 60), (cx - 8 + i * 3, cy - 6), (cx - 6 + i * 3, cy), 1)
+        elif t['kind'] == 'race':
+            gx, gy = t['goal']
+            cx, cy = (x0 + gx) * TILE + ox, (y0 + gy) * TILE + oy
+            r = 7 + (self.t // 6) % 3
+            pygame.draw.circle(ps, (255, 220, 120), (cx, cy), r, 2)
+            pygame.draw.line(ps, (240, 240, 255), (cx, cy - 10), (cx, cy + 6), 1)
+            pygame.draw.polygon(ps, (255, 90, 110), [(cx, cy - 10), (cx + 8, cy - 7), (cx, cy - 4)])
 
     def draw_darkness(self, ps, ox, oy):
         """The Sunken City is pitch dark: Octo only sees a little circle - unless Glowy lights it up."""

@@ -778,6 +778,7 @@ class Enemy(Entity):
         self.trapped = 0
         self.burn = 0
         self.chill_t = 0
+        self.goal = None          # (x, y) a raider marches to in a defend trial
         self.t = random.randint(0, 100)
 
     @property
@@ -819,7 +820,21 @@ class Enemy(Entity):
             for _ in range(3):
                 self.move(self.kb[0], self.kb[1], game.level)
             return
+        if self.goal:
+            self._march(game)
+            return
         self.ai(game)
+
+    def _march(self, game):
+        """Defend trials: head for the clam, sliding around anything in the way."""
+        gx, gy = self.goal
+        cx, cy = self.rect.center
+        d = math.hypot(gx - cx, gy - cy) or 1
+        sp = 0.55
+        dx, dy = (gx - cx) / d * sp, (gy - cy) / d * sp
+        if not self.move(dx, dy, game.level):
+            if not self.move(dx, 0, game.level):
+                self.move(0, dy if dy else sp, game.level)
 
     def ai(self, game):
         pass
@@ -1392,6 +1407,98 @@ class MiniBoss(Enemy):
         pygame.draw.polygon(surf, (255, 210, 60), [(cx - 6, top + 4), (cx - 6, top), (cx - 3, top + 2),
                                                    (cx, top - 2), (cx + 3, top + 2), (cx + 6, top),
                                                    (cx + 6, top + 4)])
+
+
+class Thief(Enemy):
+    """Chase trials: a golden crab that grabbed a pearl and runs. Tag it three times!"""
+    max_hp = 99
+    damage = 0
+    knockback = False
+    sprite = 'crab'
+    hb = (1, 5, 14, 10)
+    _img = None
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.tags = 0
+        self.wander = (0.0, 0.0)
+
+    def ai(self, game):
+        p = game.player.rect.center
+        cx, cy = self.rect.center
+        d = math.hypot(cx - p[0], cy - p[1]) or 1
+        if self.t % 40 == 0:
+            a = random.uniform(0, math.tau)
+            self.wander = (math.cos(a), math.sin(a))
+        fx, fy = (cx - p[0]) / d, (cy - p[1]) / d
+        k = 1.0 if d < 90 else 0.3
+        vx, vy = fx * k + self.wander[0] * 0.6, fy * k + self.wander[1] * 0.6
+        n = math.hypot(vx, vy) or 1
+        sp = 1.25 if d < 90 else 0.7
+        if not self.move(vx / n * sp, 0, game.level):
+            self.wander = (-self.wander[0], self.wander[1])
+        if not self.move(0, vy / n * sp, game.level):
+            self.wander = (self.wander[0], -self.wander[1])
+
+    def hit(self, game, dmg, kind, src):
+        if not self.active or self.hurt_t:
+            return False
+        self.tags += 1
+        self.hurt_t = 30
+        sound.play('pearl')
+        game.burst(self.rect.center, (255, 220, 90), 10)
+        if game.trial:
+            game.trial['got'] = self.tags
+        # scuttle off to somewhere far away
+        x0, y0, x1, y1 = [v * 16 for v in world_room(game)]
+        px, py = game.player.rect.center
+        for _ in range(30):
+            nx, ny = random.uniform(x0 + 16, x1 - 16), random.uniform(y0 + 16, y1 - 16)
+            r = pygame.Rect(nx + self.hb[0], ny + self.hb[1], self.hb[2], self.hb[3])
+            if math.hypot(nx - px, ny - py) > 80 and not game.level.blocked(r, self.who):
+                game.effects.append(Puff(self.x, self.y))
+                self.x, self.y = nx, ny
+                break
+        return True
+
+    def image(self):
+        if Thief._img is None:
+            Thief._img = [gfx.tint(f, (255, 215, 80)) for f in gfx.SPR['crab']]
+        return Thief._img[(self.t // 6) % 2]
+
+
+class Patroller(Enemy):
+    """Race trials: a spiked sentry sweeping up and down a lane. It can't be hurt -- just dodge it."""
+    max_hp = 99
+    damage = 1
+    knockback = False
+    sprite = 'urchin'
+    who = 'flyer'
+    hb = (2, 2, 12, 12)
+    spawn_time = 10
+
+    def __init__(self, x, y, speed=1.2):
+        super().__init__(x, y)
+        self.vy = speed
+
+    def ai(self, game):
+        if not self.move(0, self.vy, game.level):
+            self.vy = -self.vy
+
+    def hit(self, game, dmg, kind, src):
+        if self.active and not self.hurt_t:
+            self.hurt_t = 10
+            sound.play('tink')
+            game.spark(self.rect.center)
+        return False
+
+    def draw_hp(self, surf, ox, oy):
+        pass
+
+
+def world_room(game):
+    import world
+    return world.TRIALS[game.trial['name']]['room'] if game.trial else (0, 0, 1, 1)
 
 
 def make_enemy(kind, x, y):

@@ -176,86 +176,29 @@ WORLD_H = 80             # rows below this are the trial rooms, reached only by 
 #   room: tile rect of the room (walls included), exactly one screen big
 #   portal: where the portal sits in the world; Octo lands just below it afterwards
 TRIALS = {
-    'storms': {
-        'title': 'TRIAL OF STORMS', 'color': (250, 204, 40), 'kind': 'waves',
-        'room': (0, 80, 15, 90), 'entry': (7.5, 5), 'portal': (83, 6),
-        'goal': "DEFEAT THREE WAVES OF ENEMIES!",
-        'waves': [
-            ['crab', 'crab', 'crab', 'crab', 'crab', 'puffer', 'puffer'],
-            ['jelly', 'jelly', 'jelly', 'urchin', 'urchin', 'crab', 'crab', 'puffer'],
-            ['puffer', 'puffer', 'puffer', 'jelly', 'jelly', 'jelly', 'urchin', 'crab', 'crab', 'crab', 'crab'],
-        ],
-        'spots': [(2, 2), (13, 2), (2, 8), (13, 8), (7, 1), (8, 9), (1, 5), (14, 5), (5, 5), (10, 5), (7, 8)],
-    },
-    'currents': {
-        'title': 'TRIAL OF CURRENTS', 'color': (184, 228, 255), 'kind': 'collect',
-        'room': (20, 80, 35, 90), 'entry': (7.5, 5), 'portal': (48, 58), 'time': 30,
-        'goal': "GRAB ALL 10 ORBS IN 30 SECONDS!",
-        'orbs': [(3, 3), (12, 3), (1, 5), (14, 5), (7, 4), (8, 6), (3, 7), (12, 7), (5, 1), (10, 9)],
-        'guards': [('puffer', 1, 1), ('puffer', 14, 1), ('puffer', 1, 9), ('puffer', 14, 9),
-                   ('jelly', 3, 5), ('jelly', 12, 5)],
-    },
-    'frost': {
-        'title': 'TRIAL OF FROST', 'color': (255, 150, 200), 'kind': 'survive',
-        'room': (60, 80, 75, 90), 'entry': (7.5, 5), 'portal': (128, 13), 'time': 25,
-        'goal': "DODGE THE URCHIN STORM FOR 25 SECONDS!", 'eyes': [], 'fast': 2.2,
-        'guards': [('urchin', 2, 2), ('urchin', 13, 2), ('urchin', 2, 8), ('urchin', 13, 8),
-                   ('urchin', 7, 2), ('urchin', 8, 8)],
-    },
-    'embers': {
-        'title': 'TRIAL OF EMBERS', 'color': (250, 130, 40), 'kind': 'waves',
-        'room': (80, 80, 95, 90), 'entry': (7.5, 5), 'portal': (150, 40),
-        'goal': "DEFEAT THREE WAVES OF FIERY FOES!",
-        'waves': [
-            ['lavacrab', 'lavacrab', 'lavacrab', 'lavacrab', 'puffer', 'puffer'],
-            ['lavacrab', 'lavacrab', 'lavacrab', 'urchin', 'urchin', 'jelly', 'jelly'],
-            ['lavacrab', 'lavacrab', 'lavacrab', 'lavacrab', 'puffer', 'puffer', 'jelly', 'jelly', 'urchin'],
-        ],
-        'spots': [(2, 1), (13, 1), (1, 5), (14, 5), (4, 9), (11, 9), (4, 1), (11, 1), (1, 9), (14, 9),
-                  (5, 5), (10, 5)],
-    },
-    'echoes': {
-        'title': 'TRIAL OF ECHOES', 'color': (80, 230, 150), 'kind': 'collect',
-        'room': (100, 80, 115, 90), 'entry': (7.5, 5), 'portal': (104, 59), 'time': 35,
-        'goal': "GRAB ALL 12 ORBS IN THE MAZE IN 35 SECONDS!",
-        'orbs': [(1, 1), (14, 1), (1, 9), (14, 9), (5, 2), (10, 8), (3, 3), (12, 7), (7, 4), (8, 6),
-                 (7, 1), (8, 9)],
-        'guards': [('jelly', 3, 5), ('jelly', 12, 5), ('puffer', 1, 5), ('puffer', 14, 5)],
-    },
-    'winds': {
-        'title': 'TRIAL OF WINDS', 'color': (240, 250, 255), 'kind': 'waves',
-        'room': (120, 80, 135, 90), 'entry': (7.5, 5), 'portal': (42, 106),
-        'goal': "FEND OFF THREE WAVES OF SKY RAIDERS!",
-        'waves': [
-            ['gull', 'gull', 'gull', 'gull', 'gull'],
-            ['gull', 'gull', 'gull', 'gull', 'puffer', 'puffer'],
-            ['gull', 'gull', 'gull', 'gull', 'gull', 'gull', 'jelly', 'jelly'],
-        ],
-        'spots': [(2, 1), (13, 1), (1, 5), (14, 5), (2, 9), (13, 9), (5, 1), (10, 9), (4, 5), (11, 5)],
-    },
-    'shadows': {
-        'title': 'TRIAL OF SHADOWS', 'color': (150, 100, 222), 'kind': 'survive',
-        'room': (40, 80, 55, 90), 'entry': (7.5, 8), 'portal': (80, 40), 'time': 25,
-        'goal': "SURVIVE THE BARRAGE FOR 25 SECONDS!",
-        'eyes': [(7.5, 5), (1.5, 1.5), (13.5, 1.5), (1.5, 8.5), (13.5, 8.5)],
-    },
-    # --- more portals: every trial gives a spirit pearl ---
-    'tides': {'title': 'TRIAL OF TIDES', 'color': (255, 170, 90), 'kind': 'waves', 'room': (140, 80, 155, 90), 'entry': (7.5, 5), 'portal': (87, 55), 'goal': 'DEFEAT THREE WAVES OF ENEMIES!', 'waves': [['jelly', 'crab', 'jelly', 'crab'], ['puffer', 'puffer', 'urchin', 'crab', 'crab', 'urchin'], ['crab', 'jelly', 'puffer', 'urchin', 'jelly', 'crab', 'jelly', 'crab']], 'spots': [(11, 1), (10, 1), (3, 1), (6, 1), (3, 6), (10, 2), (12, 9), (6, 9), (3, 9), (4, 1)]},
-    'sands': {'title': 'TRIAL OF SANDS', 'color': (120, 230, 150), 'kind': 'collect', 'room': (60, 92, 75, 102), 'entry': (7.5, 5), 'portal': (69, 24), 'time': 32, 'goal': 'GRAB ALL 8 ORBS IN 32 SECONDS!', 'orbs': [(8, 9), (3, 1), (3, 7), (14, 1), (12, 5), (7, 1), (8, 3), (6, 9)], 'guards': [('urchin', 4, 9), ('crab', 1, 7), ('crab', 12, 1)]},
-    'shells': {'title': 'TRIAL OF SHELLS', 'color': (255, 120, 170), 'kind': 'survive', 'room': (77, 92, 92, 102), 'entry': (7.5, 8), 'portal': (26, 41), 'time': 20, 'goal': 'SURVIVE FOR 20 SECONDS!', 'eyes': [(7.5, 5), (1.5, 1.5), (13.5, 1.5), (1.5, 8.5), (13.5, 8.5)]},
-    'roots': {'title': 'TRIAL OF ROOTS', 'color': (120, 200, 255), 'kind': 'waves', 'room': (94, 92, 109, 102), 'entry': (7.5, 5), 'portal': (17, 21), 'goal': 'DEFEAT THREE WAVES OF ENEMIES!', 'waves': [['puffer', 'crab', 'crab', 'puffer'], ['puffer', 'puffer', 'jelly', 'crab', 'puffer', 'crab'], ['jelly', 'jelly', 'crab', 'crab', 'jelly', 'crab', 'jelly', 'jelly']], 'spots': [(1, 1), (2, 3), (4, 1), (2, 4), (4, 9), (1, 4), (5, 1), (9, 1), (2, 6), (14, 9)]},
-    'tangles': {'title': 'TRIAL OF TANGLES', 'color': (200, 140, 255), 'kind': 'collect', 'room': (111, 92, 126, 102), 'entry': (7.5, 5), 'portal': (13, 19), 'time': 33, 'goal': 'GRAB ALL 9 ORBS IN 33 SECONDS!', 'orbs': [(14, 7), (4, 3), (1, 1), (6, 4), (11, 2), (2, 5), (3, 3), (6, 9), (14, 5)], 'guards': [('jelly', 14, 1), ('crab', 4, 9), ('crab', 14, 9)]},
+    'storms': {'title': 'TRIAL OF STORMS', 'color': (250, 204, 40), 'kind': 'waves', 'room': (0, 80, 15, 90), 'entry': (7.5, 5), 'portal': (83, 6), 'goal': 'DEFEAT THREE WAVES OF ENEMIES!', 'waves': [['crab', 'crab', 'crab', 'crab', 'crab', 'puffer', 'puffer'], ['jelly', 'jelly', 'jelly', 'urchin', 'urchin', 'crab', 'crab', 'puffer'], ['puffer', 'puffer', 'puffer', 'jelly', 'jelly', 'jelly', 'urchin', 'crab', 'crab', 'crab', 'crab']], 'spots': [(2, 2), (13, 2), (2, 8), (13, 8), (7, 1), (8, 9), (1, 5), (14, 5), (5, 5), (10, 5), (7, 8)]},
+    'currents': {'title': 'TRIAL OF CURRENTS', 'color': (184, 228, 255), 'kind': 'collect', 'room': (20, 80, 35, 90), 'entry': (7.5, 5), 'portal': (48, 58), 'time': 30, 'goal': 'GRAB THE ORBS WHILE THE CURRENT SWEEPS YOU EAST!', 'orbs': [(3, 3), (12, 3), (1, 5), (14, 5), (7, 4), (8, 6), (3, 7), (12, 7), (5, 1), (10, 9)], 'guards': [('puffer', 1, 1), ('puffer', 14, 1), ('puffer', 1, 9), ('puffer', 14, 9), ('jelly', 3, 5), ('jelly', 12, 5)], 'current': (0.6, 0.0)},
+    'frost': {'title': 'TRIAL OF FROST', 'color': (255, 150, 200), 'kind': 'defend', 'room': (60, 80, 75, 90), 'entry': (7.5, 7), 'portal': (128, 13), 'raiders': ['icecrab', 'icecrab', 'crab'], 'clam_at': (7.5, 5), 'time': 30, 'every': 75, 'spots': [(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1), (7, 1), (8, 1), (9, 1), (10, 1), (11, 1), (12, 1), (13, 1), (14, 1), (1, 2), (14, 2), (1, 3), (14, 3), (1, 4), (14, 4), (1, 5), (14, 5), (1, 6), (14, 6), (1, 7), (14, 7), (1, 8), (14, 8), (1, 9), (2, 9), (3, 9), (4, 9), (5, 9), (6, 9), (7, 9), (8, 9), (9, 9), (10, 9), (11, 9), (12, 9), (13, 9), (14, 9)], 'goal': 'PROTECT THE GIANT CLAM FOR 30 SECONDS!'},
+    'embers': {'title': 'TRIAL OF EMBERS', 'color': (250, 130, 40), 'kind': 'duel', 'room': (80, 80, 95, 90), 'entry': (7.5, 8), 'portal': (150, 40), 'boss': 'magma', 'boss_at': (7.5, 2), 'goal': 'A GUARDIAN BLOCKS THE WAY. DEFEAT IT!'},
+    'echoes': {'title': 'TRIAL OF ECHOES', 'color': (80, 230, 150), 'kind': 'collect', 'room': (100, 80, 115, 90), 'entry': (7.5, 5), 'portal': (104, 59), 'time': 35, 'goal': 'FIND ALL THE ORBS IN THE DARK!', 'orbs': [(1, 1), (14, 1), (1, 9), (14, 9), (5, 2), (10, 8), (3, 3), (12, 7), (7, 4), (8, 6), (7, 1), (8, 9)], 'guards': [('jelly', 3, 5), ('jelly', 12, 5), ('puffer', 1, 5), ('puffer', 14, 5)], 'dark': True},
+    'winds': {'title': 'TRIAL OF WINDS', 'color': (240, 250, 255), 'kind': 'race', 'room': (120, 80, 135, 90), 'entry': (1.5, 5), 'portal': (42, 106), 'current': (0.0, 0.45), 'goal': (14, 5), 'time': 20, 'sentries': [(4, 7), (6, 7), (9, 4), (11, 3), (13, 4)], 'goal_text': 'REACH THE FLAG IN 20 SECONDS - THE CURRENT FIGHTS YOU AND SENTRIES SWEEP THE LANES!'},
+    'shadows': {'title': 'TRIAL OF SHADOWS', 'color': (150, 100, 222), 'kind': 'survive', 'room': (40, 80, 55, 90), 'entry': (7.5, 8), 'portal': (80, 40), 'time': 25, 'goal': 'SURVIVE THE BARRAGE FOR 25 SECONDS!', 'eyes': [(7.5, 5), (1.5, 1.5), (13.5, 1.5), (1.5, 8.5), (13.5, 8.5)]},
+    'tides': {'title': 'TRIAL OF TIDES', 'color': (255, 170, 90), 'kind': 'chase', 'room': (140, 80, 155, 90), 'entry': (7.5, 5), 'portal': (87, 55), 'thief_at': (13, 2), 'time': 35, 'goal': 'A GOLDEN THIEF STOLE A PEARL! TAG IT 3 TIMES IN 35 SECONDS!', 'guards': [('puffer', 2, 8)]},
+    'sands': {'title': 'TRIAL OF SANDS', 'color': (120, 230, 150), 'kind': 'race', 'room': (60, 92, 75, 102), 'entry': (1.5, 5), 'portal': (69, 24), 'goal': (14, 5), 'time': 20, 'sentries': [(4, 3), (6, 3), (9, 9), (11, 1), (13, 4)], 'goal_text': 'REACH THE FLAG IN 20 SECONDS - DODGE THE SPIKED SENTRIES!'},
+    'shells': {'title': 'TRIAL OF SHELLS', 'color': (255, 120, 170), 'kind': 'defend', 'room': (77, 92, 92, 102), 'entry': (7.5, 7), 'portal': (26, 41), 'raiders': ['crab', 'crab', 'puffer'], 'clam_at': (7.5, 5), 'time': 30, 'every': 75, 'spots': [(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1), (7, 1), (8, 1), (9, 1), (10, 1), (11, 1), (12, 1), (13, 1), (14, 1), (1, 2), (14, 2), (1, 3), (14, 3), (1, 4), (14, 4), (1, 5), (14, 5), (1, 6), (14, 6), (1, 7), (14, 7), (1, 8), (14, 8), (1, 9), (2, 9), (3, 9), (4, 9), (5, 9), (6, 9), (7, 9), (8, 9), (9, 9), (10, 9), (11, 9), (12, 9), (13, 9), (14, 9)], 'goal': 'PROTECT THE GIANT CLAM FOR 30 SECONDS!'},
+    'roots': {'title': 'TRIAL OF ROOTS', 'color': (120, 200, 255), 'kind': 'duel', 'room': (94, 92, 109, 102), 'entry': (6.5, 8), 'portal': (17, 21), 'boss': 'wraith', 'boss_at': (7.5, 1), 'goal': 'A GUARDIAN BLOCKS THE WAY. DEFEAT IT!'},
+    'tangles': {'title': 'TRIAL OF TANGLES', 'color': (200, 140, 255), 'kind': 'collect', 'room': (111, 92, 126, 102), 'entry': (7.5, 5), 'portal': (13, 19), 'time': 33, 'goal': 'FIND ALL THE ORBS IN THE DARK!', 'orbs': [(14, 7), (4, 3), (1, 1), (6, 4), (11, 2), (2, 5), (3, 3), (6, 9), (14, 5)], 'guards': [('jelly', 14, 1), ('crab', 4, 9), ('crab', 14, 9)], 'dark': True},
     'thorns': {'title': 'TRIAL OF THORNS', 'color': (255, 230, 120), 'kind': 'waves', 'room': (128, 92, 143, 102), 'entry': (7.5, 5), 'portal': (70, 2), 'goal': 'DEFEAT THREE WAVES OF ENEMIES!', 'waves': [['crab', 'urchin', 'crab', 'urchin', 'urchin'], ['crab', 'puffer', 'crab', 'crab', 'urchin', 'urchin', 'puffer'], ['urchin', 'crab', 'urchin', 'crab', 'urchin', 'urchin', 'urchin', 'urchin', 'crab']], 'spots': [(3, 8), (2, 2), (2, 5), (13, 8), (6, 9), (11, 9), (1, 6), (14, 4), (12, 9), (2, 4)]},
-    'ripples': {'title': 'TRIAL OF RIPPLES', 'color': (150, 255, 230), 'kind': 'survive', 'room': (144, 92, 159, 102), 'entry': (7.5, 8), 'portal': (3, 34), 'time': 20, 'goal': 'SURVIVE FOR 20 SECONDS!', 'eyes': [(7.5, 5), (1.5, 1.5), (13.5, 1.5), (1.5, 8.5), (13.5, 8.5)]},
-    'mirrors': {'title': 'TRIAL OF MIRRORS', 'color': (255, 140, 100), 'kind': 'waves', 'room': (60, 104, 75, 114), 'entry': (7.5, 5), 'portal': (22, 25), 'goal': 'DEFEAT THREE WAVES OF ENEMIES!', 'waves': [['crab', 'jelly', 'jelly', 'puffer', 'jelly'], ['jelly', 'jelly', 'jelly', 'jelly', 'jelly', 'jelly', 'jelly'], ['crab', 'crab', 'puffer', 'jelly', 'jelly', 'jelly', 'crab', 'jelly', 'crab']], 'spots': [(1, 2), (5, 1), (12, 4), (14, 1), (3, 3), (2, 9), (12, 3), (2, 6), (2, 5), (13, 9)]},
-    'depths': {'title': 'TRIAL OF DEPTHS', 'color': (180, 180, 255), 'kind': 'collect', 'room': (77, 104, 92, 114), 'entry': (7.5, 5), 'portal': (93, 48), 'time': 34, 'goal': 'GRAB ALL 10 ORBS IN 34 SECONDS!', 'orbs': [(1, 6), (2, 5), (5, 4), (1, 4), (11, 5), (4, 7), (5, 6), (9, 3), (3, 6), (9, 5)], 'guards': [('jelly', 1, 6), ('puffer', 14, 6), ('urchin', 1, 8), ('puffer', 2, 9)]},
-    'wrecks': {'title': 'TRIAL OF WRECKS', 'color': (230, 255, 160), 'kind': 'waves', 'room': (94, 104, 109, 114), 'entry': (7.5, 5), 'portal': (2, 71), 'goal': 'DEFEAT THREE WAVES OF ENEMIES!', 'waves': [['jelly', 'urchin', 'crab', 'crab', 'urchin', 'jelly'], ['urchin', 'puffer', 'puffer', 'crab', 'urchin', 'jelly', 'puffer', 'puffer'], ['jelly', 'jelly', 'jelly', 'urchin', 'jelly', 'puffer', 'urchin', 'crab', 'jelly', 'crab']], 'spots': [(2, 1), (11, 7), (12, 2), (1, 1), (1, 2), (11, 3), (2, 2), (2, 6), (10, 9), (5, 2)]},
-    'anchors': {'title': 'TRIAL OF ANCHORS', 'color': (255, 200, 220), 'kind': 'survive', 'room': (111, 104, 126, 114), 'entry': (7.5, 8), 'portal': (61, 58), 'time': 20, 'goal': 'SURVIVE FOR 20 SECONDS!', 'eyes': [(7.5, 5), (1.5, 1.5), (13.5, 1.5), (1.5, 8.5), (13.5, 8.5)]},
-    'chill': {'title': 'TRIAL OF CHILL', 'color': (140, 220, 255), 'kind': 'collect', 'room': (128, 104, 143, 114), 'entry': (7.5, 5), 'portal': (97, 2), 'time': 34, 'goal': 'GRAB ALL 10 ORBS IN 34 SECONDS!', 'orbs': [(6, 1), (2, 5), (1, 6), (14, 1), (2, 6), (10, 6), (9, 5), (11, 7), (3, 9), (1, 9)], 'guards': [('icecrab', 13, 8), ('icecrab', 3, 2), ('icecrab', 9, 1), ('urchin', 12, 8), ('urchin', 3, 9)]},
+    'ripples': {'title': 'TRIAL OF RIPPLES', 'color': (150, 255, 230), 'kind': 'survive', 'room': (144, 92, 159, 102), 'entry': (7.5, 8), 'portal': (3, 34), 'time': 20, 'goal': 'SURVIVE 20 SECONDS AGAINST THE SWIRLING CURRENT!', 'eyes': [(7.5, 5), (1.5, 1.5), (13.5, 1.5), (1.5, 8.5), (13.5, 8.5)], 'current': (-0.5, 0.25)},
+    'mirrors': {'title': 'TRIAL OF MIRRORS', 'color': (255, 140, 100), 'kind': 'chase', 'room': (60, 104, 75, 114), 'entry': (7.5, 5), 'portal': (22, 25), 'thief_at': (13, 1), 'time': 35, 'goal': 'A GOLDEN THIEF STOLE A PEARL! TAG IT 3 TIMES IN 35 SECONDS!', 'guards': [('puffer', 2, 7)]},
+    'depths': {'title': 'TRIAL OF DEPTHS', 'color': (180, 180, 255), 'kind': 'chase', 'room': (77, 104, 92, 114), 'entry': (7.5, 5), 'portal': (93, 48), 'dark': True, 'thief_at': (13, 1), 'time': 35, 'goal': "A GOLDEN THIEF STOLE A PEARL! TAG IT 3 TIMES IN 35 SECONDS! (IT'S DARK IN HERE...)", 'guards': [('puffer', 1, 8)]},
+    'wrecks': {'title': 'TRIAL OF WRECKS', 'color': (230, 255, 160), 'kind': 'duel', 'room': (94, 104, 109, 114), 'entry': (6.5, 8), 'portal': (2, 71), 'boss': 'captain', 'boss_at': (7.5, 1), 'goal': 'A GUARDIAN BLOCKS THE WAY. DEFEAT IT!'},
+    'anchors': {'title': 'TRIAL OF ANCHORS', 'color': (255, 200, 220), 'kind': 'defend', 'room': (111, 104, 126, 114), 'entry': (7.5, 7), 'portal': (61, 58), 'raiders': ['crab', 'puffer', 'jelly'], 'clam_at': (7.5, 5), 'time': 30, 'every': 75, 'spots': [(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1), (7, 1), (8, 1), (9, 1), (10, 1), (11, 1), (12, 1), (13, 1), (14, 1), (1, 2), (14, 2), (1, 3), (14, 3), (1, 4), (14, 4), (1, 5), (14, 5), (1, 6), (14, 6), (1, 7), (14, 7), (1, 8), (14, 8), (1, 9), (2, 9), (3, 9), (4, 9), (5, 9), (6, 9), (7, 9), (8, 9), (9, 9), (10, 9), (11, 9), (12, 9), (13, 9), (14, 9)], 'goal': 'PROTECT THE GIANT CLAM FOR 30 SECONDS!'},
+    'chill': {'title': 'TRIAL OF CHILL', 'color': (140, 220, 255), 'kind': 'race', 'room': (128, 104, 143, 114), 'entry': (1.5, 5), 'portal': (97, 2), 'sentry_speed': 1.5, 'goal': (14, 5), 'time': 20, 'sentries': [(4, 7), (6, 5), (9, 6), (11, 7), (13, 9)], 'goal_text': 'REACH THE FLAG IN 20 SECONDS - DODGE THE SPIKED SENTRIES!'},
     'cinders': {'title': 'TRIAL OF CINDERS', 'color': (255, 160, 60), 'kind': 'waves', 'room': (144, 104, 159, 114), 'entry': (7.5, 5), 'portal': (157, 28), 'goal': 'DEFEAT THREE WAVES OF ENEMIES!', 'waves': [['urchin', 'lavacrab', 'urchin', 'puffer', 'urchin', 'puffer', 'puffer'], ['puffer', 'lavacrab', 'puffer', 'urchin', 'lavacrab', 'puffer', 'lavacrab', 'urchin', 'puffer'], ['urchin', 'urchin', 'lavacrab', 'lavacrab', 'puffer', 'urchin', 'puffer', 'lavacrab', 'urchin', 'lavacrab', 'lavacrab']], 'spots': [(14, 1), (4, 2), (4, 3), (10, 1), (3, 4), (5, 2), (13, 9), (13, 5), (5, 1), (14, 2)]},
-    'ruins': {'title': 'TRIAL OF RUINS', 'color': (190, 255, 120), 'kind': 'survive', 'room': (60, 116, 75, 126), 'entry': (7.5, 5), 'portal': (98, 70), 'time': 20, 'goal': 'SURVIVE FOR 20 SECONDS!', 'eyes': [], 'fast': 1.8, 'guards': [('icecrab', 11, 7), ('lavacrab', 14, 9), ('jelly', 3, 3), ('icecrab', 14, 2), ('icecrab', 2, 6)]},
-    'clouds': {'title': 'TRIAL OF CLOUDS', 'color': (240, 240, 255), 'kind': 'waves', 'room': (77, 116, 92, 126), 'entry': (7.5, 5), 'portal': (44, 119), 'goal': 'DEFEAT THREE WAVES OF ENEMIES!', 'waves': [['gull', 'gull', 'gull', 'gull', 'gull', 'puffer', 'gull'], ['puffer', 'gull', 'gull', 'gull', 'puffer', 'puffer', 'gull', 'gull', 'gull'], ['gull', 'gull', 'puffer', 'gull', 'gull', 'gull', 'gull', 'gull', 'puffer', 'gull', 'puffer']], 'spots': [(4, 7), (5, 8), (11, 1), (2, 4), (4, 9), (5, 2), (14, 8), (1, 8), (14, 9), (11, 9)]},
-    'gales': {'title': 'TRIAL OF GALES', 'color': (255, 120, 120), 'kind': 'collect', 'room': (94, 116, 109, 126), 'entry': (7.5, 5), 'portal': (4, 102), 'time': 35, 'goal': 'GRAB ALL 11 ORBS IN 35 SECONDS!', 'orbs': [(3, 7), (5, 9), (14, 5), (10, 5), (2, 3), (6, 3), (13, 7), (11, 6), (12, 4), (11, 4), (1, 2)], 'guards': [('puffer', 13, 8), ('gull', 4, 9), ('gull', 12, 8), ('puffer', 2, 8), ('gull', 11, 8), ('gull', 4, 7)]},
+    'ruins': {'title': 'TRIAL OF RUINS', 'color': (190, 255, 120), 'kind': 'survive', 'room': (60, 116, 75, 126), 'entry': (7.5, 5), 'portal': (98, 70), 'time': 20, 'goal': 'SURVIVE 20 SECONDS... IN THE DARK!', 'eyes': [], 'fast': 1.8, 'guards': [('icecrab', 11, 7), ('lavacrab', 14, 9), ('jelly', 3, 3), ('icecrab', 14, 2), ('icecrab', 2, 6)], 'dark': True},
+    'clouds': {'title': 'TRIAL OF CLOUDS', 'color': (240, 240, 255), 'kind': 'duel', 'room': (77, 116, 92, 126), 'entry': (7.5, 8), 'portal': (44, 119), 'boss': 'storm', 'boss_at': (7.5, 2), 'goal': 'A GUARDIAN BLOCKS THE WAY. DEFEAT IT!'},
+    'gales': {'title': 'TRIAL OF GALES', 'color': (255, 120, 120), 'kind': 'race', 'room': (94, 116, 109, 126), 'entry': (1.5, 5), 'portal': (4, 102), 'current': (0.0, -0.5), 'goal': (14, 5), 'time': 20, 'sentries': [(4, 2), (6, 8), (9, 4), (11, 7), (13, 4)], 'goal_text': 'REACH THE FLAG IN 20 SECONDS - THE CURRENT FIGHTS YOU AND SENTRIES SWEEP THE LANES!'},
 }
 SHRINE_RECT = (28, 0, 67, 21)     # tiles (x0, y0, x1, y1) of the Sunken Shrine
 
@@ -758,7 +701,10 @@ def validate():
                     inside.add((nx, ny))
                     q.append((nx, ny))
         pts = [('entry', *t['entry'])] + [('orb', x, y) for x, y in t.get('orbs', [])] + \
-              [(k, x, y) for k, x, y in t.get('guards', [])] + [('spot', x, y) for x, y in t.get('spots', [])]
+              [(k, x, y) for k, x, y in t.get('guards', [])] + [('spot', x, y) for x, y in t.get('spots', [])] + \
+              [(k, *t[k]) for k in ('boss_at', 'thief_at', 'clam_at') if k in t] + \
+              ([('flag', *t['goal'])] if t['kind'] == 'race' else []) + \
+              [('sentry', x, y) for x, y in t.get('sentries', [])]
         for k, x, y in pts:
             if (int(x) + x0, int(y) + y0) not in inside:
                 problems.append(f"{name}: {k} at {(x, y)} is not reachable floor")
