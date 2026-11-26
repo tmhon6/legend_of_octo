@@ -9,7 +9,7 @@ import random
 import pygame
 
 import gfx
-from settings import SCREEN_H, SCREEN_W
+from settings import AUTHOR, SCREEN_H, SCREEN_W, VERSION
 
 W, H = SCREEN_W, SCREEN_H
 FLOOR_Y = 192              # where the sand starts
@@ -288,7 +288,8 @@ class TitleScene:
             gfx.text(scr, item, W // 2 + 4, y, (255, 255, 255) if on else (140, 160, 200), center=True)
         if (t // 25) % 2:
             gfx.text(scr, "TAP TO PLAY" if getattr(self, 'touch', False) else "PRESS ENTER OR CLICK TO PLAY", W // 2, py - 10, (255, 255, 255), center=True)
-        gfx.text(scr, "A FAN TRIBUTE", W // 2, H - 8, (110, 120, 150), center=True)
+        gfx.text(scr, "BY " + AUTHOR, W // 2, H - 8, (150, 165, 200), center=True)
+        gfx.text(scr, VERSION.upper(), 4, H - 8, (100, 115, 150))
         # fade in from black when the game starts
         if t < 60:
             veil = pygame.Surface((W, H))

@@ -1,7 +1,8 @@
 __pycache__/
 *.pkl
 .venv/
-savegame.json
+savegame*.json
+octo/version.py
 build/
 *.swp
 assets/

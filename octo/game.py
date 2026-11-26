@@ -15,7 +15,7 @@ from title import TitleScene
 from touch import TouchControls, touch_device
 from entities import (DIRS, ENEMY_TYPES, MiniBoss, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
                       EnemyShot, Hermie, Particle, Pickup, Player, Puff, Shelly, Urchin)
-from settings import FPS, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
+from settings import SAVE_SLOT, FPS, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
 from world import ARENAS, Level
 
 DIR_KEYS = {
@@ -33,9 +33,12 @@ PAUSE_KEYS = {pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_p, pygame.K_ESCAPE}
 WARP_KEYS = {pygame.K_t}
 FORM_KEYS = {pygame.K_1: 0, pygame.K_2: 1, pygame.K_3: 2, pygame.K_4: 3, pygame.K_5: 4,
              pygame.K_6: 5, pygame.K_7: 6, pygame.K_8: 7, pygame.K_9: 8}
-SAVE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'savegame.json')
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SAVE_PATH = os.path.join(_ROOT, f'savegame_{SAVE_SLOT}.json')     # one save per version
+LEGACY_SAVE_PATH = os.path.join(_ROOT, 'savegame.json')            # saves from before versions existed
 WEB = sys.platform == 'emscripten'      # running in a browser (pygbag build)
-WEB_SAVE_KEY = 'legend_of_octo_save'
+WEB_SAVE_KEY = f'legend_of_octo_save_{SAVE_SLOT}'
+LEGACY_WEB_SAVE_KEY = 'legend_of_octo_save'
 
 
 def _storage():
@@ -46,10 +49,10 @@ def _storage():
 def save_exists():
     if WEB:
         try:
-            return bool(_storage().getItem(WEB_SAVE_KEY))
+            return bool(_storage().getItem(WEB_SAVE_KEY) or _storage().getItem(LEGACY_WEB_SAVE_KEY))
         except Exception:
             return False
-    return os.path.exists(SAVE_PATH)
+    return os.path.exists(SAVE_PATH) or os.path.exists(LEGACY_SAVE_PATH)
 
 
 def write_save(text):
@@ -62,11 +65,12 @@ def write_save(text):
 
 def read_save():
     if WEB:
-        text = _storage().getItem(WEB_SAVE_KEY)
+        text = _storage().getItem(WEB_SAVE_KEY) or _storage().getItem(LEGACY_WEB_SAVE_KEY)
         if not text:
             raise OSError("no saved game")
         return str(text)
-    with open(SAVE_PATH) as f:
+    path = SAVE_PATH if os.path.exists(SAVE_PATH) else LEGACY_SAVE_PATH
+    with open(path) as f:
         return f.read()
 
 

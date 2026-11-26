@@ -1,9 +1,11 @@
-# Builds the browser version with pygbag and publishes it to GitHub Pages on every push to main.
+# Builds every tagged version (plus the newest development build) with pygbag, and the start page
+# that asks which version to play, then publishes it all to GitHub Pages.
 name: Deploy web version
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -20,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # all history and tags, so every version can be built
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -28,10 +32,10 @@ jobs:
           sudo apt-get update && sudo apt-get install -y ffmpeg
           pip install pygame pygbag==0.9.3
       - name: Build
-        run: python build_web.py
+        run: python build_site.py
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: build/web
+          path: build/site
 
   deploy:
     needs: build

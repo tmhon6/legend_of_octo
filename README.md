@@ -1,5 +1,7 @@
 # Legend of Octo
 
+By Minu Hong.
+
 ## ▶ [Play it in your browser](https://tmhon6.github.io/legend_of_octo/)
 
 No download needed. Wait about 15 seconds for it to load, click or tap the page, then press Enter or tap again.
@@ -25,6 +27,16 @@ The same code also runs in a web browser through [pygbag](https://pypi.org/proje
     .venv/bin/pip install pygbag            # first time only
     .venv/bin/python build_web.py           # builds build/web/
     .venv/bin/python build_web.py --serve   # builds, then serves it at http://localhost:8000
+
+### Versions
+
+Every git tag like `v1.0.0` is a version. The web page asks which version to play, and each version
+keeps its own saved game. The title screen shows the version you're running. To release one:
+
+    git tag -a v1.1.0 -m "Mini-bosses and touch controls"
+    git push origin v1.1.0
+
+`build_site.py` builds every tagged version, plus the newest development build, into `build/site/`.
 
 Pushing to `main` on GitHub runs `.github/workflows/pages.yml`, which builds the web version and
 publishes it to GitHub Pages. In the repo, set **Settings → Pages → Source** to **GitHub Actions**.
@@ -100,4 +112,4 @@ a shell shield, deep ink and a heart shell. Bubble bombs blast open cracked rock
 * `sound.py`: chiptune synth for SFX and music (cached to `.sound_cache.pkl`)
 * `game.py`: state machine, trials, shop, save/load, warping, HUD and drawing
 
-Desktop saves go to `savegame.json` in the project folder. Browser saves stay in that browser.
+Desktop saves go to `savegame_<version>.json` in the project folder (one per version). Browser saves stay in that browser.
