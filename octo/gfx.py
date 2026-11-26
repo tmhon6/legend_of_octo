@@ -132,10 +132,45 @@ OCTO_PAL.update({
                    (60, 40, 0), (255, 180, 60)),
 })
 
-MOOD_NAMES = {'blue': 'HAPPY', 'mad': 'GRUMPY', 'zap': 'ZAPPY', 'ice': 'CHILLY', 'ghost': 'SPOOKY',
-              'bubble': 'BUBBLY', 'spiky': 'SPIKY', 'glow': 'GLOWY', 'air': 'AIRY',
-              'stormy': 'STORMY', 'whippy': 'WHIPPY', 'prickly': 'PRICKLY', 'quaky': 'QUAKY',
-              'wispy': 'WISPY', 'breezy': 'BREEZY', 'frosty': 'FROSTY', 'sparky': 'SPARKY'}
+# the newer base forms the temple altar teaches
+OCTO_PAL.update({
+    'magnet': _pal((60, 10, 20), (220, 60, 60), (255, 150, 150), (160, 30, 40), (205, 205, 215),
+                   (30, 0, 0), (240, 240, 255), (255, 200, 200)),
+    'clammy': _pal((90, 50, 40), (230, 170, 140), (255, 222, 204), (180, 110, 90), (255, 244, 224),
+                   (50, 20, 10), (255, 140, 150)),
+    'starry': _pal((10, 10, 40), (44, 44, 124), (96, 96, 196), (22, 22, 84), (255, 220, 90),
+                   (255, 236, 150), (255, 220, 90)),
+    'wobbly': _pal((90, 30, 110), (230, 140, 240), (255, 212, 255), (180, 90, 200), (140, 240, 255),
+                   (60, 0, 70), (255, 120, 220)),
+    'stony': _pal((50, 48, 44), (140, 135, 125), (190, 185, 175), (100, 96, 90), (220, 200, 140),
+                  (20, 20, 20), (170, 160, 150), (200, 195, 185)),
+})
+
+
+class _FusedPalettes(dict):
+    """Fused forms are coloured on demand: a blend of both parents with the element as an accent."""
+
+    def __missing__(self, mood):
+        import forms
+        f = forms.FUSIONS.get(mood)
+        if not f:
+            raise KeyError(mood)
+        pa, pb = self[f['parents'][0]], self[f['parents'][1]]
+        accent = forms.ELEMENTS[f['element']][2]
+        pal = {}
+        for k in set(pa) | set(pb):
+            ca, cb = pa.get(k, pb.get(k)), pb.get(k, pa.get(k))
+            pal[k] = tuple((x * 3 + y * 2) // 5 for x, y in zip(ca, cb))
+        pal['P'] = accent                       # the element shows in the tentacle tips
+        pal['c'] = tuple((x + y) // 2 for x, y in zip(pal.get('c', accent), accent))
+        pal['w'] = (255, 255, 255)
+        self[mood] = pal
+        return pal
+
+
+OCTO_PAL = _FusedPalettes(OCTO_PAL)
+import forms as _forms   # noqa: E402  (names for every form, fused ones included)
+MOOD_NAMES = _forms.NAMES
 
 OCTO_BODY = [
     "................",
@@ -188,7 +223,12 @@ def _octo_face(rows, mood, facing):
         rows[10][mx] = 'k'
         rows[10][mx + 1] = 'k'
         return
-    if mood in ('spiky', 'prickly', 'quaky'):
+    if '+' in mood:                 # fused: wear a parent's face
+        a, b = mood.split('+')
+        mood = 'mad' if {'mad', 'spiky', 'stony'} & {a, b} else 'ghost' if 'ghost' in (a, b) else 'blue'
+        if mood == 'ghost':
+            return _octo_face(rows, 'ghost', facing)
+    if mood in ('spiky', 'prickly', 'quaky', 'stony', 'magnet'):
         mood = 'mad'
     for i, x0 in enumerate(eyes):
         if mood != 'mad':
@@ -221,17 +261,30 @@ def _octo_face(rows, mood, facing):
         rows[9][mx + 2] = 'm'
 
 
-def make_octo():
+def _octo_frames(mood):
     out = {}
-    for mood in OCTO_PAL:
-        out[mood] = {}
-        for facing in ('down', 'up', 'left', 'right'):
-            frames = []
-            for legs in OCTO_LEGS:
-                rows = [list(r) for r in OCTO_BODY + legs]
-                _octo_face(rows, mood, facing)
-                frames.append(from_strings([''.join(r) for r in rows], OCTO_PAL[mood]))
-            out[mood][facing] = frames
+    for facing in ('down', 'up', 'left', 'right'):
+        frames = []
+        for legs in OCTO_LEGS:
+            rows = [list(r) for r in OCTO_BODY + legs]
+            _octo_face(rows, mood, facing)
+            frames.append(from_strings([''.join(r) for r in rows], OCTO_PAL[mood]))
+        out[facing] = frames
+    return out
+
+
+class _LazyOcto(dict):
+    """Octo's sprites per form, drawn the first time a form is needed."""
+
+    def __missing__(self, mood):
+        self[mood] = _octo_frames(mood)
+        return self[mood]
+
+
+def make_octo():
+    out = _LazyOcto()
+    for mood in ('blue', 'mad'):
+        out[mood] = _octo_frames(mood)
     return out
 
 

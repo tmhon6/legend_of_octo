@@ -18,7 +18,8 @@ JET_COOLDOWN = 40
 SLAP_AIM_RANGE = 32      # px between centres: about the slap's real reach
 # attacks that STRONG forms (and fused forms) power up
 PLAYER_HIT_KINDS = {'ink', 'slap', 'zap', 'ice', 'wisp', 'spike', 'glow', 'bubble', 'bomb', 'thorns',
-                    'hail', 'whip', 'roll', 'quake', 'lantern', 'whirl', 'trap', 'chain'}
+                    'hail', 'whip', 'roll', 'quake', 'lantern', 'whirl', 'trap', 'chain', 'nova', 'shell',
+                    'star', 'mine', 'boulder'}
 INK_AIM_RANGE = 200      # px: ink homes its launch angle on enemies this close (on screen)
 
 
@@ -92,6 +93,7 @@ class Player(Entity):
         self.fog_t = 0
         self.fog_cd = 0
         self.regen_t = 0
+        self.spirit = 0          # spirit pearls from trials, traded at the temple altar
         self.analog = None       # (x, y) from the touch joystick, length up to 1
         self.roll_t = 0
         self.roll_dir = (0, 0)
@@ -177,7 +179,7 @@ class Player(Entity):
             return
         if self.shoot_cd:
             return
-        if self.mood in forms.FUSIONS:
+        if self.mood in forms.FUSIONS or self.mood in forms.OWN_SHAPE:
             self.fusion_attack(game, cx, cy)
             return
         if self.mood == 'bubble':
@@ -199,12 +201,14 @@ class Player(Entity):
         if self.mood == 'glow':
             # blinding flash: stuns and stings every enemy on screen
             game.glow_flash = 14
-            for e in game.enemies:
+            # balance: a short daze for everything on screen, damage only up close, long recharge
+            for e in list(game.enemies):
                 if e.active and game.view_rect.colliderect(e.rect):
-                    e.hit(game, 1, 'glow', (cx, cy))
+                    if math.hypot(e.rect.centerx - cx, e.rect.centery - cy) < 56:
+                        e.hit(game, 1, 'glow', (cx, cy))
                     if not e.dead:
-                        e.frozen = max(e.frozen, 30 if getattr(e, 'boss', False) else 100)
-            self.shoot_cd = 110
+                        e.frozen = max(e.frozen, 15 if getattr(e, 'boss', False) else 45)
+            self.shoot_cd = 240
             self.attack_t = 10
             sound.play('warp')
             return
@@ -225,7 +229,7 @@ class Player(Entity):
             dx, dy = DIRS[self.facing]
         if self.mood == 'ice':
             game.shots.append(IceShard(cx - 4 + dx * 8, cy - 4 + dy * 8, dx * 3.6, dy * 3.6))
-            self.shoot_cd = 26
+            self.shoot_cd = 44
             sound.play('ice')
         else:
             # two wisps curl out to either side, then home in on enemies (through walls!)
@@ -249,57 +253,65 @@ class Player(Entity):
         return DIRS[self.facing]
 
     def fusion_attack(self, game, cx, cy):
-        """The brand-new attacks of the fused forms."""
-        m = self.mood
+        """Attacks built from a shape and an element: every fused form, plus the newer base forms."""
+        if self.mood in forms.FUSIONS:
+            f = forms.FUSIONS[self.mood]
+            self.cast(game, f['shape'], f['element'], cx, cy)
+        else:
+            self.cast(game, forms.OWN_SHAPE[self.mood], 'pull' if self.mood == 'magnet' else None, cx, cy)
+
+    def cast(self, game, shape, elem, cx, cy):
+        col = forms.ELEMENTS[elem][2] if elem in forms.ELEMENTS else None
         self.attack_t = 10
-        if m == 'stormy':
+        if shape == 'hail':
             seen = [e for e in game.enemies if e.active and game.view_rect.colliderect(e.rect)]
             seen.sort(key=lambda e: math.hypot(e.rect.centerx - cx, e.rect.centery - cy))
             spots = [e.rect.center for e in seen[:6]] or \
                 [(cx + math.cos(a) * 40, cy + math.sin(a) * 40) for a in (0.5, 2.6, 4.7)]
             for i, (tx, ty) in enumerate(spots):
-                game.shots.append(Hail(tx, ty, delay=i * 6))
+                game.shots.append(Hail(tx, ty, delay=i * 6, elem=elem))
             self.shoot_cd = 75
             sound.play('zap')
-        elif m == 'whippy':
+        elif shape == 'whip':
             dx, dy = self.aim(game, cx, cy, 60)
-            game.shots.append(InkWhip(self, math.atan2(dy, dx)))
+            game.shots.append(InkWhip(self, math.atan2(dy, dx), elem))
             self.shoot_cd = 26
             sound.play('slap')
-        elif m == 'prickly':
+        elif shape == 'roll':
             self.roll_dir = self.aim(game, cx, cy)
             self.roll_t = 34
+            self.roll_elem = elem
             self.attack_t = 0
             self.roll_hits = set()
             self.shoot_cd = 55
             sound.play('jet')
-        elif m == 'quaky':
+        elif shape == 'quake':
             for d in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                game.shots.append(Quake(cx, cy, d))
+                game.shots.append(Quake(cx, cy, d, elem))
             game.shake = 10
             self.shoot_cd = 60
             sound.play('boom')
-        elif m == 'wispy':
+        elif shape == 'lantern':
             if any(isinstance(s, Lantern) for s in game.shots):
                 sound.play('nope')
                 return
-            game.shots.append(Lantern(self))
+            game.shots.append(Lantern(self, elem))
             self.shoot_cd = 40
             sound.play('wisp')
-        elif m == 'breezy':
+        elif shape == 'whirl':
             if any(isinstance(s, Whirlpool) for s in game.shots):
                 sound.play('nope')
                 return
             dx, dy = self.aim(game, cx, cy)
-            game.shots.append(Whirlpool(cx, cy, dx, dy))
+            game.shots.append(Whirlpool(cx, cy, dx, dy, elem))
             self.shoot_cd = 60
             sound.play('whoosh')
-        elif m == 'frosty':
+        elif shape == 'trap':
             dx, dy = self.aim(game, cx, cy)
-            game.shots.append(TrapBubble(cx - 6 + dx * 8, cy - 6 + dy * 8, dx * 2.4, dy * 2.4))
+            game.shots.append(TrapBubble(cx - 6 + dx * 8, cy - 6 + dy * 8, dx * 2.4, dy * 2.4, elem))
             self.shoot_cd = 40
             sound.play('bubble')
-        elif m == 'sparky':
+        elif shape == 'chain':
             hit, (px, py) = [], (cx, cy)
             for reach in (130, 90, 90, 90, 90):
                 best = None
@@ -312,13 +324,52 @@ class Player(Entity):
                     break
                 hit.append(best[1])
                 px, py = best[1].rect.center
-            points = [(cx, cy)] + [e.rect.center for e in hit]
             for e in hit:
-                e.hit(game, 2, 'chain', (cx, cy))
-            game.effects.append(Bolt(points if len(points) > 1 else
-                                     [(cx, cy), (cx + DIRS[self.facing][0] * 24, cy + DIRS[self.facing][1] * 24)]))
+                strike(game, e, 2, 'chain', (cx, cy), elem)
+            points = [(cx, cy)] + [e.rect.center for e in hit]
+            if len(points) == 1:
+                points.append((cx + DIRS[self.facing][0] * 24, cy + DIRS[self.facing][1] * 24))
+            game.effects.append(Bolt(points, col))
             self.shoot_cd = 45
             sound.play('zap')
+        elif shape == 'nova':
+            game.shots.append(Nova(cx, cy, elem))
+            if elem == 'pull':          # Magnety: every pickup on screen comes flying in
+                for it in game.pickups:
+                    if it.kind != 'orb' and game.view_rect.colliderect(it.rect):
+                        it.pulled = True
+            self.shoot_cd = 70
+            sound.play('warp')
+        elif shape == 'boomerang':
+            if sum(isinstance(s, Boomerang) for s in game.shots) >= 1:
+                sound.play('nope')
+                return
+            dx, dy = self.aim(game, cx, cy)
+            game.shots.append(Boomerang(self, dx, dy, elem))
+            self.shoot_cd = 20
+            sound.play('whoosh')
+        elif shape == 'seekers':
+            dx, dy = self.aim(game, cx, cy)
+            base = math.atan2(dy, dx)
+            for da in (-0.9, 0, 0.9):
+                game.shots.append(Seeker(cx - 3, cy - 3, base + da, elem))
+            self.shoot_cd = 50
+            sound.play('pearl')
+        elif shape == 'mines':
+            mines = [s for s in game.shots if isinstance(s, Mine)]
+            if len(mines) >= 3:
+                mines[0].dead = True
+            game.shots.append(Mine(cx - 5, cy - 5, elem))
+            self.shoot_cd = 24
+            sound.play('bubble')
+        elif shape == 'boulder':
+            if any(isinstance(s, Boulder) for s in game.shots):
+                sound.play('nope')
+                return
+            dx, dy = DIRS[self.facing] if not game.nearest_enemy((cx, cy), 120) else self.aim(game, cx, cy)
+            game.shots.append(Boulder(cx, cy, dx, dy, elem))
+            self.shoot_cd = 50
+            sound.play('shut')
 
     def _roll_update(self, game):
         """Prickly's spike roll: barrel along, bounce off walls, spike everything in the way."""
@@ -334,7 +385,7 @@ class Player(Entity):
         for e in game.enemies:
             if e.active and e not in self.roll_hits and r.colliderect(e.rect):
                 self.roll_hits.add(e)
-                e.hit(game, 2, 'roll', self.rect.center)
+                strike(game, e, 2, 'roll', self.rect.center, getattr(self, 'roll_elem', None))
         if self.roll_t % 3 == 0:
             game.effects.append(Particle(*self.rect.center, -dx * 0.6, -dy * 0.6, (255, 200, 120), 14))
 
@@ -725,6 +776,8 @@ class Enemy(Entity):
         self.last_slap = -1
         self.frozen = 0
         self.trapped = 0
+        self.burn = 0
+        self.chill_t = 0
         self.t = random.randint(0, 100)
 
     @property
@@ -737,6 +790,16 @@ class Enemy(Entity):
             return
         if self.hurt_t:
             self.hurt_t -= 1
+        if self.chill_t:
+            self.chill_t -= 1
+        if self.burn:
+            self.burn -= 1
+            if self.burn % 45 == 0:
+                self.hurt_t = 0
+                self.hit(game, 1, 'burn', (self.rect.centerx, self.rect.bottom))
+                game.effects.append(Particle(self.rect.centerx, self.rect.top, 0, -0.6, (255, 140, 60), 16))
+                if self.dead:
+                    return
         if self.trapped:
             self.trapped -= 1
             self.frozen = max(self.frozen, 1)
@@ -745,7 +808,7 @@ class Enemy(Entity):
                 game.splat(self.rect.center, (200, 240, 255))
                 sound.play('bubble')
                 self.frozen = 0
-                self.hit(game, 3, 'trap', (self.rect.centerx, self.rect.bottom))
+                strike(game, self, 3, 'trap', (self.rect.centerx, self.rect.bottom), getattr(self, 'trap_elem', None))
                 return
         if self.frozen:
             self.frozen -= 1
@@ -1395,7 +1458,9 @@ SHELLY_TALK = [
     "HAPPY BLUE OCTO SQUIRTS INK - PRESS C TO SWAP A LONG LINE FOR A SHORT WIDE BURST. GRUMPY BLACK OCTO SLAPS HARD AND CUTS KELP.",
     "INK PASSES RIGHT THROUGH JELLIES, AND SLAPPING AN URCHIN... OUCH. CHOOSE YOUR MOOD WISELY!",
     "IN A PINCH, PRESS V TO JET AWAY IN A PUFF OF INK. NOTHING CAN TOUCH YOU MID-JET, AND THE INK STINGS!",
-    "GLOWING PORTALS LEAD TO TRIALS. BEAT ONE TO LEARN A NEW FORM - AND THE PORTAL BECOMES A WARP POINT (PRESS T).",
+    "GLOWING PORTALS LEAD TO TRIALS. BEAT ONE TO EARN A SPIRIT PEARL - AND THE PORTAL BECOMES A WARP POINT (PRESS T).",
+    "BRING THREE SPIRIT PEARLS TO THE ALTAR ON TOP OF THE OCTO TEMPLE AND IT WILL TEACH YOU A NEW FORM. "
+    "YOU PICK WHICH ONE!",
     "FAR TO THE EAST LIE THE FROZEN SHELF, THE EMBER VENTS AND THE DARK SUNKEN CITY. ICE, LAVA AND GHOSTLY WALLS "
     "BAR THE WAY... ZAPPY, CHILLY AND SPOOKY OCTO COULD GET THROUGH!",
     "SEE THAT BUBBLING GEYSER EAST OF THE TEMPLE? STEP IN AND IT'LL BLAST YOU UP TO THE SKY ISLANDS!",
@@ -1513,7 +1578,7 @@ class IceShard(Entity):
             if e.active and r.colliderect(e.rect):
                 e.hit(game, 1, 'ice', (r.centerx - self.vx * 4, r.centery - self.vy * 4))
                 if not e.dead:
-                    e.frozen = 45 if getattr(e, 'boss', False) else 170
+                    freeze(e, 70)
                     e.kb_t = 0
                 self.dead = True
                 game.splat(r.center, (200, 240, 255))
@@ -1732,7 +1797,7 @@ class EnemyShot(Entity):
         p = game.player
         if r.colliderect(p.rect):
             fx, fy = DIRS[p.facing]
-            if 'shield' in p.items and self.vx * fx + self.vy * fy < 0 and not p.dash_t:
+            if ('shield' in p.items or p.stat('shield', 0)) and self.vx * fx + self.vy * fy < 0 and not p.dash_t:
                 sound.play('tink')          # bounced off the shell shield
                 game.spark(r.center)
             else:
@@ -1756,6 +1821,7 @@ class Pickup(Entity):
         self.item_id = item_id
         self.life = life
         self.t = 0
+        self.pulled = False          # flying towards Octo (Magnety)
         w, h = self._img().get_size()
         self.hb = (0, 0, max(w, 8), max(h, 8))
 
@@ -1862,13 +1928,94 @@ class Bubble:
 # Fused-form attacks (see forms.FUSIONS)
 # ===========================================================================
 
+def freeze(e, frames):
+    """Freeze an enemy -- but once it thaws it can't be re-frozen for a couple of seconds."""
+    if e.chill_t:
+        return
+    if getattr(e, 'boss', False):
+        frames //= 3
+    e.frozen = max(e.frozen, frames)
+    e.chill_t = frames + 120
+
+
+def strike(game, e, dmg, kind, src, elem=None):
+    """Hit an enemy with a shaped attack and apply its element."""
+    if elem == 'heavy':
+        dmg += 1
+    if not e.hit(game, dmg, kind, src):
+        return
+    boss = getattr(e, 'boss', False)
+    cx, cy = e.rect.center
+    if elem == 'freeze' and not e.dead:
+        freeze(e, 60)
+    elif elem == 'burn' and not e.dead:
+        e.burn = 180
+    elif elem == 'stun' and not e.dead:
+        e.frozen = max(e.frozen, 20 if boss else 60)
+        game.effects.append(Daze(e))
+    elif elem == 'drain' and random.random() < 0.35:
+        p = game.player
+        if p.hp < p.max_hp:
+            p.hp += 1
+            game.burst(p.rect.center, (255, 110, 160), 5)
+    elif elem == 'loot' and random.random() < 0.4:
+        it = Pickup(cx - 4, cy - 4, 'pearl', life=420)
+        game.pickups.append(it)
+    elif elem == 'spark':
+        best = None
+        for o in game.enemies:
+            if o is not e and o.active:
+                d = math.hypot(o.rect.centerx - cx, o.rect.centery - cy)
+                if d < 56 and (best is None or d < best[0]):
+                    best = (d, o)
+        if best:
+            o = best[1]
+            o.hurt_t = 0
+            o.hit(game, 1, 'chain', (cx, cy))
+            game.effects.append(Bolt([(cx, cy), o.rect.center], (255, 255, 140), t=8))
+    if elem in forms.ELEMENTS:
+        col = forms.ELEMENTS[elem][2]
+        for _ in range(4):
+            game.effects.append(Particle(cx, cy, random.uniform(-1.4, 1.4), random.uniform(-1.4, 1.4), col, 14))
+
+
+class Daze:
+    """Little stars circling a stunned enemy's head."""
+
+    def __init__(self, e):
+        self.e = e
+        self.t = 50
+        self.dead = False
+
+    def update(self, game):
+        self.t -= 1
+        if self.t <= 0 or self.e.dead:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        r = self.e.rect
+        for i in range(3):
+            a = self.t * 0.2 + i * 2.1
+            x = r.centerx + ox + math.cos(a) * 7
+            y = r.top + oy - 2 + math.sin(a) * 2
+            pygame.draw.circle(surf, (255, 250, 150), (int(x), int(y)), 1)
+
+
+def _glow(surf, x, y, r, col, alpha=70):
+    g = pygame.Surface((r * 2 + 2, r * 2 + 2), pygame.SRCALPHA)
+    pygame.draw.circle(g, col + (alpha,), (r + 1, r + 1), r)
+    surf.blit(g, (x - r - 1, y - r - 1))
+
+
 class Hail(Entity):
-    """Stormy: a crackling hailstone that drops out of the water above onto a target."""
+    """Hail: stones that drop out of the water above onto a target."""
     FALL = 22
 
-    def __init__(self, tx, ty, delay=0):
+    def __init__(self, tx, ty, delay=0, elem='freeze'):
         super().__init__(tx, ty)
         self.t = -delay
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (220, 245, 255)))[2]
 
     @property
     def rect(self):
@@ -1879,15 +2026,12 @@ class Hail(Entity):
         if self.t == self.FALL:
             game.shake = max(game.shake, 3)
             sound.play('ice')
-            for e in game.enemies:
+            for e in list(game.enemies):
                 if e.active and self.rect.colliderect(e.rect):
-                    e.hit(game, 2, 'hail', (self.x, self.y - 20))
-                    if not e.dead:
-                        e.frozen = max(e.frozen, 30 if getattr(e, 'boss', False) else 90)
+                    strike(game, e, 2, 'hail', (self.x, self.y - 20), self.elem)
             for i in range(10):
                 a = i / 10 * math.tau
-                game.effects.append(Particle(self.x, self.y, math.cos(a) * 1.6, math.sin(a) * 1.6,
-                                             (220, 245, 255), 16))
+                game.effects.append(Particle(self.x, self.y, math.cos(a) * 1.6, math.sin(a) * 1.6, self.col, 16))
         if self.t > self.FALL + 4:
             self.dead = True
 
@@ -1896,24 +2040,30 @@ class Hail(Entity):
             return
         x, y = round(self.x) + ox, round(self.y) + oy
         k = min(1.0, self.t / self.FALL)
-        pygame.draw.ellipse(surf, (20, 40, 70), (x - 6 * k, y + 2, 12 * k + 1, 4))      # shadow
+        sh = pygame.Surface((14, 6), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 10, 30, int(40 + 80 * k)), (7 - 7 * k, 0, 14 * k + 1, 6))
+        surf.blit(sh, (x - 7, y))
         if self.t < self.FALL:
             hy = y - int((1 - k) * 70)
-            pygame.draw.line(surf, (255, 255, 160), (x - 3, hy - 14), (x + 2, hy - 6))
-            pygame.draw.polygon(surf, (230, 250, 255), [(x, hy - 5), (x + 4, hy), (x, hy + 5), (x - 4, hy)])
-            pygame.draw.polygon(surf, (120, 190, 240), [(x, hy - 5), (x + 4, hy), (x, hy + 5), (x - 4, hy)], 1)
+            _glow(surf, x, hy, 7, self.col, 60)
+            pygame.draw.line(surf, self.col, (x - 1, hy - 14), (x, hy - 6))
+            pts = [(x, hy - 5), (x + 4, hy), (x, hy + 5), (x - 4, hy)]
+            pygame.draw.polygon(surf, (240, 250, 255), pts)
+            pygame.draw.polygon(surf, self.col, pts, 1)
 
 
 class InkWhip:
-    """Whippy: an inky tentacle that sweeps a wide arc in front of Octo."""
+    """Whip: an inky tentacle that sweeps a wide arc in front of Octo."""
     SWEEP, REACH, TIME = 2.4, 40, 12
 
-    def __init__(self, owner, angle):
+    def __init__(self, owner, angle, elem=None):
         self.owner = owner
         self.a0 = angle - self.SWEEP / 2
         self.t = 0
         self.hit = set()
         self.dead = False
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (200, 190, 255)))[2]
 
     def tip_angle(self):
         return self.a0 + self.SWEEP * min(1.0, self.t / self.TIME)
@@ -1922,16 +2072,15 @@ class InkWhip:
         self.t += 1
         cx, cy = self.owner.rect.center
         swept = self.tip_angle()
-        for e in game.enemies:
+        for e in list(game.enemies):
             if not e.active or e in self.hit:
                 continue
             ex, ey = e.rect.center
             d = math.hypot(ex - cx, ey - cy)
-            ang = math.atan2(ey - cy, ex - cx)
-            rel = (ang - self.a0) % math.tau
+            rel = (math.atan2(ey - cy, ex - cx) - self.a0) % math.tau
             if d < self.REACH + 8 and rel <= swept - self.a0 + 0.2:
                 self.hit.add(e)
-                e.hit(game, 2, 'whip', (cx, cy))
+                strike(game, e, 2, 'whip', (cx, cy), self.elem)
         if self.t >= self.TIME + 4:
             self.dead = True
 
@@ -1944,21 +2093,24 @@ class InkWhip:
             bend = math.sin(i / 8 * math.pi) * 0.35
             pts.append((cx + ox + math.cos(a - bend) * r, cy + oy + math.sin(a - bend) * r))
         pygame.draw.lines(surf, (20, 16, 50), False, pts, 5)
-        pygame.draw.lines(surf, (70, 60, 150), False, pts, 2)
-        for p in pts[2::2]:
-            pygame.draw.circle(surf, (200, 190, 255), (int(p[0]), int(p[1])), 1)
+        pygame.draw.lines(surf, (70, 60, 150), False, pts, 3)
+        pygame.draw.lines(surf, self.col, False, pts[3:], 1)
+        for p in pts[2::2]:       # suckers
+            pygame.draw.circle(surf, (230, 220, 255), (int(p[0]), int(p[1]) + 1), 1)
 
 
 class Quake(Entity):
-    """Quaky: a shockwave rumbling along the sea floor. Cracks rock it passes over."""
+    """Quake: a shockwave rumbling along the sea floor. Cracks rock it passes over."""
     hb = (0, 0, 12, 12)
     who = 'shot'
 
-    def __init__(self, cx, cy, d):
+    def __init__(self, cx, cy, d, elem=None):
         super().__init__(cx - 6, cy - 6)
         self.d = d
         self.life = 30
         self.hit = set()
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (230, 200, 140)))[2]
 
     def update(self, game):
         self.life -= 1
@@ -1970,10 +2122,10 @@ class Quake(Entity):
             self.dead = True
             game.effects.append(Puff(self.x - 2, self.y - 2))
             return
-        for e in game.enemies:
+        for e in list(game.enemies):
             if e.active and e not in self.hit and r.inflate(8, 8).colliderect(e.rect):
                 self.hit.add(e)
-                e.hit(game, 2, 'quake', (r.centerx - self.d[0] * 10, r.centery - self.d[1] * 10))
+                strike(game, e, 2, 'quake', (r.centerx - self.d[0] * 10, r.centery - self.d[1] * 10), self.elem)
         if self.life % 2 == 0:
             game.effects.append(Particle(r.centerx + random.uniform(-4, 4), r.centery + random.uniform(-4, 4),
                                          random.uniform(-0.5, 0.5), -1.0, (150, 120, 80), 14, grav=0.1, size=2))
@@ -1983,18 +2135,20 @@ class Quake(Entity):
         for i in range(3):
             pygame.draw.circle(surf, (110, 90, 60), (r.centerx - self.d[0] * i * 5, r.centery - self.d[1] * i * 5),
                                5 - i)
-        pygame.draw.circle(surf, (230, 200, 140), r.center, 3)
+        pygame.draw.circle(surf, self.col, r.center, 3)
 
 
 class Lantern(Entity):
-    """Wispy: a spirit lantern that circles Octo for a while, burning what it touches."""
+    """Lantern: a spirit lantern that circles Octo for a while, hitting what it touches."""
     hb = (0, 0, 12, 12)
 
-    def __init__(self, owner):
+    def __init__(self, owner, elem='burn'):
         super().__init__(owner.x, owner.y)
         self.owner = owner
         self.ang = 0.0
         self.life = 420
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (160, 255, 200)))[2]
 
     def update(self, game):
         self.life -= 1
@@ -2004,11 +2158,11 @@ class Lantern(Entity):
         self.y = cy + math.sin(self.ang) * 26 - 6
         if self.life <= 0:
             self.dead = True
-            game.burst(self.rect.center, (180, 255, 200), 10)
+            game.burst(self.rect.center, self.col, 10)
             return
-        for e in game.enemies:
+        for e in list(game.enemies):
             if e.active and not e.hurt_t and self.rect.colliderect(e.rect):
-                e.hit(game, 2, 'lantern', self.owner.rect.center)
+                strike(game, e, 2, 'lantern', self.owner.rect.center, self.elem)
         for sh in game.shots:
             if isinstance(sh, EnemyShot) and self.rect.colliderect(sh.rect):
                 sh.dead = True
@@ -2017,26 +2171,25 @@ class Lantern(Entity):
     def draw(self, surf, ox=0, oy=0):
         x, y = round(self.x) + ox + 6, round(self.y) + oy + 6
         flick = 1 if (self.life // 4) % 2 else 0
-        glow = pygame.Surface((24, 24), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (160, 255, 200, 60), (12, 12), 11 + flick)
-        surf.blit(glow, (x - 12, y - 12))
+        _glow(surf, x, y, 11 + flick, self.col, 55)
         pygame.draw.rect(surf, (60, 40, 90), (x - 4, y - 5, 8, 10))
-        pygame.draw.rect(surf, (200, 255, 210), (x - 3, y - 4, 6, 8))
+        pygame.draw.rect(surf, self.col, (x - 3, y - 4, 6, 8))
+        pygame.draw.rect(surf, (255, 255, 240), (x - 1, y - 2, 2, 4))
         pygame.draw.line(surf, (60, 40, 90), (x - 2, y - 7), (x + 2, y - 7))
-        if self.life < 60 and (self.life // 4) % 2:
-            pygame.draw.rect(surf, (255, 255, 255), (x - 3, y - 4, 6, 8))
 
 
 class Whirlpool(Entity):
-    """Breezy: a slow spinning whirlpool that drags nearby enemies in and churns them."""
+    """Whirlpool: a slow spinning vortex that drags nearby enemies in and churns them."""
     hb = (0, 0, 16, 16)
     who = 'shot'
 
-    def __init__(self, cx, cy, dx, dy):
+    def __init__(self, cx, cy, dx, dy, elem='stun'):
         super().__init__(cx - 8, cy - 8)
         self.vx, self.vy = dx * 0.9, dy * 0.9
         self.life = 210
         self.t = 0
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (200, 240, 255)))[2]
 
     def update(self, game):
         self.t += 1
@@ -2047,7 +2200,7 @@ class Whirlpool(Entity):
             self.dead = True
             return
         cx, cy = self.rect.center
-        for e in game.enemies:
+        for e in list(game.enemies):
             if not e.active:
                 continue
             ex, ey = e.rect.center
@@ -2055,28 +2208,34 @@ class Whirlpool(Entity):
             if d < 52 and not getattr(e, 'boss', False) and d > 4:
                 e.move((cx - ex) / d * 0.7, (cy - ey) / d * 0.7, game.level)
             if d < 16 and not e.hurt_t:
-                e.hit(game, 1, 'whirl', (cx, cy))
+                strike(game, e, 1, 'whirl', (cx, cy), self.elem)
+        if self.t % 3 == 0:
+            a = random.uniform(0, math.tau)
+            game.effects.append(Particle(cx + math.cos(a) * 16, cy + math.sin(a) * 10,
+                                         -math.sin(a) * 1.2, math.cos(a) * 0.8, (200, 235, 255), 12))
 
     def draw(self, surf, ox=0, oy=0):
         cx, cy = self.rect.center
         cx, cy = cx + ox, cy + oy
+        _glow(surf, cx, cy, 15, (120, 190, 240), 35)
         for i in range(3):
             r = 14 - i * 4
             a = self.t * (0.25 + i * 0.1)
             rect = pygame.Rect(cx - r, cy - r * 0.6, r * 2, r * 1.2)
-            pygame.draw.arc(surf, (200, 240, 255), rect, a, a + 3.6, 2 if i == 0 else 1)
-            pygame.draw.arc(surf, (120, 190, 240), rect, a + 3.14, a + 5.5, 1)
+            pygame.draw.arc(surf, (220, 245, 255), rect, a, a + 3.6, 2 if i == 0 else 1)
+            pygame.draw.arc(surf, self.col, rect, a + 3.14, a + 5.5, 1)
 
 
 class TrapBubble(Entity):
-    """Frosty: a freezing bubble. It traps an enemy, which floats helplessly, then pops for big damage."""
+    """Trap: a bubble that traps an enemy, which floats helplessly, then pops for big damage."""
     hb = (0, 0, 12, 12)
     who = 'shot'
 
-    def __init__(self, x, y, vx, vy):
+    def __init__(self, x, y, vx, vy, elem='freeze'):
         super().__init__(x, y)
         self.vx, self.vy = vx, vy
         self.life = 90
+        self.elem = elem
 
     def update(self, game):
         self.x += self.vx
@@ -2087,15 +2246,16 @@ class TrapBubble(Entity):
             self.dead = True
             game.splat(r.center, (200, 240, 255))
             return
-        for e in game.enemies:
+        for e in list(game.enemies):
             if e.active and not e.trapped and r.colliderect(e.rect):
                 self.dead = True
                 if getattr(e, 'boss', False):
-                    e.hit(game, 3, 'trap', r.center)
+                    strike(game, e, 3, 'trap', r.center, self.elem)
                     if not e.dead:
                         e.frozen = max(e.frozen, 40)
                 else:
                     e.trapped = 150
+                    e.trap_elem = self.elem
                     e.kb_t = 0
                 sound.play('ice')
                 return
@@ -2108,11 +2268,12 @@ class TrapBubble(Entity):
 
 
 class Bolt:
-    """Sparky: a jagged chain of lightning between the enemies it struck."""
+    """A jagged lightning bolt between points."""
 
-    def __init__(self, points):
+    def __init__(self, points, col=None, t=14):
         self.points = points
-        self.t = 14
+        self.col = col or (255, 255, 160)
+        self.t = t
         self.dead = False
 
     def update(self, game):
@@ -2128,8 +2289,268 @@ class Bolt:
                 pts.append((x0 + (x1 - x0) * k + random.uniform(-4, 4) + ox,
                             y0 + (y1 - y0) * k + random.uniform(-4, 4) + oy))
             pts.append((x1 + ox, y1 + oy))
-            pygame.draw.lines(surf, (255, 255, 160), False, pts, 3 if self.t > 8 else 1)
+            pygame.draw.lines(surf, self.col, False, pts, 3 if self.t > 8 else 1)
             pygame.draw.lines(surf, (255, 255, 255), False, pts, 1)
+
+
+class Nova:
+    """Nova: a ring of force that rings out around Octo. Magnety's version also drags things in."""
+
+    def __init__(self, cx, cy, elem=None):
+        self.x, self.y = cx, cy
+        self.r = 6
+        self.hit = set()
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (180, 200, 255)))[2]
+        self.dead = False
+
+    def update(self, game):
+        self.r += 4
+        for e in list(game.enemies):
+            if e.active and e not in self.hit:
+                ex, ey = e.rect.center
+                d = math.hypot(ex - self.x, ey - self.y)
+                if d < self.r + 6:
+                    self.hit.add(e)
+                    if self.elem == 'pull':
+                        if not getattr(e, 'boss', False) and d > 1:
+                            for _ in range(8):
+                                e.move((self.x - ex) / d * 2, (self.y - ey) / d * 2, game.level)
+                            e.frozen = max(e.frozen, 40)
+                        strike(game, e, 1, 'nova', (self.x, self.y))
+                    else:
+                        strike(game, e, 2, 'nova', (self.x, self.y), self.elem)
+        if self.r > 80:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        a = max(0, 200 - self.r * 2)
+        ring = pygame.Surface((self.r * 2 + 4, self.r * 2 + 4), pygame.SRCALPHA)
+        pygame.draw.circle(ring, self.col + (a,), (self.r + 2, self.r + 2), self.r, 3)
+        pygame.draw.circle(ring, (255, 255, 255, a), (self.r + 2, self.r + 2), max(1, self.r - 3), 1)
+        surf.blit(ring, (self.x - self.r - 2 + ox, self.y - self.r - 2 + oy))
+
+
+class Boomerang(Entity):
+    """Boomerang: a spinning shell that flies out and comes back to Octo, hitting both ways."""
+    hb = (0, 0, 12, 12)
+    who = 'shot'
+
+    def __init__(self, owner, dx, dy, elem=None):
+        cx, cy = owner.rect.center
+        super().__init__(cx - 6, cy - 6)
+        self.owner = owner
+        self.vx, self.vy = dx * 3.6, dy * 3.6
+        self.t = 0
+        self.back = False
+        self.hits = set()
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (250, 200, 170)))[2]
+
+    def update(self, game):
+        self.t += 1
+        if not self.back:
+            self.x += self.vx
+            self.y += self.vy
+            self.vx *= 0.95
+            self.vy *= 0.95
+            if self.t > 26 or game.level.blocked(self.rect, 'shot'):
+                self.back = True
+                self.hits = set()
+        else:
+            ox, oy = self.owner.rect.center
+            cx, cy = self.rect.center
+            d = math.hypot(ox - cx, oy - cy)
+            if d < 10:
+                self.dead = True
+                return
+            self.x += (ox - cx) / d * 4
+            self.y += (oy - cy) / d * 4
+        for e in list(game.enemies):
+            if e.active and e not in self.hits and self.rect.colliderect(e.rect):
+                self.hits.add(e)
+                strike(game, e, 2, 'shell', self.rect.center, self.elem)
+        if self.t > 150:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        cx, cy = self.rect.centerx + ox, self.rect.centery + oy
+        a = self.t * 0.6
+        pts = [(cx + math.cos(a + i * math.tau / 3) * 6, cy + math.sin(a + i * math.tau / 3) * 6) for i in range(3)]
+        pygame.draw.polygon(surf, (120, 70, 50), pts)
+        pygame.draw.polygon(surf, self.col, pts, 2)
+        pygame.draw.circle(surf, (255, 240, 220), (cx, cy), 2)
+
+
+class Seeker(Entity):
+    """Seekers: little stars that curve towards the nearest enemy."""
+    hb = (0, 0, 6, 6)
+    who = 'shot'
+
+    def __init__(self, x, y, ang, elem=None):
+        super().__init__(x, y)
+        self.ang = ang
+        self.life = 120
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (255, 240, 150)))[2]
+        self.trail = []
+
+    def update(self, game):
+        self.life -= 1
+        cx, cy = self.rect.center
+        target = game.nearest_enemy((cx, cy), 160)
+        if target:
+            tx, ty = target.rect.center
+            want = math.atan2(ty - cy, tx - cx)
+            diff = (want - self.ang + math.pi) % math.tau - math.pi
+            self.ang += max(-0.12, min(0.12, diff))
+        self.x += math.cos(self.ang) * 2.6
+        self.y += math.sin(self.ang) * 2.6
+        self.trail = (self.trail + [(cx, cy)])[-6:]
+        if self.life <= 0 or game.level.blocked(self.rect, 'shot'):
+            self.dead = True
+            return
+        for e in list(game.enemies):
+            if e.active and self.rect.colliderect(e.rect):
+                strike(game, e, 2, 'star', self.rect.center, self.elem)
+                self.dead = True
+                return
+
+    def draw(self, surf, ox=0, oy=0):
+        for i, (x, y) in enumerate(self.trail):
+            pygame.draw.circle(surf, self.col, (int(x + ox), int(y + oy)), max(1, i // 2))
+        cx, cy = self.rect.centerx + ox, self.rect.centery + oy
+        a = self.life * 0.3
+        pts = []
+        for i in range(10):
+            r = 5 if i % 2 == 0 else 2
+            pts.append((cx + math.cos(a + i * math.pi / 5) * r, cy + math.sin(a + i * math.pi / 5) * r))
+        pygame.draw.polygon(surf, (255, 255, 230), pts)
+        pygame.draw.polygon(surf, self.col, pts, 1)
+
+
+class Mine(Entity):
+    """Mines: a jelly-blob mine sitting on the sea floor until an enemy bumps it."""
+    hb = (0, 0, 10, 10)
+    who = 'shot'
+
+    def __init__(self, x, y, elem=None):
+        super().__init__(x, y)
+        self.t = 0
+        self.life = 900
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (230, 150, 255)))[2]
+
+    def update(self, game):
+        self.t += 1
+        self.life -= 1
+        if self.life <= 0:
+            self.dead = True
+            return
+        if self.t < 20:
+            return
+        for e in list(game.enemies):
+            if e.active and self.rect.inflate(8, 8).colliderect(e.rect):
+                self.dead = True
+                cx, cy = self.rect.center
+                sound.play('boom')
+                game.shake = max(game.shake, 4)
+                for o in list(game.enemies):
+                    if o.active and math.hypot(o.rect.centerx - cx, o.rect.centery - cy) < 26:
+                        strike(game, o, 3, 'mine', (cx, cy), self.elem)
+                for i in range(12):
+                    a = i / 12 * math.tau
+                    game.effects.append(Particle(cx, cy, math.cos(a) * 2, math.sin(a) * 2, self.col, 18, size=2))
+                return
+
+    def draw(self, surf, ox=0, oy=0):
+        x, y = round(self.x) + ox + 5, round(self.y) + oy + 6
+        wob = math.sin(self.t * 0.15)
+        pygame.draw.ellipse(surf, (60, 20, 80), (x - 6, y - 4 + wob, 12, 9))
+        pygame.draw.ellipse(surf, self.col, (x - 5, y - 4 + wob, 10, 7))
+        if (self.t // 12) % 2:
+            pygame.draw.circle(surf, (255, 255, 255), (x, int(y - 1 + wob)), 1)
+
+
+class Boulder(Entity):
+    """Boulder: a big rolling rock that crushes everything in its path and cracks rock walls."""
+    hb = (0, 0, 14, 14)
+    who = 'shot'
+
+    def __init__(self, cx, cy, dx, dy, elem=None):
+        super().__init__(cx - 7 + dx * 10, cy - 7 + dy * 10)
+        self.vx, self.vy = dx * 2.6, dy * 2.6
+        self.t = 0
+        self.hits = set()
+        self.elem = elem
+
+    def update(self, game):
+        self.t += 1
+        self.x += self.vx
+        self.y += self.vy
+        r = self.rect
+        game.blast_tiles(r.centerx, r.centery, 10)
+        if game.level.blocked(r, 'shot') or self.t > 90:
+            self.dead = True
+            game.shake = max(game.shake, 6)
+            sound.play('shut')
+            for _ in range(8):
+                game.effects.append(Particle(r.centerx, r.centery, random.uniform(-2, 2), random.uniform(-2, 1),
+                                             (140, 120, 100), 20, grav=0.15, size=2))
+            return
+        for e in list(game.enemies):
+            if e.active and e not in self.hits and r.inflate(4, 4).colliderect(e.rect):
+                self.hits.add(e)
+                strike(game, e, 3, 'boulder', (r.centerx - self.vx * 4, r.centery - self.vy * 4), self.elem)
+        if self.t % 4 == 0:
+            game.effects.append(Particle(r.centerx, r.bottom, random.uniform(-0.5, 0.5), -0.4,
+                                         (170, 150, 110), 14))
+
+    def draw(self, surf, ox=0, oy=0):
+        cx, cy = self.rect.centerx + ox, self.rect.centery + oy
+        sh = pygame.Surface((18, 6), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 20, 90), (0, 0, 18, 6))
+        surf.blit(sh, (cx - 9, cy + 5))
+        pygame.draw.circle(surf, (90, 80, 70), (cx, cy), 8)
+        pygame.draw.circle(surf, (140, 126, 106), (cx - 1, cy - 1), 7)
+        a = self.t * 0.25 * (1 if self.vx >= 0 else -1)
+        for i in range(3):
+            pygame.draw.line(surf, (90, 80, 70), (cx, cy), (cx + math.cos(a + i * 2.1) * 6, cy + math.sin(a + i * 2.1) * 6))
+        pygame.draw.circle(surf, (190, 176, 150), (cx - 3, cy - 3), 2)
+        if self.elem in forms.ELEMENTS:
+            pygame.draw.circle(surf, forms.ELEMENTS[self.elem][2], (cx, cy), 8, 1)
+
+
+# ===========================================================================
+# The spirit altar (top of the Octo Temple)
+# ===========================================================================
+
+class Altar(Entity):
+    hb = (0, 2, 32, 22)
+
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.t = 0
+        self.lit = 0
+
+    def update(self, game):
+        self.t += 1
+        self.lit = min(3, game.player.spirit)
+
+    def draw(self, surf, ox=0, oy=0):
+        x, y = round(self.x) + ox, round(self.y) + oy
+        pygame.draw.rect(surf, (120, 100, 70), (x + 2, y + 6, 28, 10))
+        pygame.draw.rect(surf, (200, 180, 136), (x + 2, y + 4, 28, 4))
+        pygame.draw.rect(surf, (90, 74, 52), (x + 2, y + 4, 28, 12), 1)
+        for i in range(3):
+            cx = x + 8 + i * 8
+            pygame.draw.circle(surf, (60, 46, 30), (cx, y + 4), 3)
+            if i < self.lit:
+                glow = 2 + ((self.t // 10 + i) % 2)
+                pygame.draw.circle(surf, (190, 140, 255), (cx, y + 4), glow)
+                surf.set_at((cx - 1, y + 3), (255, 255, 255))
+        if self.lit >= 3 and (self.t // 15) % 2:
+            pygame.draw.line(surf, (220, 190, 255), (x + 16, y - 6), (x + 16, y - 2))
 
 
 # ===========================================================================
