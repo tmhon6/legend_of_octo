@@ -35,6 +35,7 @@ keeps its own saved game. The title screen shows the version you're running. To 
 
     git tag -a v1.1.0 -m "Mini-bosses and touch controls"
     git push origin v1.1.0
+    gh workflow run pages.yml        # republish the site so the new version appears
 
 `build_site.py` builds every tagged version, plus the newest development build, into `build/site/`.
 
