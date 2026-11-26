@@ -7,7 +7,8 @@ By Minu Hong.
 No download needed. Wait about 15 seconds for it to load, click or tap the page, then press Enter or tap again.
 Works with a keyboard on a computer, or with on-screen touch controls on phones and tablets.
 On a phone, play sideways: the controls sit on both sides of the game, and your first tap goes full
-screen. On an iPhone, use Share → Add to Home Screen to play full screen.
+screen (the FULL / EXIT button toggles it). Put your thumb anywhere on the left half and the D-pad
+appears under it. On an iPhone, use Share → Add to Home Screen to play full screen.
 
 A top-down undersea adventure starring Octo, the reversible octopus. It's a fan tribute to the
 1st-gen 2D action-adventure style, built in pygame.

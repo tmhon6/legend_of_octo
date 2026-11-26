@@ -58,6 +58,18 @@ window.octoFullscreen = function () {
     if (p && p.then) { p.then(lock).catch(function () {}); } else { lock(); }
   } catch (e) {}
 };
+window.octoCanFullscreen = function () {
+  var el = document.documentElement;
+  return !!(el.requestFullscreen || el.webkitRequestFullscreen);
+};
+window.octoToggleFullscreen = function () {
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    var ex = document.exitFullscreen || document.webkitExitFullscreen;
+    if (ex) { try { ex.call(document); } catch (e) {} }
+  } else {
+    window.octoFullscreen();
+  }
+};
 (function () {
   if (!(window.matchMedia && matchMedia('(pointer: coarse)').matches)) return;
   var once = function () {

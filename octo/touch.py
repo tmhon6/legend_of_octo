@@ -51,12 +51,18 @@ def viewport():
         return None
 
 
-def go_fullscreen():
-    """Ask the browser for full screen + landscape (only works right after a tap)."""
+def toggle_fullscreen():
+    """Enter or leave full screen (entering only works right after a tap).
+    Returns False when the browser can't do full screen at all (iPhone Safari)."""
     try:
-        _window().octoFullscreen()
+        w = _window()
+        if not w.octoCanFullscreen():
+            return False
+        w.octoToggleFullscreen()
+        return True
     except Exception as e:
         print("fullscreen:", e)
+        return True
 
 
 def is_fullscreen():
@@ -98,6 +104,7 @@ class TouchControls:
         self.side = 0               # width of each landscape side panel
         self.gx = 0                 # where the game picture sits on the display
         self.vp = None
+        self.stick = None           # where the thumb landed: the D-pad floats there while held
         self.layout()
 
     # ---- setup -------------------------------------------------------------
@@ -225,6 +232,7 @@ class TouchControls:
             dx, dy, r = self.dpad
             if math.hypot(x - dx, y - dy) <= r + 10:
                 self.fingers[fid] = 'dpad'
+                self.stick = None
                 self.move(fid, pos)
                 return
             for name, (bx, by, br, key, _) in self.buttons.items():
@@ -238,10 +246,20 @@ class TouchControls:
                     self.fingers[fid] = name
                     self.lit[name] = 8
                     if name == 'full':
-                        go_fullscreen()
+                        if not toggle_fullscreen():
+                            g.say(["THIS BROWSER CAN'T GO FULL SCREEN.",
+                                   "ON AN IPHONE: TAP SHARE, THEN 'ADD TO HOME SCREEN'. OPEN LEGEND OF OCTO "
+                                   "FROM ITS ICON AND IT PLAYS FULL SCREEN."])
                     else:
                         self.press(key)
                     return
+            # anywhere else on the left half: the D-pad appears under your thumb
+            w = pygame.display.get_surface().get_width() if pygame.display.get_surface() else SCREEN_W
+            if st in ('play', 'warp', 'fuse') and x < w / 2:
+                self.fingers[fid] = 'dpad'
+                self.stick = (x, y)
+                self.dir = None
+                return
         # a tap anywhere else
         self.fingers[fid] = 'tap'
         if st == 'title':
@@ -263,7 +281,7 @@ class TouchControls:
     def move(self, fid, pos):
         if self.fingers.get(fid) != 'dpad':
             return
-        dx, dy, r = self.dpad
+        dx, dy = self.stick or self.dpad[:2]
         vx, vy = pos[0] - dx, pos[1] - dy
         if math.hypot(vx, vy) < 6:
             new = None
@@ -279,6 +297,7 @@ class TouchControls:
     def up(self, fid):
         if self.fingers.pop(fid, None) == 'dpad':
             self.dir = None
+            self.stick = None
 
     # ---- drawing -----------------------------------------------------------
     def present(self, disp):
@@ -330,16 +349,19 @@ class TouchControls:
             return c + (alpha,)
         # pills
         for (name, label, _), rect in zip(PILLS, self.pill_rects):
-            if name == 'full' and (not WEB or is_fullscreen()):
-                continue
+            if name == 'full':
+                if not WEB:
+                    continue
+                label = "EXIT" if is_fullscreen() else "FULL"
             lit = name in self.lit
             pygame.draw.rect(s, col((50, 60, 100), lit), rect, border_radius=6)
             pygame.draw.rect(s, col((140, 160, 220)), rect, 1, border_radius=6)
             if name == 'mute' and not __import__('sound').music_on:
                 label = "SOUND"
             gfx.text(s, label, rect.centerx, rect.centery - 3, (230, 235, 255), center=True)
-        # D-pad
-        dx, dy, r = self.dpad
+        # D-pad (drawn under the thumb while it floats)
+        r = self.dpad[2]
+        dx, dy = self.stick or self.dpad[:2]
         arm = r * 2 // 3
         for d, (ux, uy) in {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}.items():
             cx, cy = dx + ux * (r - arm // 2), dy + uy * (r - arm // 2)
