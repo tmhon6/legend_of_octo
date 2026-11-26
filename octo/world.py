@@ -20,6 +20,7 @@ from collections import deque
 
 import pygame
 
+import cities
 import gfx
 import temples
 
@@ -39,6 +40,17 @@ LEVEL = LEVEL + _rows
 for _t in TEMPLES.values():          # each temple's door: a dark cave mouth on the sea floor
     _x, _y = _t['door']
     LEVEL[_y] = LEVEL[_y][:_x] + 'E' + LEVEL[_y][_x + 1:]
+# the two towns sit below the temples; their gates stand out in the worlds
+CITY_Y = len(LEVEL)
+_rows, CITIES = cities.build_all(len(LEVEL[0]), CITY_Y)
+LEVEL = LEVEL + _rows
+CITY_ART = {}                        # tile -> (picture, column, row): buildings and gates
+for _c in CITIES.values():
+    CITY_ART.update(_c['art'])
+for _g in cities.OVERWORLD_GATES.values():
+    for (_x, _y), _ch in list(_g['set'].items()) + [(_g['door'], 'E')]:
+        LEVEL[_y] = LEVEL[_y][:_x] + _ch + LEVEL[_y][_x + 1:]
+    CITY_ART.update(_g['art'])
 LEVEL_W, LEVEL_H = len(LEVEL[0]), len(LEVEL)
 BELLS_NEEDED = 1 + len(TEMPLES)      # the Sunken Shrine's bell + one per temple
 SEAL = [(148, 77), (149, 77)]
@@ -61,6 +73,12 @@ GUARDIAN_OF = {d: g for d, g in QUEST}
 # the four worlds: the Sea, the Sky, the Surface (land) and the Underdeep, as tile rects
 WORLD_RECTS = dict(WD.WORLD_RECTS)
 WORLD_NAMES = {'sea': 'THE SEA', 'sky': 'THE SKY', 'land': 'THE SURFACE', 'under': 'THE UNDERDEEP'}
+for _c in CITIES.values():               # each town is a little world of its own (own map page)
+    WORLD_RECTS[_c['theme']] = _c['rect']
+    WORLD_NAMES[_c['theme']] = _c['title']
+DRY_WORLDS = {'land'} | {c['theme'] for c in CITIES.values() if not c['wet']}
+THEMES.update({c['title']: c['theme'] for c in CITIES.values()})
+REGION_MUSIC.update({c['title']: c['music'] for c in CITIES.values()})
 SKY_RECT = WORLD_RECTS['sky']
 SKY_Y = SKY_RECT[1]
 GEYSERS = [((53, 49), (8, 102)), ((10, 28), (14, 119)), ((140, 18), (52, 100))]   # (sea tile, sky tile) pairs
@@ -544,6 +562,7 @@ REGION_TIER = {'KELP WOODS': 1, 'CORAL GARDENS': 1, 'THE LAGOON': 1, 'SUNKEN SHR
                'THE ABYSS': 2, 'SHIP GRAVEYARD': 2, 'SKY ISLANDS': 2, 'FROZEN SHELF': 3, 'EMBER VENTS': 3,
                'SUNKEN CITY': 4, 'MURK PALACE': 4}
 REGION_TIER.update({name: tier for name, wld, r, theme, tier, *_ in WD.NEW_REGIONS})
+REGION_TIER.update({c['title']: 0 for c in CITIES.values()})
 def _mega_machine_spot():
     r = next(rr for name, wld, rr, *_ in WD.NEW_REGIONS if name == 'ANCIENT RUINS')
     taken = {(int(x), int(y)) for _k, x, y in ENEMIES + ITEMS}
@@ -577,7 +596,7 @@ for _t in TEMPLES.values():
     ITEMS += _t['items']
 
 
-SOLID_ALL = set('#CKWSLRIPQBU')
+SOLID_ALL = set('#CKWSLRIPQBUO')
 OPENABLE = set('KLRIlBU')       # tiles that can be opened for good (saved in savegames)
 FLOOR_CHARS = set('.,=dH')
 
@@ -587,6 +606,8 @@ def in_rect(tx, ty, r):
 
 
 def area_at(tx, ty):
+    if ty >= CITY_Y:
+        return 'overworld'
     if ty >= TEMPLE_Y:
         return 'dungeon'
     if in_rect(tx, ty, SKY_RECT):
@@ -609,6 +630,22 @@ def temple_at(tx, ty):
     for tid, t in TEMPLES.items():
         if in_rect(tx, ty, t['rect']):
             return tid
+    return None
+
+
+def city_at(tx, ty):
+    if ty < CITY_Y:
+        return None
+    for cid, c in CITIES.items():
+        if in_rect(tx, ty, c['rect']):
+            return cid
+    return None
+
+
+def city_door(tx, ty):
+    for cid, c in CITIES.items():
+        if c['door'] == (tx, ty):
+            return cid
     return None
 
 
@@ -639,6 +676,9 @@ def _region_grid():
 
 
 def region_at(tx, ty):
+    if ty >= CITY_Y:
+        cid = city_at(tx, ty)
+        return CITIES[cid]['title'] if cid else 'CORAL REEF'
     if ty >= TEMPLE_Y:
         tid = temple_at(tx, ty)
         return TEMPLES[tid]['title'] if tid else 'CORAL REEF'
@@ -771,6 +811,15 @@ class Level:
     def _blit_tile(self, tiles, tx, ty, surf=None, off=(0, 0)):
         surf = surf or self.surface
         ch = self.tiles[ty][tx]
+        art = CITY_ART.get((tx, ty))
+        if art:                          # a piece of a building or a town gate, on top of the floor
+            key, i, j = art
+            themed = tiles['themes'].get(self.themes[ty][tx], {})
+            floor = themed.get('.') or tiles['overworld']['.']
+            pos = (tx * TILE - off[0], ty * TILE - off[1])
+            surf.blit(floor[(tx * 7 + ty * 13) % len(floor)], pos)
+            surf.blit(gfx.SPR['city_art'][key], pos, (i * TILE, j * TILE, TILE, TILE))
+            return
         top = ch == '=' and region_at(tx, ty) == 'OCTO TEMPLE'
         if ch in 'PQH' or top:
             h = self._height(tx, ty)
@@ -855,6 +904,15 @@ def validate():
     for a, b, _kind in PASSAGES:
         links[a] = b
         links[b] = a
+    for c in CITIES.values():
+        inside = (int(c['entry'][0]), int(c['entry'][1]))
+        links[c['door']] = inside
+        links[inside] = c['door']
+        if LEVEL[c['door'][1]][c['door'][0]] != 'E':
+            problems.append(f"{c['id']} gate at {c['door']} is not an E tile")
+        for who, (x, y) in c['spots'].items():
+            if LEVEL[int(y)][int(x)] not in FLOOR_CHARS:
+                problems.append(f"{c['id']}: {who} stands on {LEVEL[int(y)][int(x)]!r} at {(x, y)}")
     for t in TEMPLES.values():
         inside = (int(t['entry'][0]), int(t['entry'][1]))
         links[t['door']] = inside
@@ -871,8 +929,15 @@ def validate():
                     and LEVEL[ny][nx] in walk:
                 seen.add((nx, ny))
                 q.append((nx, ny))
+    import folk
     targets = [(k, x, y) for k, x, y in ENEMIES + ITEMS] + \
               [(n, a['reward'][1], a['reward'][2]) for n, a in ARENAS.items()]
+    targets += [('quest ' + q, x, y) for q, spots in folk.QUEST_SPOTS.items() for x, y in spots]
+    targets += [(c['id'] + ' ' + who, x, y) for c in CITIES.values() for who, (x, y) in c['spots'].items()]
+    for q, spots in folk.QUEST_SPOTS.items():
+        for x, y in spots:
+            if LEVEL[y][x] not in FLOOR_CHARS:
+                problems.append(f"quest {q} item at {(x, y)} sits on {LEVEL[y][x]!r}")
     for name, t in TRIALS.items():
         px, py = t['portal']
         targets += [(name + ' portal', px, py), (name + ' portal exit', px, py + 1)]

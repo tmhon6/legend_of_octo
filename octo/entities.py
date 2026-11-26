@@ -483,7 +483,8 @@ class Player(Entity):
         self.facing = d
         self.dash_dir = DIRS[d]
         self.dash_t = JET_FRAMES + (4 if 'fins' in self.items else 0)
-        self.dash_cd = int(JET_COOLDOWN * self.stat('jet', 1.0) * (0.6 if 'jetink' in self.items else 1.0))
+        self.dash_cd = int(JET_COOLDOWN * self.stat('jet', 1.0) * (0.6 if 'jetink' in self.items else 1.0) *
+                           (0.5 if 'u_quickjet' in self.items else 1.0))
         cx, cy = self.rect.center
         game.shots.append(InkCloud(cx - self.dash_dir[0] * 4, cy - self.dash_dir[1] * 4, self.dash_col))
         sound.play('jet')
@@ -508,7 +509,8 @@ class Player(Entity):
         return forms.stat(self.mood, key, default)
 
     def speed(self):
-        return PLAYER_SPEED * (1.35 if 'fins' in self.items else 1.0) * self.stat('speed', 1.0)
+        return PLAYER_SPEED * (1.35 if 'fins' in self.items else 1.0) * self.stat('speed', 1.0) * \
+            (1.12 if 'u_turbo' in self.items else 1.0)
 
     def toggle_ink(self):
         self.ink_mode = 'burst' if self.ink_mode == 'line' else 'line'
@@ -592,7 +594,7 @@ class Player(Entity):
         moving = bool(move_dir or self.analog or self.dash_t)
         self.moving = moving
         if moving and not self.in_sky and self.idle_t % 11 == 0 and \
-                world_of(cx, cy) != 'land':                     # no bubbles on dry land
+                world_of(cx, cy) not in __import__('world').DRY_WORLDS:   # no bubbles on dry land
             game.effects.append(fx.SwimBubble(cx + random.uniform(-3, 3), cy - 6))
         elem = fx.element_of(self.mood)
         if elem and self.idle_t % 5 == 0:
@@ -990,6 +992,9 @@ class Enemy(Entity):
             dmg += game.player.stat('power', 0)
             if game.player.stat('crit', 0) and random.random() < game.player.stat('crit', 0):
                 dmg *= 2                             # Crysty: a sharp, critical hit
+                game.spark(self.rect.center)
+            if 'u_megaink' in game.player.items and random.random() < 0.25:
+                dmg += 1                             # the Mega Ink milestone
                 game.spark(self.rect.center)
         if getattr(self, 'weak', 0):
             dmg += 1

@@ -19,6 +19,7 @@ pygame.init()
 pygame.display.set_mode((8, 8))
 
 import entities  # noqa: E402
+import folk  # noqa: E402
 import gfx  # noqa: E402
 import temples  # noqa: E402
 import world  # noqa: E402
@@ -191,9 +192,56 @@ def world_page(wld):
             cx, cy = px(tx, ty)
             ring(surf, cx, cy, 14, (120, 255, 160))
             label(surf, what, cx, cy + 16, (160, 255, 190), scale=2 if 'MURK' in what or 'START' in what else 1)
+    for c in world.CITIES.values():                 # town gates
+        if here(*c['door']):
+            cx, cy = px(*c['door'], ox, oy)
+            ring(surf, cx, cy, 18, (255, 170, 210))
+            label(surf, c['title'] + ' GATE', cx, cy - 26, (255, 190, 220), scale=2)
+    for qid, spots in folk.QUEST_SPOTS.items():    # side-quest things
+        q = folk.QUESTS[qid]
+        what = q.get('thing') or 'TILLY'
+        for tx, ty in spots:
+            if here(tx, ty):
+                cx, cy = px(tx, ty, ox, oy)
+                ring(surf, cx, cy, 7, (255, 230, 90), 2)
+                label(surf, 'QUEST: ' + what, cx, cy + 9, (255, 230, 120), scale=1)
     if wld == 'sky':
         surf = pygame.transform.smoothscale(surf, (surf.get_width() * 3 // 2, surf.get_height() * 3 // 2))
     page(world.WORLD_NAMES[wld], surf, WORLD_SUB[wld])
+
+
+def town_page(cid):
+    c = world.CITIES[cid]
+    x0, y0, x1, y1 = c['rect']
+    surf = FULL.subsurface((x0 * TILE, y0 * TILE, (x1 - x0 + 1) * TILE, (y1 - y0 + 1) * TILE)).copy()
+    surf = pygame.transform.scale(surf, (surf.get_width() * 2, surf.get_height() * 2))
+    ox, oy = x0 * TILE, y0 * TILE
+    for nid, d in folk.NPCS.items():
+        if d['town'] != cid or nid not in c['spots']:
+            continue
+        tx, ty = c['spots'][nid]
+        cx, cy = (tx * TILE - ox) * 2, (ty * TILE - oy) * 2
+        if d['kind'] == 'octo':
+            img = gfx.OCTO['cit_' + nid]['down'][0]
+        else:
+            import townart
+            img = townart.turtle_folk(tuple(d['shell']), tuple(d['skin']), d.get('small', False))[0]
+        blit_c(surf, img, cx, cy, 3)
+        jobs = [folk.QUESTS[q]['title'] for q in d.get('quests', [])]
+        if 'shop' in d:
+            jobs.append(folk.SHOPS[d['shop']][0])
+        if d.get('role') == 'scores':
+            jobs.append('THE LEADERBOARD')
+        label(surf, d['name'], cx, cy + 30, (255, 240, 200), scale=2)
+        if jobs:
+            label(surf, ', '.join(jobs), cx, cy + 50, (255, 220, 120), scale=1)
+    if cid == 'octo':
+        tx, ty = c['spots']['statue']
+        label(surf, 'LIVING LEGEND STATUE (100,000 POINTS)', (tx * TILE - ox) * 2, (ty * TILE - oy) * 2 + 24,
+              (255, 215, 90), scale=1)
+    sub = {'octo': "UNDER THE SEA, THROUGH THE GATE IN THE OCTO TEMPLE COURTYARD. TOWNSFOLK, SHOPS, SIDE QUESTS",
+           'turtle': "ON SUNNY BEACH, THROUGH THE GATE IN THE WALL NORTH OF THE SHORE STEPS"}[cid]
+    page(c['title'], surf, sub)
 
 
 def trials_page():
@@ -457,6 +505,8 @@ def main():
     world_page('sky')
     world_page('land')
     world_page('under')
+    town_page('octo')
+    town_page('turtle')
     trials_page()
     forms_page()
     creatures_page()

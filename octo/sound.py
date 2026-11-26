@@ -17,6 +17,7 @@ enabled = False
 music_on = True
 _sfx = {}
 _music = {}
+_music_files = {}            # browser build: tunes not decoded yet
 _music_channel = None
 _current_track = None
 _channels = 1
@@ -297,6 +298,31 @@ def _abyss_song():
     return render_song(mel, bass, 0.34, mel_wave='sine', mel_duty=0.5, mel_vol=0.3, bass_vol=0.34)
 
 
+def _octocity_song():
+    """Octo City: a bouncy, jazzy stroll through the plaza in F major."""
+    H = 0
+    mel = [65, H, 69, 72, 74, H, 72, 69, 70, H, 69, 67, 65, H, H, H,
+           67, H, 70, 74, 77, H, 74, 70, 72, H, 70, 69, 67, H, H, H,
+           69, 72, 77, H, 76, 74, 72, H, 74, 72, 70, H, 69, 67, 65, H,
+           67, H, 69, 70, 72, H, 64, H, 65, H, H, H, None, None, 72, 74]
+    bass = _bass((41, 41, 46, 46, 43, 43, 48, 48, 45, 45, 46, 46, 43, 48, 41, 41), (0, 12, 7, 12))
+    arp = []
+    for r in (65, 65, 70, 70, 67, 67, 72, 72, 69, 69, 70, 70, 67, 72, 65, 65):
+        arp += [r + 12, r + 16, r + 19, r + 16]
+    return render_song(mel, bass, 0.14, mel_duty=0.25, mel_vol=0.22, bass_vol=0.28, arp=arp)
+
+
+def _turtletown_song():
+    """Turtle Town: a slow, sunny calypso by the sea in C major."""
+    H = 0
+    mel = [72, H, 76, H, 79, 76, H, 74, 72, H, 69, H, 67, H, H, H,
+           69, H, 72, H, 76, 74, H, 72, 74, H, 76, H, 74, H, H, H,
+           72, H, 76, H, 79, H, 81, 79, 77, H, 76, H, 74, H, 72, H,
+           74, H, 72, 69, 67, H, 71, H, 72, H, H, H, None, None, None, None]
+    bass = _bass((48, 48, 41, 41, 43, 43, 48, 48, 45, 45, 41, 41, 43, 43, 48, 48), (0, None, 7, 5))
+    return render_song(mel, bass, 0.2, mel_wave='tri', mel_duty=0.5, mel_vol=0.32, bass_vol=0.27)
+
+
 def _wreck_song():
     """Ship Graveyard: a creaky old sea shanty in D minor."""
     H = 0
@@ -463,8 +489,11 @@ def _init_web():
         for name in sorted(os.listdir(AUDIO_DIR)):
             kind, _, rest = name.partition('_')
             key = rest.rsplit('.', 1)[0]
-            snd = pygame.mixer.Sound(os.path.join(AUDIO_DIR, name))
-            (_music if kind == 'music' else _sfx)[key] = snd
+            path = os.path.join(AUDIO_DIR, name)
+            if kind == 'music':
+                _music_files[key] = path          # tunes are decoded the first time they play
+            else:
+                _sfx[key] = pygame.mixer.Sound(path)
     except Exception as e:
         print("Sound disabled:", e)
         enabled = False
@@ -546,7 +575,8 @@ def _synth(S, M):
     M['sky'] = _to_sound(_sky_song())
     for name, song in (('kelp', _kelp_song), ('garden', _garden_song), ('lagoon', _lagoon_song),
                        ('abyss', _abyss_song), ('wreck', _wreck_song), ('palace', _palace_song),
-                       ('temple', _temple_song), ('boss', _boss_song)):
+                       ('temple', _temple_song), ('boss', _boss_song), ('octocity', _octocity_song),
+                       ('turtletown', _turtletown_song)):
         M[name] = _to_sound(song())
     for theme, spec in REGION_TUNES.items():
         M['r_' + theme] = _to_sound(_compose(*spec))
@@ -566,6 +596,14 @@ def music(track, loops=-1):
     _current_track = track
     _music_channel.stop()
     if track and music_on:
+        if track not in _music and track in _music_files:
+            try:
+                _music[track] = pygame.mixer.Sound(_music_files[track])
+            except Exception as e:
+                print("music:", e)
+                return
+        if track not in _music:
+            return
         _music_channel.set_volume(0.55)
         _music_channel.play(_music[track], loops=loops)
 

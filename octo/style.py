@@ -25,6 +25,26 @@ HATS = {
     'viking': ("VIKING HELM", 'guardians10'),
     'crown': ("GOLD CROWN", 'bells'),
     'halo': ("HALO", 'alltrials'),
+    # from the towns: sold at the stalls, or given as side-quest rewards
+    'beret': ("BERET", 'item'),
+    'fez': ("FEZ", 'item'),
+    'tiara': ("TIARA", 'item'),
+    'sunhat': ("SUN HAT", 'item'),
+    'straw': ("STRAW HAT", 'item'),
+    'snorkel': ("SNORKEL MASK", 'item'),
+    'headphones': ("HEADPHONES", 'item'),
+    'gradcap': ("GRAD CAP", 'item'),
+    'shellhelm': ("SHELL HELMET", 'item'),
+    'bandana': ("LUCKY BANDANA", 'item'),
+    'champion': ("CHAMPION CROWN", 'item'),
+}
+ITEM_HOW = {
+    'beret': "MADAME TENTA SELLS IT IN OCTO CITY.", 'fez': "MADAME TENTA SELLS IT IN OCTO CITY.",
+    'tiara': "MADAME TENTA SELLS IT IN OCTO CITY.", 'sunhat': "MYRTLE SELLS IT IN TURTLE TOWN.",
+    'straw': "MYRTLE SELLS IT IN TURTLE TOWN.", 'snorkel': "HELP LITTLE OLLIE IN OCTO CITY.",
+    'headphones': "HELP ZIGGY IN OCTO CITY.", 'gradcap': "HELP PROFESSOR OCTAGON IN OCTO CITY.",
+    'shellhelm': "HELP ELDER TORTUGA IN TURTLE TOWN.", 'bandana': "HELP SPEEDY IN TURTLE TOWN.",
+    'champion': "REACH THE 100,000 POINT MILESTONE.",
 }
 HAT_PRICES = {'beanie': 30, 'chef': 40, 'cowboy': 50, 'sombrero': 50, 'tophat': 60}
 HOW = {
@@ -39,19 +59,37 @@ HOW = {
     'alltrials': "WIN EVERY TRIAL.",
 }
 
-# name, colour (None = a rainbow)
-DASH_COLORS = [("INK", (24, 18, 56)), ("CORAL", (240, 90, 120)), ("GOLD", (240, 190, 40)),
-               ("MINT", (80, 220, 160)), ("SKY", (90, 170, 255)), ("VIOLET", (150, 80, 230)),
-               ("FIRE", (255, 110, 30)), ("SNOW", (235, 240, 255)), ("RAINBOW", None)]
+# name, colour (None = a rainbow, 'sparkle' = shimmering gold), and what unlocks it (None = free)
+DASH_COLORS = [("INK", (24, 18, 56), None), ("CORAL", (240, 90, 120), None), ("GOLD", (240, 190, 40), None),
+               ("MINT", (80, 220, 160), None), ("SKY", (90, 170, 255), None), ("VIOLET", (150, 80, 230), None),
+               ("FIRE", (255, 110, 30), None), ("SNOW", (235, 240, 255), None), ("RAINBOW", None, None),
+               # bought from Inky in Octo City, or earned
+               ("OCEAN", (20, 140, 210), 'ink_ocean'), ("CANDY", (255, 150, 220), 'ink_candy'),
+               ("TOXIC", (130, 255, 60), 'ink_toxic'), ("SHADOW", (50, 20, 70), 'ink_shadow'),
+               ("PEARL", 'pearl', 'ink_pearl'), ("STORM", 'storm', 'ink_storm'),
+               ("LEGEND GOLD", 'sparkle', 'ink_legend')]
+
+
+def ink_unlocked(player, index):
+    need = DASH_COLORS[index % len(DASH_COLORS)][2]
+    return need is None or need in player.items
 
 
 def dash_rgb(index, t=0):
-    name, col = DASH_COLORS[index % len(DASH_COLORS)]
+    name, col, _need = DASH_COLORS[index % len(DASH_COLORS)]
     if col is None:
         h = (t * 7) % 360
         c = pygame.Color(0)
         c.hsva = (h, 80, 100, 100)
         return (c.r, c.g, c.b)
+    if col == 'pearl':
+        k = (math.sin(t * 0.2) + 1) / 2
+        return (int(230 + 25 * k), int(225 + 20 * k), int(240 + 15 * k))
+    if col == 'storm':
+        return (255, 250, 120) if (t // 3) % 3 == 0 else (90, 120, 230)
+    if col == 'sparkle':
+        k = (math.sin(t * 0.3) + 1) / 2
+        return (255, int(190 + 60 * k), int(40 + 150 * k))
     return col
 
 
@@ -78,7 +116,14 @@ def unlocked(game, hat):
         return len(game.flags.get('bells', [])) >= world.BELLS_NEEDED
     if how == 'worlds':
         return all(game.flags.get(k) for k in ('sky_intro', 'intro_land', 'intro_under'))
+    if how == 'item':
+        return 'hat_' + hat in p.items
     return False
+
+
+def how_text(hat):
+    how = HATS[hat][1]
+    return ITEM_HOW.get(hat, "") if how == 'item' else HOW[how]
 
 
 # ---------------------------------------------------------------------- hat art (drawn in code)
@@ -171,6 +216,70 @@ def _hat(hat):
     elif hat == 'halo':
         pygame.draw.ellipse(s, (180, 140, 20), (2, 1, 14, 5), 2)
         pygame.draw.ellipse(s, (255, 240, 140), (3, 1, 12, 4), 1)
+    elif hat == 'beret':
+        pygame.draw.ellipse(s, k, (2, 5, 14, 7))
+        pygame.draw.ellipse(s, (200, 40, 60), (3, 5, 12, 6))
+        pygame.draw.ellipse(s, (240, 90, 110), (5, 6, 6, 2))
+        pygame.draw.line(s, k, (9, 5), (10, 3), 2)
+    elif hat == 'fez':
+        pygame.draw.polygon(s, k, [(4, 12), (14, 12), (13, 3), (5, 3)])
+        pygame.draw.polygon(s, (210, 40, 40), [(5, 11), (13, 11), (12, 4), (6, 4)])
+        pygame.draw.line(s, (250, 110, 110), (6, 5), (6, 10))
+        pygame.draw.line(s, (20, 20, 20), (9, 3), (13, 6))
+        pygame.draw.circle(s, (250, 200, 60), (13, 7), 1)
+    elif hat == 'tiara':
+        pygame.draw.line(s, (150, 150, 170), (3, 11), (15, 11), 2)
+        pygame.draw.polygon(s, (220, 225, 240), [(4, 10), (6, 6), (8, 9), (9, 4), (10, 9), (12, 6), (14, 10)])
+        pygame.draw.polygon(s, (120, 120, 150), [(4, 10), (6, 6), (8, 9), (9, 4), (10, 9), (12, 6), (14, 10)], 1)
+        s.set_at((9, 6), (240, 80, 160))
+        s.set_at((6, 8), (90, 200, 255))
+        s.set_at((12, 8), (90, 200, 255))
+    elif hat == 'sunhat':
+        pygame.draw.ellipse(s, (170, 130, 60), (0, 7, 18, 5))
+        pygame.draw.ellipse(s, (250, 226, 150), (1, 7, 16, 4))
+        pygame.draw.ellipse(s, (250, 226, 150), (5, 3, 8, 7))
+        pygame.draw.line(s, (240, 110, 160), (5, 8), (13, 8), 2)
+        s.set_at((14, 9), (255, 160, 200))
+    elif hat == 'straw':
+        pygame.draw.rect(s, (160, 120, 50), (0, 9, 18, 3))
+        pygame.draw.rect(s, (240, 210, 130), (1, 9, 16, 2))
+        pygame.draw.rect(s, (160, 120, 50), (4, 3, 10, 7))
+        pygame.draw.rect(s, (240, 210, 130), (5, 4, 8, 5))
+        pygame.draw.line(s, (60, 90, 180), (5, 8), (12, 8))
+    elif hat == 'snorkel':
+        pygame.draw.rect(s, k, (2, 7, 14, 5), border_radius=2)
+        pygame.draw.rect(s, (120, 210, 255), (3, 8, 12, 3), border_radius=1)
+        s.set_at((5, 8), (255, 255, 255))
+        pygame.draw.line(s, (250, 140, 40), (15, 10), (15, 1), 2)
+        pygame.draw.line(s, (250, 140, 40), (15, 1), (13, 1), 2)
+    elif hat == 'headphones':
+        pygame.draw.arc(s, k, (2, 1, 14, 18), 0, math.pi, 2)
+        for x in (1, 13):
+            pygame.draw.rect(s, k, (x, 7, 4, 5), border_radius=1)
+            pygame.draw.rect(s, (60, 200, 190), (x + 1, 8, 2, 3))
+    elif hat == 'gradcap':
+        pygame.draw.polygon(s, (10, 10, 20), [(1, 6), (9, 3), (17, 6), (9, 9)])
+        pygame.draw.rect(s, (30, 30, 40), (5, 7, 8, 5))
+        pygame.draw.line(s, (250, 200, 60), (9, 6), (14, 8))
+        pygame.draw.line(s, (250, 200, 60), (14, 8), (14, 11))
+    elif hat == 'shellhelm':
+        pygame.draw.ellipse(s, (40, 70, 30), (2, 3, 14, 10))
+        pygame.draw.ellipse(s, (110, 160, 80), (3, 4, 12, 8))
+        for x, y in ((6, 6), (10, 6), (8, 9)):
+            pygame.draw.rect(s, (60, 100, 40), (x - 1, y - 1, 3, 3), 1)
+        pygame.draw.line(s, (220, 200, 140), (3, 11), (15, 11))
+    elif hat == 'bandana':
+        pygame.draw.ellipse(s, (120, 10, 20), (2, 5, 14, 8))
+        pygame.draw.ellipse(s, (220, 40, 50), (3, 6, 12, 6))
+        for x, y in ((5, 8), (9, 7), (12, 9)):
+            s.set_at((x, y), (255, 255, 255))
+        pygame.draw.polygon(s, (220, 40, 50), [(15, 8), (18, 6), (18, 11)])
+    elif hat == 'champion':
+        pygame.draw.polygon(s, (120, 70, 0), [(1, 12), (17, 12), (17, 2), (13, 7), (9, 0), (5, 7), (1, 2)])
+        pygame.draw.polygon(s, (255, 214, 60), [(2, 11), (16, 11), (16, 4), (13, 8), (9, 2), (5, 8), (2, 4)])
+        for x, c in ((5, (220, 40, 60)), (9, (60, 160, 255)), (13, (60, 200, 100))):
+            pygame.draw.circle(s, c, (x, 9), 1)
+        s.set_at((9, 3), (255, 255, 255))
     _cache[hat] = s
     return s
 

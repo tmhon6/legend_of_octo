@@ -1513,7 +1513,10 @@ def make_tiles():
         'B': [_sealed(rnd)],
         'U': [_sigil_gate(rnd)],
     }
-    return {'overworld': ow, 'dungeon': dg, 'themes': make_themes(rnd)}
+    import townart
+    themes = make_themes(rnd)
+    themes.update(townart.make_town_themes(rnd))
+    return {'overworld': ow, 'dungeon': dg, 'themes': themes}
 
 
 # --------------------------------------------------------------------------
@@ -2031,6 +2034,8 @@ def make_critters():
 
 def load():
     global OCTO, SLAP, TILES, SPR
+    import folk                          # noqa: F401  (registers the townsfolk's colours)
+    import townart
     OCTO = make_octo()
     SLAP = make_slap()
     TILES = make_tiles()
@@ -2064,3 +2069,5 @@ def load():
         'items': make_items(),
         'orb': make_pearl((120, 255, 200), (230, 255, 245), size=10),
     }
+    SPR.update(townart.quest_items())
+    SPR['city_art'] = townart.make_city_art()

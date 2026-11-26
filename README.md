@@ -4,7 +4,7 @@ By Minu Hong.
 
 ## ▶ [Play it in your browser](https://tmhon6.github.io/legend_of_octo/)
 
-📜 **[Game layout for review](docs/layout.pdf)**: story flow, the whole map, every dungeon, the trial rooms and all creatures, without playing. The pages are also pictures in [docs/layout](docs/layout/). Rebuild them with `.venv/bin/python tools/make_layout.py`.
+📜 **[Game layout for review](docs/layout.pdf)**: story flow, the whole map, every dungeon, both towns, the trial rooms and all creatures, without playing. The pages are also pictures in [docs/layout](docs/layout/). Rebuild them with `.venv/bin/python tools/make_layout.py`.
 
 No download needed. Wait about 15 seconds for it to load, click or tap the page, then press Enter or tap again.
 Works with a keyboard on a computer, or with on-screen touch controls on phones and tablets.
@@ -59,13 +59,15 @@ In the browser, saves go to the browser's local storage instead of `savegame.jso
 | C                  | Happy ink style: long line <-> short wide burst     |
 | V                  | Ink jet: a quick dash that leaves a stinging ink cloud (you can't be hurt mid-jet) |
 | B                  | Drop a bubble bomb (buy them in the Pearl Shop)     |
-| T                  | Warp to a completed trial portal                    |
+| T                  | Warp to a completed trial portal (and, after the Octo Express milestone, to the towns) |
 | Left Shift         | Save the game                                       |
 | P / Enter / Esc    | Pause. In the pause menu: **S** saves, **Q** quits  |
 | M                  | World map (game pauses; ←/→ flips between sea and sky) |
 | N                  | Mute / unmute all sound (music and effects)         |
 | H                  | Wardrobe: pick a hat and the ink jet's colour       |
+| Q                  | Journal: side quests, score and milestones, the leaderboard, extras (←/→ switch tabs) |
 | F11                | Fullscreen                                          |
+| F3                 | Show the frame rate                                 |
 
 ## Forms
 
@@ -114,11 +116,20 @@ on the arena with a **FIGHT!**. Temple bosses get the same entrance the first ti
 room. The final blow lands in slow motion with a **VICTORY!** banner. Press Enter or Z (or tap) to
 skip ahead.
 
-### The 3D opening
+### Hi-fi 3D
 
-The game opens with a short 3D intro, all drawn in code: the camera skims a dawn ocean, dives
-under, Octo swims up out of the deep as a spinning voxel model, and the logo builds itself out of
-tumbling cubes. Press any key (or tap) to skip to the title.
+The game itself is pixel art, but its big moments are drawn in smooth 3D at three times the
+resolution (twice in the browser), all in code: shiny shaded spheres with glints and soft glows,
+squishy 3D Octos with wiggling tentacles, turtles with patterned shells, puffy bead-figure bosses,
+and bevelled 3D lettering.
+* **The opening:** skim a sunset ocean, dive under, and Octo swims up out of the deep as the logo
+  flies together letter by letter. Any key (or a tap) skips it.
+* **The title screen:** the 3D logo and a 3D Octo that flips between moods.
+* **Boss entrances:** the versus screen faces a 3D Octo (in your form, wearing your hat) off against
+  a 3D bead figure of the boss, with **FIGHT!** and **VICTORY!** in 3D letters.
+* **Town fly-overs:** the first time you reach Octo City or Turtle Town.
+* **Milestones:** a gold medal spins in on a sunburst.
+* **The leaderboard podium** and the **3D Museum** of the guardians you've beaten.
 
 ### Hermie's shop
 
@@ -205,11 +216,14 @@ in straight lines and strikes with a stinger. There are 16 kinds.
 ### Wardrobe: hats and ink colour
 
 Press **H** (or tap **HAT**) to open the wardrobe:
-* **16 hats.** A sea cap, a bow and a party hat are yours from the start. Hermie sells a beanie,
-  chef hat, cowboy hat, sombrero and top hat. The rest are earned: a flower crown for 10 trials, a
+* **27 hats.** A sea cap, a bow and a party hat are yours from the start. Hermie sells a beanie,
+  chef hat, cowboy hat, sombrero and top hat. Some are earned: a flower crown for 10 trials, a
   pirate hat for Captain Claw, a propeller cap for visiting every world, a wizard hat for 10 forms,
   a viking helm for 10 guardians, a gold crown for all seven Tide Bells, and a halo for every trial.
-* **9 colours for the ink jet's puff**, rainbow included.
+  The towns sell a beret, fez, tiara, sun hat and straw hat, and side quests give a snorkel mask,
+  headphones, a grad cap, a shell helmet and a lucky bandana. The Champion Crown is for 100,000 points.
+* **16 colours for the ink jet's puff**: 9 to start with (rainbow included), five more at Inky's
+  in Octo City, Storm ink from Coco's quest and Legend-Gold for the last milestone.
 
 The world map is 160×80 tiles, plus seven one-screen trial rooms and the Sky Islands:
 
@@ -230,6 +244,58 @@ Completed portals become warp points (press **T**).
 **Hermie's Pearl Shop**, just west of the temple, sells shrimp platters, bubble bombs, swift fins,
 a shell shield, deep ink and a heart shell. Bubble bombs blast open cracked rock and hidden caches.
 
+## The towns
+
+**Octo City** lies under the sea; its gate is in the Octo Temple courtyard, right where you start.
+**Turtle Town** sits on Sunny Beach, through a gate in the wall north of the shore steps. Both
+are full of friendly townsfolk (twelve octopuses and eleven turtles) who wander about, chat and
+trade. Press **Z** next to someone to talk. A yellow **!** means they need help, a grey **?** means
+you're working on it, a yellow **?** means you've done it, and a gold coin means a shop.
+
+* **Shops:** Inky's ink colours, Madame Tenta's and Myrtle's hats, the Octo City Bank and Nana's
+  Swap Shop (pearls, spirit pearls, bombs, even heart shells), Barnaby's kitchen and Dr. Carapace's
+  clinic (healing and sea potions).
+* **16 side quests:** find the mayor's lost hatchlings, sea peppers for Chef Barnaby, coral
+  seeds, Ollie's marbles and Sheldon's shiny shells hidden around the worlds; carry a parcel to
+  Turtle Town and coconuts back to Octo City; find Tiny Tim's sister in Palm Jungle; chase
+  creatures off Sunny Beach and out of the Underdeep; send Speedy and Coco postcards from far-off
+  places; win trials for Dr. Carapace; beat guardians for Professor Octagon; show Ziggy a fused
+  form; and follow Granny Octa's trading chain (scarf → ship in a bottle → star map → golden
+  conch) between the two towns. Rewards include pearls, spirit pearls, potions, a heart shell, new
+  hats and a new ink colour.
+* **The journal (Q):** your quests with their progress and where to go, your score and milestones,
+  the leaderboard, and the extras you've unlocked.
+
+## Score, milestones and the leaderboard
+
+Everything earns points: beating creatures (more in tougher regions), pearls, keys, trials,
+guardians, temple bosses, Tide Bells, new forms and fusions, heart shells, new regions, meeting
+townsfolk, trades and side quests. A Deep Tide run scores 1.5×. Your score shows under the
+minimap, with a bar filling up towards the next milestone. Each milestone unlocks something new:
+
+| Points  | Unlock            | What it does |
+|---------|-------------------|--------------|
+| 1,000   | Quest Compass     | Your map and minimap mark where your side quests lead |
+| 2,500   | Turbo Fins        | Swim 12% faster in every form |
+| 5,000   | Octo Express      | Warp (T) to Octo City and Turtle Town |
+| 8,000   | Pearl Magnet      | Pearls and hearts drift to you from much farther away |
+| 12,000  | 3D Museum         | Every guardian you've beaten, as a 3D statue |
+| 16,000  | Gold Card         | 25% off at Hermie's and every town stall |
+| 22,000  | Quick Jet         | The ink jet recharges twice as fast |
+| 30,000  | Octo Radio        | Listen to any tune in the game |
+| 40,000  | Heart of the City | One more heart |
+| 55,000  | Treasure Sense    | Your map shows treasure you haven't picked up |
+| 75,000  | Mega Ink          | One hit in four lands extra hard |
+| 100,000 | Living Legend     | A golden statue of you in Octo City, the Champion Crown and Legend-Gold ink |
+
+**The leaderboard** ranks every run you've played against the townsfolk's best scores (Speedy,
+Inky, Mayor Octavia, Elder Tortuga, Old Shelly... and the Great Kraken at 120,000). Pass your first
+milestone and you'll be asked for your name. Tally, by the scoreboard in Octo City's plaza, shows
+the board too. It's kept apart from your saved games (`leaderboard.json` on a computer, the
+browser's storage on the web), so new runs join the same board.
+
+Saves from before scores existed are scored for the progress they've already made when you load them.
+
 ## Code map (`octo/`)
 
 * `settings.py`: screen size, speeds
@@ -239,7 +305,13 @@ a shell shield, deep ink and a heart shell. Bubble bombs blast open cracked rock
 * `entities.py`: Player (forms, jet, bombs), enemies and bosses, NPCs, projectiles, pickups, effects
 * `gfx.py`: every sprite, themed tileset and the bitmap font, drawn in code
 * `sound.py`: chiptune synth for SFX and music (cached to `.sound_cache.pkl`)
-* `cinema.py`: the 3D opening (a tiny voxel renderer and a mode-7 ocean) and the versus entrance for boss fights
+* `hifi.py`: the hi-fi 3D toolkit: pre-shaded sphere impostors, 3D Octo, turtle and bead-figure models, smooth 3D text
+* `cinema.py`: the 3D scenes: the opening, the versus entrance, town fly-overs and the milestone medal
+* `cities.py`, `townart.py`: the two towns' maps and their pixel art
+* `folk.py`: who lives in the towns, their shops and side quests, and the leaderboard rivals
+* `town.py`: talking, trading, side quests, the journal, the score, milestones, the leaderboard, the museum and the radio
+* `people.py`: the townsfolk and the Living Legend statue
+* `score.py`: points, milestones and the leaderboard file
 * `game.py`: state machine, trials, shop, save/load, warping, HUD and drawing
 
 Desktop saves go to `savegame_<version>.json` in the project folder (one per version). Browser saves stay in that browser.

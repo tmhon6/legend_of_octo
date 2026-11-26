@@ -14,14 +14,17 @@ import gfx
 import sound
 import world
 from title import TitleScene
+import cinema
 from cinema import Intro3D, VersusCut
 from touch import TouchControls, touch_device
 from entities import (CATALOGUE, max_bombs, Altar, DIRS, ENEMY_TYPES, FusionMachine, MegaMachine, MiniBoss, Patroller, Thief, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
                       EnemyShot, Hermie, Jelly, Particle, Pickup, Player, Puff, Shelly, Urchin)
-from settings import SAVE_SLOT, FPS, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
+from settings import SAVE_SLOT, FPS, HI, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
 from world import ARENAS, Level
 import temples
 import style
+from people import Citizen, LegendStatue
+from town import TownLife
 
 DIR_KEYS = {
     pygame.K_UP: 'up', pygame.K_w: 'up',
@@ -88,6 +91,7 @@ BOMB_KEYS = {pygame.K_b}
 MAP_KEYS = {pygame.K_m}
 FORMS_KEYS = {pygame.K_f}
 WARDROBE_KEYS = {pygame.K_h}
+JOURNAL_KEYS = {pygame.K_q}
 CONFIRM_KEYS = {pygame.K_RETURN, pygame.K_KP_ENTER}
 
 AREA_INFO = {
@@ -117,6 +121,7 @@ THEME_FX = {
     'desert': ((255, 200, 120), 26, 'dust'), 'volcano': ((120, 20, 0), 46, 'embers'),
     'crystal': ((40, 20, 90), 50, 'snow'), 'fungus': ((60, 0, 60), 46, 'dust'), 'bone': ((10, 6, 20), 60, 'dust'),
     'ruins': ((20, 20, 10), 50, 'dust'), 'magma': ((140, 30, 0), 56, 'embers'),
+    'octocity': ((40, 0, 80), 12, None), 'turtletown': ((255, 236, 190), 10, None),
 }
 THEME_MINI = {'reef': (196, 178, 128), 'kelp': (160, 170, 110), 'garden': (226, 186, 170),
               'lagoon': (230, 224, 200), 'abyss': (100, 106, 142), 'wreck': (140, 130, 108),
@@ -125,7 +130,7 @@ THEME_MINI = {'reef': (196, 178, 128), 'kelp': (160, 170, 110), 'garden': (226, 
               'thunder': (150, 160, 180), 'rainbow': (190, 230, 160), 'starfall': (80, 80, 140),
               'beach': (240, 222, 160), 'meadow': (120, 190, 80), 'jungle': (70, 140, 60), 'desert': (236, 200, 130),
               'volcano': (80, 60, 56), 'crystal': (84, 90, 130), 'fungus': (96, 74, 96), 'bone': (120, 110, 100),
-              'ruins': (110, 106, 90), 'magma': (70, 44, 36)}
+              'ruins': (110, 106, 90), 'magma': (70, 44, 36), 'octocity': (186, 166, 196), 'turtletown': (240, 222, 168)}
 FORM_INFO = {
     'zap': ["YOU UNLOCKED ZAPPY OCTO!", "PRESS X TO CYCLE YOUR FORMS. ZAPPY'S Z SENDS OUT A SHOCK RING "
             "THAT HITS EVERYTHING AROUND YOU - EVEN URCHINS AND JELLIES - AND FRIES ENEMY SHOTS."],
@@ -200,6 +205,7 @@ MINIMAP_COLORS = {
     'I': (170, 220, 255), 'G': (150, 100, 220), 'l': (240, 110, 30),
     'P': (150, 128, 92), 'Q': (184, 162, 118), 'H': (196, 176, 132),
     'A': (255, 255, 255), 'D': (180, 120, 255), 'Y': (220, 250, 255),
+    'O': (226, 140, 170), 'E': (255, 226, 120),
 }
 MINIMAP_SIZE = (52, 26)
 
@@ -209,14 +215,19 @@ def tile_to_px(tx, ty):
     return tx * TILE + TILE / 2 - 8, ty * TILE + TILE / 2 - 8
 
 
-class Game:
+class Game(TownLife):
     def __init__(self):
         problems = [] if WEB else world.validate()     # a developer check: skipped in the browser to load faster
         if problems:
             raise SystemExit("Map errors:\n  " + "\n  ".join(problems))
         pygame.init()
         pygame.display.set_caption("Legend of Octo")
-        self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H), 0 if WEB else pygame.SCALED)
+        # the real window is HI times bigger than the pixel-art screen: the game is scaled up into
+        # it each frame, and the 3D scenes are drawn straight onto it at full detail
+        self.window = pygame.display.set_mode((SCREEN_W * HI, SCREEN_H * HI), 0 if WEB else pygame.SCALED)
+        self.screen = pygame.Surface((SCREEN_W, SCREEN_H))
+        self.hires = pygame.Surface((SCREEN_W * HI, SCREEN_H * HI), pygame.SRCALPHA)
+        self.hires_on = False
         gfx.load()
         sound.init()
         self.clock = pygame.time.Clock()
@@ -319,6 +330,7 @@ class Game:
             cx = 27 * TILE + 11 + i * 18
             cy = world.SHOP_ROW * TILE + 8
             self.wares.append((ware, pygame.Rect(cx - 7, cy - 7, 14, 14)))
+        self.town_setup()
         lv.blockers = [n.rect for n in self.npcs]
         self.active_arena = None
         self.checkpoint = world.START
@@ -329,7 +341,9 @@ class Game:
         self.banner_t = 0
         self.state = 'play'
         self.say([SHELLY_TALK[0], SHELLY_TALK[1], SHELLY_TALK[2], self.next_goal(),
-                  "IF YOU EVER GET LOST, COME BACK AND TALK TO ME (PRESS Z NEXT TO ME)."])
+                  "IF YOU EVER GET LOST, COME BACK AND TALK TO ME (PRESS Z NEXT TO ME).",
+                  "OH, AND THE GATE IN THE TEMPLE COURTYARD LEADS TO OCTO CITY. THE TOWNSFOLK WOULD LOVE TO MEET "
+                  "YOU - AND THEY ALWAYS NEED A HELPING TENTACLE!"])
 
     def respawn_player(self):
         p = self.player
@@ -351,8 +365,8 @@ class Game:
     # helpers used by entities
     # ======================================================================
 
-    def say(self, pages):
-        self.dialog = {'pages': pages, 'i': 0, 'chars': 0.0, 'back': 'play'}
+    def say(self, pages, then=None):
+        self.dialog = {'pages': pages, 'i': 0, 'chars': 0.0, 'back': 'play', 'then': then}
         self.state = 'dialog'
 
     def burst(self, center, color, n=8):
@@ -420,24 +434,20 @@ class Game:
         hi = max(avg) or 1
         lo = min(avg)
         accent = tuple(min(255, int(40 + (c - lo) / ((hi - lo) or 1) * 215)) for c in avg)
-        self.versus = VersusCut(self.screen.copy(), gfx.OCTO[p.mood]['down'][0], img, boss.name, subtitle,
-                                accent, style.icon(getattr(p, 'hat', 'none')))
+        small = pygame.transform.scale(img, (img.get_width() // 2, img.get_height() // 2))
+        mad = p.mood in ('mad', 'spiky', 'prickly', 'quaky', 'stony', 'magnet')
+        self.versus = VersusCut(self.screen.copy(), gfx.OCTO_PAL[p.mood], small, boss.name, subtitle,
+                                accent, style.icon(getattr(p, 'hat', 'none')), mad)
         self.vs_t = 0
         self.state = 'versus'
         self.flash_t = 0
         self.shake = 0
-        sound.play('whoosh')
 
     def update_versus(self):
         self.vs_t += 1
         t, v = self.vs_t, self.versus
-        if t == v.VS_AT:
-            sound.play('boom')
-            sound.play('roar')
-        elif t == v.SHATTER + 2:
-            sound.play('whoosh')
-        elif t == v.OPEN:
-            sound.play('door')
+        for name in v.cues(t):
+            sound.play(name)
         if t >= v.LENGTH:
             self.versus = None
             self.state = 'play'
@@ -449,49 +459,6 @@ class Game:
             if self.vs_t < v.VS_AT:
                 sound.play('boom')
             self.vs_t = v.OPEN
-
-    def draw_fight_text(self, scr):
-        t = 70 - self.fight_t
-        if t < 50:
-            sc = max(3.0, 8 - t * 0.6)
-            col = (255, 240, 120) if (t // 3) % 2 else (255, 255, 255)
-            w = gfx.text_width("FIGHT!") + 2
-            tmp = pygame.Surface((w + 2, 11), pygame.SRCALPHA)
-            for ox, oy in ((0, 1), (2, 1), (1, 0), (1, 2), (2, 2)):
-                gfx.text(tmp, "FIGHT!", ox, oy, (120, 20, 20), shadow=False)
-            gfx.text(tmp, "FIGHT!", 1, 1, col, shadow=False)
-            img = pygame.transform.scale(tmp, (int((w + 2) * sc), int(11 * sc)))
-            if t > 36:
-                img.set_alpha(255 - (t - 36) * 18)
-            scr.blit(img, img.get_rect(center=(SCREEN_W // 2, HUD_H + PLAY_H // 2 - 10)))
-
-    def draw_ko(self, scr):
-        t = 110 - self.ko_t
-        if t < 6:
-            v = pygame.Surface((PLAY_W, PLAY_H))
-            v.fill((255, 255, 255))
-            v.set_alpha(220 - t * 36)
-            scr.blit(v, (0, HUD_H))
-        if 20 <= t < 104:
-            u = t - 20
-            k = min(1.0, u / 10)
-            y = HUD_H + PLAY_H // 2 - 22
-            band_h = int(30 * k) if u < 74 else int(30 * (104 - t) / 10)
-            band = pygame.Surface((SCREEN_W, max(1, band_h)), pygame.SRCALPHA)
-            band.fill((0, 0, 0, 190))
-            for i in range(0, SCREEN_W + 40, 12):              # gold stripes sliding along
-                x = (i + u * 3) % (SCREEN_W + 40) - 20
-                pygame.draw.line(band, (255, 200, 60, 50), (x, 0), (x - 10, band_h), 4)
-            scr.blit(band, (0, y + 15 - band_h // 2))
-            if band_h > 20:
-                w = gfx.text_width("VICTORY!") + 2
-                tmp = pygame.Surface((w + 2, 11), pygame.SRCALPHA)
-                for ox, oy in ((0, 1), (2, 1), (1, 0), (1, 2), (2, 2)):
-                    gfx.text(tmp, "VICTORY!", ox, oy, (90, 50, 0), shadow=False)
-                gfx.text(tmp, "VICTORY!", 1, 1, (255, 230, 120), shadow=False)
-                img = pygame.transform.scale(tmp, ((w + 2) * 2, 22))
-                scr.blit(img, img.get_rect(center=(SCREEN_W // 2 + max(0, 30 - u * 3) * 8, y + 13)))
-                gfx.text(scr, getattr(self, 'ko_name', ''), SCREEN_W // 2, y + 28, (255, 255, 255), center=True)
 
     def boss_vignette(self):
         v = getattr(self, '_boss_vig', None)
@@ -649,6 +616,7 @@ class Game:
         }
         try:
             write_save(json.dumps(data))
+            self.record_score()
             self.has_save = True
             self.pause_msg = 'GAME SAVED!'
             sound.play('key')
@@ -708,11 +676,17 @@ class Game:
         self.area = self.region = None
         self.update_area()
         self.state = 'play'
+        self.flags.setdefault('run', __import__('score').new_run_id())
+        self.town_after_load('score' in data['flags'])
         self.say(["WELCOME BACK, OCTO!"])
 
     # ---- warping between completed trial portals ---------------------------
     def warp_spots(self):
         spots = [('OCTO TEMPLE', world.START)]
+        if self.unlocked('express'):
+            for cid in self.flags.get('towns_seen', []):
+                c = world.CITIES[cid]
+                spots.append((c['title'], c['entry']))
         for name, t in world.TRIALS.items():
             if name in self.trials_done:
                 px, py = t['portal']
@@ -757,6 +731,7 @@ class Game:
             owned = once and wid in self.bought
             if i == self.cat_i:
                 gfx.text(scr, ">", box.x + 5, y, (255, 220, 120))
+            price = self.shop_price(price)
             col = (120, 200, 140) if owned else (255, 255, 255) if p.pearls >= price else (150, 150, 175)
             gfx.text(scr, name, box.x + 14, y, col)
             tag = "OWNED" if owned else str(price)
@@ -1083,15 +1058,18 @@ class Game:
         self.state = 'wardrobe'
         sound.play('pause')
 
+    WARD_COLS = 6
+
     def wardrobe_key(self, k):
         hats = list(style.HATS)
         p = self.player
+        cols = self.WARD_COLS
         if k in (pygame.K_UP, pygame.K_w, pygame.K_DOWN, pygame.K_s):
             if self.ward_row == 0:
-                step = -4 if k in (pygame.K_UP, pygame.K_w) else 4
-                if step > 0 and self.ward_i + 4 >= len(hats):
+                step = -cols if k in (pygame.K_UP, pygame.K_w) else cols
+                if step > 0 and self.ward_i + cols >= len(hats):
                     self.ward_row = 1
-                elif step < 0 and self.ward_i < 4:
+                elif step < 0 and self.ward_i < cols:
                     pass
                 else:
                     self.ward_i = max(0, min(len(hats) - 1, self.ward_i + step))
@@ -1103,8 +1081,14 @@ class Game:
             if self.ward_row == 0:
                 self.ward_i = (self.ward_i + d) % len(hats)
             else:
-                self.ward_c = (self.ward_c + d) % len(style.DASH_COLORS)
-                p.dash_col = self.ward_c          # colours are always free: pick and go
+                n = len(style.DASH_COLORS)
+                c = self.ward_c
+                for _ in range(n):                    # skip the colours you don't have yet
+                    c = (c + d) % n
+                    if style.ink_unlocked(p, c):
+                        break
+                self.ward_c = c
+                p.dash_col = self.ward_c          # colours you own are free: pick and go
             sound.play('text')
         elif k in ACTION_KEYS or k in CONFIRM_KEYS:
             if self.ward_row == 0:
@@ -1125,9 +1109,12 @@ class Game:
     def draw_wardrobe(self, scr):
         p = self.player
         hats = list(style.HATS)
+        cols = self.WARD_COLS
         box = pygame.Rect(8, HUD_H + 3, SCREEN_W - 16, PLAY_H - 6)
         self.draw_box(scr, box)
         gfx.text(scr, "WARDROBE", SCREEN_W // 2, box.y + 5, (255, 220, 120), center=True)
+        got_n = sum(1 for h in hats if style.unlocked(self, h))
+        gfx.text(scr, f"{got_n}/{len(hats)}", box.x + 8, box.y + 5, (150, 160, 200))
         # a big Octo wearing the hat under the cursor, puffing the chosen ink colour
         hat = hats[self.ward_i]
         ox, oy = box.right - 40, box.y + 22
@@ -1142,35 +1129,40 @@ class Game:
             scr.blit(himg, (ox + 16 - himg.get_width() // 2, oy + 6 - himg.get_height() + 8))
         # the hat grid
         for i, h in enumerate(hats):
-            cx, cy = box.x + 18 + (i % 4) * 44, box.y + 24 + (i // 4) * 24
+            cx, cy = box.x + 18 + (i % cols) * 30, box.y + 22 + (i // cols) * 19
             got = style.unlocked(self, h)
             on = self.ward_row == 0 and i == self.ward_i
-            pygame.draw.rect(scr, (255, 220, 120) if on else (60, 70, 110), (cx - 14, cy - 8, 28, 20), 1)
+            pygame.draw.rect(scr, (255, 220, 120) if on else (60, 70, 110), (cx - 13, cy - 7, 26, 17), 1)
             img = style.icon(h)
             if img is not None:
                 if not got:
                     img = gfx.tint(img, (60, 60, 80))
-                scr.blit(img, (cx - img.get_width() // 2, cy - 6))
+                scr.blit(img, (cx - img.get_width() // 2, cy - 5))
             else:
                 gfx.text(scr, "-", cx - 2, cy - 2, (180, 180, 200))
             if h == p.hat:
-                gfx.text(scr, "*", cx + 8, cy + 5, (120, 255, 160))
-        name, how = style.HATS[hat]
+                gfx.text(scr, "*", cx + 7, cy + 3, (120, 255, 160))
+        name = style.HATS[hat][0]
         got = style.unlocked(self, hat)
-        y = box.y + 124
+        y = box.y + 120
         gfx.text(scr, name + ("" if got else " (LOCKED)"), box.x + 8, y, (255, 255, 255) if got else (170, 170, 190))
-        gfx.text(scr, style.HOW[how] if not got or how else "Z: WEAR IT", box.x + 8, y + 10, (170, 180, 220))
+        how = style.how_text(hat) if not got else ("Z: WEAR IT" if hat != p.hat else "WEARING IT")
+        gfx.text(scr, how, box.x + 8, y + 10, (170, 180, 220))
         # ink jet colour
         cy = box.bottom - 24
         on = self.ward_row == 1
-        gfx.text(scr, "JET INK:", box.x + 8, cy, (255, 220, 120) if on else (170, 180, 220))
+        gfx.text(scr, "INK:", box.x + 8, cy, (255, 220, 120) if on else (170, 180, 220))
         for i in range(len(style.DASH_COLORS)):
-            cx = box.x + 66 + i * 16
-            pygame.draw.circle(scr, style.dash_rgb(i, self.t), (cx, cy + 3), 5)
+            cx = box.x + 40 + i * 12
+            if style.ink_unlocked(p, i):
+                pygame.draw.circle(scr, style.dash_rgb(i, self.t), (cx, cy + 3), 4)
+            else:
+                pygame.draw.circle(scr, (50, 54, 80), (cx, cy + 3), 4, 1)
             if i == self.ward_c:
-                pygame.draw.circle(scr, (255, 255, 255) if on else (150, 150, 170), (cx, cy + 3), 7, 1)
-        gfx.text(scr, style.DASH_COLORS[self.ward_c][0], box.x + 8, cy + 10, (200, 210, 240))
-        gfx.text(scr, "ESC: DONE", box.right - 6 - gfx.text_width("ESC: DONE"), cy + 10, (140, 150, 190))
+                pygame.draw.circle(scr, (255, 255, 255) if on else (150, 150, 170), (cx, cy + 3), 6, 1)
+        inks = sum(1 for i in range(len(style.DASH_COLORS)) if style.ink_unlocked(p, i))
+        gfx.text(scr, f"{style.DASH_COLORS[self.ward_c][0]}  ({inks}/{len(style.DASH_COLORS)}, MORE AT INKY'S)",
+                 box.x + 8, cy + 10, (200, 210, 240))
 
     # ---- choosing a form from the whole list ---------------------------------
     def open_forms(self):
@@ -1291,6 +1283,14 @@ class Game:
         if not getattr(self, 'temple_armed', True):
             return
         self.temple_armed = False
+        cid = world.city_door(tx, ty)
+        if cid:
+            self.enter_city(cid)
+            return
+        cid = world.city_at(tx, ty)
+        if cid:
+            self.leave_city(cid)
+            return
         tid = world.temple_door(tx, ty)
         if tid:
             if not self.unsealed(tid):
@@ -1844,8 +1844,12 @@ class Game:
             self.effects.append(Particle(tx * TILE + 8, ty * TILE + 8, random.uniform(-0.6, 0.6),
                                          random.uniform(-1.4, -0.4), (230, 230, 240), 26, size=2))
 
+    def shop_price(self, price):
+        return max(1, int(price * 0.75 + 0.5)) if self.unlocked('goldcard') else price
+
     def buy(self, ware):
         wid, name, price, desc, once = ware
+        price = self.shop_price(price)
         p = self.player
         if p.pearls < price:
             sound.play('nope')
@@ -1933,11 +1937,41 @@ class Game:
             self.draw()
             if self.touch.active:
                 self.touch.present(self.display)
+            self.present()
             pygame.display.flip()
             self.clock.tick(FPS)
+            if WEB and self.t % 30 == 0:             # lets a test page read the frame rate
+                try:
+                    import platform
+                    platform.window.octo_fps = int(self.clock.get_fps())
+                    platform.window.octo_state = self.state
+                except Exception:
+                    pass
             await asyncio.sleep(0)      # lets the browser breathe (pygbag); harmless on desktop
 
+    def present(self):
+        """Scale the pixel-art picture up into the real window, then lay the hi-res 3D on top."""
+        if getattr(self, 'show_fps', False):
+            gfx.text(self.display, f"{self.clock.get_fps():.0f} FPS", 2, 2, (120, 255, 120))
+        win = self.window
+        pygame.transform.scale(self.display, win.get_size(), win)
+        if self.hires_on:
+            gx = self.touch.gx if self.touch.active else 0
+            win.blit(self.hires, (gx * HI, 0))
+            self.hires_on = False
+
+    def hires_layer(self, clear=True):
+        """The hi-res canvas for this frame (cleared the first time it's asked for)."""
+        if not self.hires_on:
+            if clear:
+                self.hires.fill((0, 0, 0, 0))
+            self.hires_on = True
+        return self.hires
+
     def handle_event(self, ev):
+        if ev.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION) and \
+                not getattr(ev, 'touch', False) and hasattr(ev, 'pos'):
+            ev.pos = (ev.pos[0] // HI, ev.pos[1] // HI)     # window pixels -> game pixels
         if ev.type == pygame.QUIT:
             quit_game()
         if self.state == 'intro' and ev.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
@@ -1964,6 +1998,8 @@ class Game:
                     pygame.display.toggle_fullscreen()
                 except pygame.error:
                     pass
+            if k == pygame.K_F3:
+                self.show_fps = not getattr(self, 'show_fps', False)     # a frame-rate readout
             if k == pygame.K_n:
                 sound.toggle_music()        # mutes music and sound effects together
                 self.toast = ('SOUND ON' if sound.music_on else 'MUTED', 90)
@@ -1986,6 +2022,29 @@ class Game:
 
     def on_key(self, k):
         st = self.state
+        if st == 'journal':
+            self.journal_key(k)
+            return
+        if st == 'trade':
+            self.trade_key(k)
+            return
+        if st == 'name':
+            self.name_key(k)
+            return
+        if st == 'museum':
+            self.museum_key(k)
+            return
+        if st == 'radio':
+            self.radio_key(k)
+            return
+        if st == 'medal':
+            if (k in CONFIRM_KEYS or k in ACTION_KEYS) and self.medal_t > 40:
+                self.end_medal()
+            return
+        if st == 'cityintro':
+            if (k in CONFIRM_KEYS or k in ACTION_KEYS or k == pygame.K_ESCAPE) and self.ci_t > 20:
+                self.end_cityintro()
+            return
         if st == 'versus':
             if k in CONFIRM_KEYS or k in ACTION_KEYS:
                 self.skip_versus()
@@ -2034,6 +2093,8 @@ class Game:
                 self.open_forms()
             elif k in WARDROBE_KEYS:
                 self.open_wardrobe()
+            elif k in JOURNAL_KEYS:
+                self.open_journal(0)
             elif k in FORM_KEYS:
                 self.player.pick_form(FORM_KEYS[k])
         elif st == 'pause':
@@ -2104,6 +2165,8 @@ class Game:
                     d['chars'] = 0
                     if d['i'] >= len(d['pages']):
                         self.state = d['back']
+                        if d.get('then'):
+                            d['then']()
         elif st == 'gameover':
             if k in CONFIRM_KEYS:
                 self.continue_game()
@@ -2130,7 +2193,15 @@ class Game:
         dx, dy = DIRS[p.facing]
         probe = p.rect.inflate(4, 4).move(dx * 6, dy * 6)
         for npc in self.npcs:
+            if getattr(npc, 'hidden', False):
+                continue
             if probe.colliderect(npc.rect):
+                if isinstance(npc, Citizen):
+                    self.talk_citizen(npc)
+                    return True
+                if isinstance(npc, LegendStatue):
+                    self.talk_statue()
+                    return True
                 if isinstance(npc, MegaMachine):
                     self.talk_mega()
                     return True
@@ -2188,6 +2259,12 @@ class Game:
         if st == 'versus':
             self.update_versus()
             return
+        if st == 'medal':
+            self.update_medal()
+            return
+        if st == 'cityintro':
+            self.update_cityintro()
+            return
         if st == 'play':
             self.frames += 1
             if self.fight_t:
@@ -2221,7 +2298,9 @@ class Game:
                 self.state = 'gameover'
 
     def update_bubbles(self):
-        rate = 0.06 if self.state == 'title' else (0.03 if self.area == 'overworld' else
+        dry = self.player is not None and world.world_at(self.player.rect.centerx // TILE,
+                                                          self.player.rect.centery // TILE) in world.DRY_WORLDS
+        rate = 0.06 if self.state == 'title' else 0 if dry else (0.03 if self.area == 'overworld' else
                                                    0 if self.area == 'sky' else 0.012)
         if random.random() < rate:
             h = SCREEN_H if self.state == 'title' else PLAY_H
@@ -2238,7 +2317,7 @@ class Game:
             x, y = r.x, r.y
         elif self.bossfight:
             x, y = world.BOSS_LAIR[0] * TILE, world.BOSS_LAIR[1] * TILE
-        elif cy >= world.TEMPLE_Y * TILE:
+        elif world.TEMPLE_Y * TILE <= cy < world.CITY_Y * TILE:
             # deep temples: one room per screen; the camera glides to the next room
             tid = world.temple_at(cx // TILE, cy // TILE)
             ox, oy = world.TEMPLES[tid]['origin'] if tid else (0, world.TEMPLE_Y)
@@ -2280,6 +2359,7 @@ class Game:
         if region != self.region:
             self.region = region
             self.banner_t = 150
+            self.town_region(region)
             if area in ('overworld', 'sky'):
                 sound.music(world.REGION_MUSIC.get(region, 'reef'))
         if area != self.area:
@@ -2451,7 +2531,7 @@ class Game:
             s.update(self)
         for n in self.npcs:
             n.update(self)
-        mag = max(p.stat('magnet', 0), 56 if 'pmagnet' in p.items else 0)
+        mag = max(p.stat('magnet', 0), 56 if 'pmagnet' in p.items else 0, 96 if 'u_magnet' in p.items else 0)
         pcx, pcy = p.rect.center
         for it in self.pickups:
             it.update(self)
@@ -2472,6 +2552,9 @@ class Game:
                     self.shop_focus = ware
                     break
         for e in self.enemies:
+            if e.dead and not getattr(e, 'scored', False) and getattr(e, 'hp', 1) <= 0:
+                e.scored = True
+                self.score_kill(e)
             if e.dead and e.spawn['arena'] == 'trial':
                 continue
             if e.dead and e.spawn['inst'] is e:
@@ -2482,6 +2565,7 @@ class Game:
         self.pickups = [i for i in self.pickups if not i.dead]
         self.effects = [f for f in self.effects if not f.dead]
         self.update_arenas()
+        self.town_tick()
 
         if self.state != 'play':
             return
@@ -2513,11 +2597,16 @@ class Game:
         if it.item_id:
             self.collected.add(it.item_id)
         k = it.kind
+        if k.startswith('q_'):                       # something a side quest sent you looking for
+            self.quest_item_got(it)
+            return
         if k == 'pearl':
             p.pearls += int(1 * p.stat('pearls', 1))
+            self.add_score(1)
             sound.play('pearl')
         elif k == 'bluepearl':
             p.pearls += int(5 * p.stat('pearls', 1))
+            self.add_score(5)
             sound.play('pearl')
         elif k == 'heart':
             p.hp = min(p.max_hp, p.hp + 2)
@@ -2528,6 +2617,7 @@ class Game:
             self.burst(it.rect.center, (255, 160, 120), 6)
         elif k == 'key':
             p.keys += 1
+            self.add_score(50, it.rect.center)
             sound.play('key')
             self.say(["YOU FOUND A SHRINE KEY!", "IT SHOULD OPEN THE SEALED DOOR IN THE GREAT HALL."])
         elif k == 'container':
@@ -2569,7 +2659,10 @@ class Game:
         scr = self.screen
         st = self.state
         if st == 'intro':
-            self.intro.draw(scr, self.t)
+            scr.fill((0, 0, 0))
+            self.intro.draw(self.hires_layer(clear=False), self.t)
+            for name in self.intro.cues(self.t):
+                sound.play(name)
             return
         if st == 'title':
             self.draw_title(scr)
@@ -2579,6 +2672,14 @@ class Game:
             return
         if st == 'win':
             self.draw_win(scr)
+            return
+        if st == 'cityintro' and self.cityintro:
+            scr.fill((0, 0, 0))
+            self.cityintro.draw(self.hires_layer(clear=False), self.ci_t)
+            return
+        if st == 'museum':
+            scr.fill((0, 0, 0))
+            self.draw_museum(self.hires_layer(clear=False))
             return
 
         self.draw_world(self.play_surf)
@@ -2616,7 +2717,8 @@ class Game:
             veil.fill((255, 255, 255))
             veil.set_alpha(int(255 * self.flash_t / 20))
             scr.blit(veil, (0, HUD_H))
-        if st in ('warp', 'map', 'fuse', 'altar', 'forms', 'catalogue', 'wardrobe', 'megafuse'):
+        if st in ('warp', 'map', 'fuse', 'altar', 'forms', 'catalogue', 'wardrobe', 'megafuse', 'journal', 'trade',
+                  'name', 'radio'):
             veil = pygame.Surface((PLAY_W, PLAY_H))
             veil.fill((0, 0, 16))
             veil.set_alpha(150)
@@ -2624,11 +2726,12 @@ class Game:
         if self.bossfight and st in ('play', 'versus', 'dialog', 'pause'):
             scr.blit(self.boss_vignette(), (0, HUD_H))
         if st == 'play' and self.fight_t:
-            self.draw_fight_text(scr)
+            cinema.draw_fight(self.hires_layer(), 70 - self.fight_t, (HUD_H + PLAY_H // 2 - 10) * HI)
         if st == 'play' and self.ko_t:
-            self.draw_ko(scr)
+            cinema.draw_victory(self.hires_layer(), 110 - self.ko_t, getattr(self, 'ko_name', ''),
+                                (HUD_H + PLAY_H // 2 - 8) * HI)
         if st == 'versus' and self.versus:
-            self.versus.draw(scr, self.vs_t)
+            self.versus.draw(self.hires_layer(), self.vs_t)
         if st == 'warp':
             self.draw_warp(scr)
             gfx.text(scr, "PAUSED", SCREEN_W // 2, SCREEN_H - 10, (150, 160, 200), center=True)
@@ -2646,6 +2749,19 @@ class Game:
             self.draw_megafuse(scr)
         elif st == 'catalogue':
             self.draw_catalogue(scr)
+        elif st == 'journal':
+            self._podium = None
+            self.draw_journal(scr)
+            if self.jtab == 2:
+                self.draw_podium(self.hires_layer())
+        elif st == 'trade':
+            self.draw_trade(scr)
+        elif st == 'name':
+            self.draw_name(scr)
+        elif st == 'radio':
+            self.draw_radio(scr)
+        elif st == 'medal' and self.medal:
+            self.medal.draw(self.hires_layer(), self.medal_t)
         if st == 'dialog':
             self.draw_dialog(scr)
         elif st == 'pause':
@@ -2665,7 +2781,8 @@ class Game:
         theme0 = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
         p_ = self.player.rect.center
         if self.area == 'overworld' and theme0 not in ('abyss', 'city') and \
-                self.region not in world.DARK_REGIONS and world.world_at(p_[0] // TILE, p_[1] // TILE) == 'sea':
+                self.region not in world.DARK_REGIONS and \
+                world.world_at(p_[0] // TILE, p_[1] // TILE) in ('sea', 'octocity'):
             fx.caustics(ps, self.cam, self.t)
         vis = self.view_rect.inflate(32, 32)
         for it in self.pickups:
@@ -2678,8 +2795,9 @@ class Game:
                 img = self.ware_icon(ware[0])
                 bob = round(math.sin(self.t * 0.08 + r.x) * 1) if ware is self.shop_focus else 0
                 ps.blit(img, (r.centerx - img.get_width() // 2 + ox, r.centery - img.get_height() // 2 + oy + bob))
-                gfx.text(ps, str(ware[2]), r.centerx + ox, r.bottom + 3 + oy,
-                         (255, 220, 120) if self.player.pearls >= ware[2] else (200, 120, 120), center=True)
+                price = self.shop_price(ware[2])
+                gfx.text(ps, str(price), r.centerx + ox, r.bottom + 3 + oy,
+                         (255, 220, 120) if self.player.pearls >= price else (200, 120, 120), center=True)
         self.draw_portals(ps, ox, oy)
         if self.trial and world.TRIALS[self.trial['name']].get('eyes'):
             t = world.TRIALS[self.trial['name']]
@@ -2692,7 +2810,7 @@ class Game:
                 pygame.draw.circle(ps, (255, 240, 255), (cx, cy), r // 2)
         # soft shadows first, so everything sits on the sea floor
         for n in self.npcs:
-            if vis.colliderect(n.rect):
+            if vis.colliderect(n.rect) and not getattr(n, 'hidden', False):
                 fx.shadow(ps, n.rect, ox, oy)
         for e in self.enemies:
             if vis.colliderect(e.rect) and not e.spawn_t:
@@ -2700,7 +2818,8 @@ class Game:
         if self.state != 'dying' and not self.player.tumble:
             fx.shadow(ps, self.player.rect, ox, oy, lift=6 if self.player.in_sky else 0)
         for n in self.npcs:
-            n.draw(ps, ox, oy)
+            if vis.colliderect(n.rect):
+                n.draw(ps, ox, oy)
         for e in sorted(self.enemies, key=lambda e: e.y):
             if vis.colliderect(e.rect):
                 e.draw(ps, ox, oy)
@@ -3120,6 +3239,19 @@ class Game:
                 c = (110, 110, 120) if tid in self.bells() else (255, 210, 90)
                 pygame.draw.rect(scr, (20, 20, 30), (sx - 3, sy - 3, 7, 7))
                 pygame.draw.rect(scr, c, (sx - 2, sy - 2, 5, 5))
+        # town gates (a little house), quest targets (Quest Compass) and treasure (Treasure Sense)
+        for c in world.CITIES.values():
+            gx, gy = c['door']
+            if inside(gx, gy) or (x0 <= gx < x0 + w and y0 <= gy < y0 + h and c['id'] in self.flags.get('towns_seen', [])):
+                sx, sy = spot(gx, gy)
+                pygame.draw.polygon(scr, (20, 20, 30), [(sx - 4, sy + 3), (sx - 4, sy - 1), (sx, sy - 5), (sx + 4, sy - 1),
+                                                        (sx + 4, sy + 3)])
+                pygame.draw.polygon(scr, (255, 170, 200) if c['id'] == 'octo' else (150, 220, 120),
+                                    [(sx - 3, sy + 2), (sx - 3, sy - 1), (sx, sy - 4), (sx + 3, sy - 1), (sx + 3, sy + 2)])
+        in_page = lambda tx, ty: x0 <= tx < x0 + w and y0 <= ty < y0 + h     # noqa: E731
+        self.draw_treasure_marks(scr, spot, in_page)
+        if blink:
+            self.draw_quest_marks(scr, spot, in_page)
         # big bosses
         for boss in ('throne', 'murk'):
             bx0, by0, bx1, by1 = ARENAS[boss]['rect']
@@ -3184,6 +3316,10 @@ class Game:
             if world.in_rect(px, py, (x0, y0, x1, y1)) and self.seen[py][px]:
                 c = (120, 120, 130) if name in self.trials_done else self.portal_color(t)
                 pygame.draw.rect(scr, c, (x + int((px - x0 + 0.5) * kx) - 1, y + int((py - y0 + 0.5) * ky) - 1, 2, 2))
+        if self.unlocked('compass') and (self.t // 16) % 2:
+            for qx, qy in self.quest_targets():
+                if world.in_rect(qx, qy, (x0, y0, x1, y1)):
+                    pygame.draw.rect(scr, (255, 220, 60), (x + int((qx - x0 + 0.5) * kx) - 1, y + int((qy - y0 + 0.5) * ky) - 1, 2, 2))
         if (self.t // 12) % 2 and not self.trial and not self.bossfight:
             cx, cy = p.rect.center
             pygame.draw.rect(scr, (255, 255, 255), (x + int((cx / TILE - x0) * kx) - 1, y + int((cy / TILE - y0) * ky) - 1, 3, 3))
@@ -3198,6 +3334,7 @@ class Game:
         pygame.draw.rect(scr, (0, 0, 0), (0, 0, SCREEN_W, HUD_H))
         p = self.player
         self.draw_minimap(scr, 4, 8)
+        self.draw_score_hud(scr)
 
         # counters
         scr.blit(gfx.SPR['pearl'], (60, 12))
@@ -3277,7 +3414,7 @@ class Game:
         lines = ["PAUSED", "ARROWS/WASD  MOVE", "Z / SPACE    ATTACK / TALK / BUY",
                  "X / 1-9      CHANGE FORM", "C            INK: LINE/BURST",
                  "V            INK JET (DASH)", "B            BUBBLE BOMB", "T            WARP TO PORTALS",
-                 "M            WORLD MAP", "N / H        MUTE / HATS", "P/ENTER/ESC  RESUME"]
+                 "M / Q        MAP / JOURNAL", "N / H        MUTE / HATS", "P/ENTER/ESC  RESUME"]
         for i, l in enumerate(lines):
             gfx.text(scr, l, box.x + 10 if i else SCREEN_W // 2, box.y + 6 + i * 10,
                      (255, 220, 120) if i == 0 else (255, 255, 255), center=(i == 0))
@@ -3324,7 +3461,8 @@ class Game:
         elif phase < 15 and self.t > 15:
             w = abs(math.sin(phase / 15 * math.pi / 2))
         self.title_scene.touch = self.touch.active
-        self.title_scene.draw(scr, self.t, menu, self.title_sel, mood, w)
+        self.title_scene.draw(scr, self.t, menu, self.title_sel, mood, w, hires=True)
+        self.title_scene.draw_hifi(self.hires_layer(), self.t, mood, w)
 
     def draw_title_old(self, scr):
         scr.blit(self.title_bg, (0, 0))

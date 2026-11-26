@@ -194,7 +194,46 @@ class TitleScene:
         return sil
 
     # ---- per frame ----------------------------------------------------------
-    def draw(self, scr, t, menu, sel, mood, flip_w):
+    def _hifi_parts(self):
+        """The hi-res logo and 3D Octos (built the first time the title is shown in hi-res)."""
+        if getattr(self, '_hifi', None) is None:
+            import hifi
+            HI = hifi.HI
+            words = []
+            for word, px, top, bot, side, y in (("LEGEND OF", 24 * HI, (240, 248, 255), (130, 180, 240), (40, 70, 150), 13),
+                                                ("OCTO", 62 * HI, (255, 244, 150), (250, 140, 40), (150, 60, 10), 28)):
+                img = hifi.text3d(word, px, top, bot, side)
+                words.append((img, hifi.W / 2 - img.get_width() / 2, y * HI))
+            self._hifi = {'words': words, 'blue': hifi.Octo3D(gfx.OCTO_PAL['blue']),
+                          'mad': hifi.Octo3D(gfx.OCTO_PAL['mad'], mad=True), 'tmp': None}
+        return self._hifi
+
+    def draw_hifi(self, hr, t, mood, flip_w):
+        """The smooth 3D logo and Octo, drawn on the hi-res canvas over the pixel-art scene."""
+        import hifi
+        HI = hifi.HI
+        parts = self._hifi_parts()
+        dest = hr
+        if t < 60:                                   # fade in with the rest of the title
+            if parts['tmp'] is None:
+                parts['tmp'] = pygame.Surface(hr.get_size(), pygame.SRCALPHA)
+            dest = parts['tmp']
+            dest.fill((0, 0, 0, 0))
+        for img, x, y in parts['words']:
+            dest.blit(img, (x, y + math.sin(t * 0.03) * 1.5 * HI))
+        spin = (1 - flip_w) * math.pi
+        z = 400 * HI
+        k = hifi.F / z
+        bob = math.sin(t * 0.05) * 4 * HI
+        cy = 134 * HI + bob
+        items = parts[mood].items((0, (cy - hifi.H / 2) / k, z), yaw=math.sin(t * 0.02) * 0.45 + spin, pitch=0.18,
+                                  t=t, size=21 * HI / k, blink=(t % 200) < 6, wave=max(0.0, math.sin(t * 0.013)) ** 4)
+        hifi.render(dest, items)
+        if dest is not hr:
+            dest.set_alpha(int(255 * t / 60))
+            hr.blit(dest, (0, 0))
+
+    def draw(self, scr, t, menu, sel, mood, flip_w, hires=False):
         scr.blit(self.bg, (0, 0))
         # a shark patrols far away now and then
         st = t % 1500
@@ -255,18 +294,19 @@ class TitleScene:
         sh = pygame.Surface((shadow_w, 8), pygame.SRCALPHA)
         pygame.draw.ellipse(sh, (0, 0, 0, 70), (0, 0, shadow_w, 8))
         scr.blit(sh, (W // 2 - shadow_w // 2, FLOOR_Y + 6))
-        w = max(4, int(size * flip_w))
-        key = (mood, (t // 16) % 2, w)
-        img = self._octo_cache.get(key)
-        if img is None:
-            img = pygame.transform.scale(gfx.OCTO[mood]['down'][(t // 16) % 2], (w, size))
-            if len(self._octo_cache) > 80:
-                self._octo_cache.clear()
-            self._octo_cache[key] = img
-        scr.blit(img, (W // 2 - w // 2, oy))
-        # logo
-        lx = W // 2 - self.logo.get_width() // 2
-        scr.blit(self.logo, (lx, 16 + math.sin(t * 0.03) * 1.5))
+        if not hires:
+            w = max(4, int(size * flip_w))
+            key = (mood, (t // 16) % 2, w)
+            img = self._octo_cache.get(key)
+            if img is None:
+                img = pygame.transform.scale(gfx.OCTO[mood]['down'][(t // 16) % 2], (w, size))
+                if len(self._octo_cache) > 80:
+                    self._octo_cache.clear()
+                self._octo_cache[key] = img
+            scr.blit(img, (W // 2 - w // 2, oy))
+            # logo
+            lx = W // 2 - self.logo.get_width() // 2
+            scr.blit(self.logo, (lx, 16 + math.sin(t * 0.03) * 1.5))
         gfx.text(scr, "A REVERSIBLE UNDERSEA ADVENTURE", W // 2 + 1, 89, (0, 10, 30), center=True)
         gfx.text(scr, "A REVERSIBLE UNDERSEA ADVENTURE", W // 2, 88, (200, 230, 255), center=True)
         gfx.text(scr, "A FAN TRIBUTE TO 8-BIT ADVENTURES", W // 2 + 1, 100, (0, 10, 30), center=True)

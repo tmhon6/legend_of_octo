@@ -7,6 +7,10 @@ HUD_H = 56
 SCREEN_W, SCREEN_H = PLAY_W, PLAY_H + HUD_H     # 256 x 232 (scaled up by SDL)
 FPS = 60
 
+import sys as _sys
+WEB_BUILD = _sys.platform == "emscripten"
+HI = 2 if WEB_BUILD else 3           # the 3D scenes are drawn this many times sharper than the pixel art
+
 PLAYER_SPEED = 1.3
 SCROLL_FRAMES = 44
 FADE_FRAMES = 24

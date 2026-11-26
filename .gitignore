@@ -6,3 +6,4 @@ octo/version.py
 build/
 *.swp
 assets/
+leaderboard.json
