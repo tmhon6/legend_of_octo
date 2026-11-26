@@ -192,7 +192,7 @@ class Player(Entity):
                 if e.active and game.view_rect.colliderect(e.rect):
                     e.hit(game, 1, 'glow', (cx, cy))
                     if not e.dead:
-                        e.frozen = max(e.frozen, 30 if isinstance(e, Shark) else 100)
+                        e.frozen = max(e.frozen, 30 if getattr(e, 'boss', False) else 100)
             self.shoot_cd = 110
             self.attack_t = 10
             sound.play('warp')
@@ -775,6 +775,7 @@ class Shark(Enemy):
     CHARGE = (2.8, 3.4)
     SPREAD = (-0.35, 0, 0.35)
     knockback = False
+    boss = True
     spawn_time = 60
     hb = (8, 8, 34, 15)
 
@@ -943,6 +944,222 @@ class Gull(Enemy):
     def image(self):
         img = gfx.SPR['gull'][(self.t // 8) % 2]
         return gfx.flipped(img) if self.vx < 0 or (not self.dive and math.sin(self.ang) < 0) else img
+
+
+# ---------------------------------------------------------------------------
+# Mini-bosses: one guards each region of the world
+# ---------------------------------------------------------------------------
+MINIBOSS_STYLES = {
+    # id: name, base sprite, tint, hp, contact damage, speed, moves, minion, shot kind, movement
+    'pinch': dict(name="BIG PINCH", base='crab', tint=(255, 200, 190), hp=12, dmg=1, speed=0.7,
+                  moves=('charge', 'summon', 'charge'), minion='crab', shot='spine'),
+    'wraith': dict(name="KELP WRAITH", base='jelly', tint=(120, 255, 140), hp=12, dmg=1, speed=0.55,
+                   moves=('spread', 'teleport', 'ring'), minion='jelly', shot='bubble', phase=True),
+    'thorn': dict(name="THORNBACK", base='urchin', tint=(255, 150, 210), hp=14, dmg=2, speed=0.5,
+                  moves=('ring', 'charge', 'ring'), minion='urchin', shot='spine'),
+    'blowhard': dict(name="BLOWHARD", base='puffer', tint=(255, 240, 150), hp=14, dmg=1, speed=0.6,
+                     moves=('ring', 'spread', 'summon'), minion='puffer', shot='spine'),
+    'gloom': dict(name="GLOOM JELLY", base='jelly', tint=(150, 100, 255), hp=16, dmg=2, speed=0.6,
+                  moves=('teleport', 'ring', 'spread'), minion='jelly', shot='bubble', fly=True),
+    'captain': dict(name="CAPTAIN CLAW", base='crab', tint=(200, 160, 90), hp=16, dmg=2, speed=0.8,
+                    moves=('charge', 'spread', 'summon'), minion='crab', shot='spine'),
+    'frostmaw': dict(name="FROSTMAW", base='icecrab', tint=(220, 240, 255), hp=18, dmg=2, speed=0.85,
+                     moves=('charge', 'ring', 'charge'), minion='icecrab', shot='bubble'),
+    'magma': dict(name="MAGMA KING", base='lavacrab', tint=(255, 190, 150), hp=18, dmg=2, speed=0.8,
+                  moves=('charge', 'summon', 'ring'), minion='lavacrab', shot='spine'),
+    'warden': dict(name="HOLLOW WARDEN", base='puffer', tint=(150, 160, 190), hp=20, dmg=2, speed=0.7,
+                   moves=('teleport', 'spread', 'ring'), minion='jelly', shot='bubble', fly=True),
+    'storm': dict(name="STORM GULL", base='gull', tint=(200, 210, 255), hp=16, dmg=2, speed=1.0,
+                  moves=('charge', 'spread', 'summon'), minion='gull', shot='spine', fly=True),
+}
+
+
+class MiniBoss(Enemy):
+    """A big, tough cousin of a regular enemy that guards one region."""
+    knockback = False
+    spawn_time = 50
+    boss = True
+    hb = (4, 6, 24, 22)
+    _frames = {}
+
+    def __init__(self, bid, x, y):
+        super().__init__(x - 8, y - 8)
+        cfg = MINIBOSS_STYLES[bid]
+        self.bid, self.cfg = bid, cfg
+        self.name = cfg['name']
+        self.max_hp = self.hp = cfg['hp']
+        self.damage = cfg['dmg']
+        self.who = 'flyer' if cfg.get('fly') else 'walker'
+        self.home = (self.x, self.y)
+        self.state, self.state_t = 'roam', 90
+        self.move_i = 0
+        self.v = (0.0, 0.0)
+        self.face = 1
+        self.minions = []
+        self.fade = 255
+
+    def frames(self):
+        key = self.bid
+        if key not in MiniBoss._frames:
+            out = []
+            for f in gfx.SPR[self.cfg['base']]:
+                f = gfx.tint(f, self.cfg['tint']) if self.cfg.get('tint') else f
+                out.append(pygame.transform.scale(f, (f.get_width() * 2, f.get_height() * 2)))
+            MiniBoss._frames[key] = out
+        return MiniBoss._frames[key]
+
+    def _step(self, dx, dy, room):
+        if self.cfg.get('phase'):           # drifts straight through kelp and rock
+            nx, ny = self.x + dx, self.y + dy
+            hx, hy = self.home
+            if math.hypot(nx - hx, ny - hy) < 110 and room.bounds.contains(
+                    pygame.Rect(nx + self.hb[0], ny + self.hb[1], self.hb[2], self.hb[3])):
+                self.x, self.y = nx, ny
+                return True
+            return False
+        return self.move(dx, dy, room)
+
+    def ai(self, game):
+        room = game.level
+        enraged = self.hp <= self.max_hp // 2
+        tx, ty = game.player.seen_pos()
+        cx, cy = self.rect.center
+        d = math.hypot(tx - cx, ty - cy) or 1
+        ux, uy = (tx - cx) / d, (ty - cy) / d
+        if abs(ux) > 0.2:
+            self.face = sign(ux)
+        self.state_t -= 1
+        st = self.state
+        if st == 'roam':
+            sp = self.cfg['speed'] * (1.35 if enraged else 1.0)
+            wob = math.sin(self.t * 0.05) * 0.6
+            if not self._step((ux - uy * wob) * sp, (uy + ux * wob) * sp, room):
+                self._step(-uy * sp, ux * sp, room)
+            if self.state_t <= 0:
+                moves = self.cfg['moves']
+                self.state = moves[self.move_i % len(moves)]
+                self.move_i += 1
+                self.state_t = {'charge': 36, 'ring': 30, 'spread': 34, 'summon': 30, 'teleport': 40}[self.state]
+        elif st == 'charge':
+            if self.state_t > 0:                    # wind-up: shudder in place
+                return
+            if self.state_t == 0:
+                s = 3.6 if enraged else 3.0
+                self.v = (ux * s, uy * s)
+                sound.play('jet')
+            if not self._step(self.v[0], self.v[1], room) or self.state_t < -40:
+                if self.state_t >= -40:
+                    game.shake = 6
+                    sound.play('shut')
+                self._end(enraged)
+        elif st == 'ring':
+            if self.state_t == 0:
+                n = 12 if enraged else 8
+                off = random.random()
+                for i in range(n):
+                    a = (i + off) / n * math.tau
+                    game.shots.append(EnemyShot(cx - 4 + math.cos(a) * 12, cy - 4 + math.sin(a) * 12,
+                                                math.cos(a) * 1.6, math.sin(a) * 1.6, self.cfg['shot']))
+                sound.play('shoot')
+                self._end(enraged)
+        elif st == 'spread':
+            if self.state_t in (20, 10, 0):
+                base = math.atan2(uy, ux)
+                for da in ((-0.5, -0.25, 0, 0.25, 0.5) if enraged else (-0.35, 0, 0.35)):
+                    a = base + da
+                    game.shots.append(EnemyShot(cx - 4, cy - 4, math.cos(a) * 2.0, math.sin(a) * 2.0,
+                                                self.cfg['shot']))
+                sound.play('shoot')
+            if self.state_t <= 0:
+                self._end(enraged)
+        elif st == 'summon':
+            if self.state_t == 0:
+                self.minions = [m for m in self.minions if not m.dead]
+                for _ in range(min(2, 3 - len(self.minions))):
+                    for _try in range(8):
+                        a = random.uniform(0, math.tau)
+                        m = ENEMY_TYPES[self.cfg['minion']](cx - 8 + math.cos(a) * 26, cy - 8 + math.sin(a) * 26)
+                        if not room.blocked(m.rect, m.who):
+                            m.spawn = {'kind': self.cfg['minion'], 'arena': None, 'inst': None, 'killed': False}
+                            game.enemies.append(m)
+                            self.minions.append(m)
+                            break
+                sound.play('bubble')
+                self._end(enraged)
+        elif st == 'teleport':
+            if self.state_t > 20:
+                self.fade = max(0, self.fade - 25)
+            elif self.state_t == 20:
+                for _try in range(12):
+                    a = random.uniform(0, math.tau)
+                    nx, ny = tx - 16 + math.cos(a) * 64, ty - 16 + math.sin(a) * 64
+                    r = pygame.Rect(nx + self.hb[0], ny + self.hb[1], self.hb[2], self.hb[3])
+                    if not room.blocked(r, self.who) or self.cfg.get('phase') and room.bounds.contains(r):
+                        self.x, self.y = nx, ny
+                        if self.cfg.get('phase'):
+                            self.home = (nx, ny)
+                        break
+                sound.play('wisp')
+            else:
+                self.fade = min(255, self.fade + 25)
+            if self.state_t <= 0:
+                self.fade = 255
+                self._end(enraged)
+
+    def _end(self, enraged):
+        self.state = 'roam'
+        self.state_t = random.randint(50, 80) if enraged else random.randint(80, 120)
+
+    @property
+    def active(self):
+        return self.spawn_t == 0 and not self.dead and self.fade > 120
+
+    def die(self, game):
+        self.dead = True
+        sound.play('roar')
+        game.shake = 16
+        for i in range(6):
+            game.effects.append(Puff(self.x + random.randint(0, 20), self.y + random.randint(0, 20), delay=i * 5))
+        game.miniboss_defeated(self)
+
+    def draw(self, surf, ox=0, oy=0):
+        if self.spawn_t:
+            frames = gfx.SPR['puff']
+            i = min(3, (self.spawn_time - min(self.spawn_t, self.spawn_time)) * 4 // self.spawn_time)
+            img = pygame.transform.scale(frames[3 - i], (32, 32))
+            surf.blit(img, (round(self.x) + ox, round(self.y) + oy))
+            return
+        fr = self.frames()
+        if self.cfg['base'] == 'puffer':
+            img = fr[2] if self.state in ('ring', 'spread') else fr[(self.t // 12) % 2]
+        else:
+            img = fr[(self.t // 10) % 2]
+        if self.face < 0 and self.cfg['base'] in ('puffer', 'gull'):
+            img = gfx.flipped(img)
+        if self.frozen:
+            img = gfx.icy(img)
+        if self.hurt_t and (self.hurt_t // 2) % 2:
+            img = gfx.flash(img)
+        jx = jy = 0
+        if self.state == 'charge' and self.state_t > 0:
+            jx = random.choice((-1, 0, 1))
+            if self.state_t % 8 < 4:
+                img = gfx.flash(img)
+        if self.fade < 255:
+            img = img.copy()
+            img.set_alpha(self.fade)
+        surf.blit(img, (round(self.x) + ox + jx, round(self.y) + oy + jy))
+        # a little crown so it reads as a boss
+        cx, top = round(self.x) + ox + 16, round(self.y) + oy - 3
+        pygame.draw.polygon(surf, (255, 210, 60), [(cx - 6, top + 4), (cx - 6, top), (cx - 3, top + 2),
+                                                   (cx, top - 2), (cx + 3, top + 2), (cx + 6, top),
+                                                   (cx + 6, top + 4)])
+
+
+def make_enemy(kind, x, y):
+    if kind.startswith('mini:'):
+        return MiniBoss(kind[5:], x, y)
+    return ENEMY_TYPES[kind](x, y)
 
 
 ENEMY_TYPES = {'gull': Gull, 'crab': Crab, 'urchin': Urchin, 'jelly': Jelly, 'puffer': Puffer, 'shark': Shark,
@@ -1119,7 +1336,7 @@ class IceShard(Entity):
             if e.active and r.colliderect(e.rect):
                 e.hit(game, 1, 'ice', (r.centerx - self.vx * 4, r.centery - self.vy * 4))
                 if not e.dead:
-                    e.frozen = 45 if isinstance(e, Shark) else 170
+                    e.frozen = 45 if getattr(e, 'boss', False) else 170
                     e.kb_t = 0
                 self.dead = True
                 game.splat(r.center, (200, 240, 255))

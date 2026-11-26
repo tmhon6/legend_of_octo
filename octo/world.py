@@ -163,6 +163,10 @@ DARK_REGIONS = {'SUNKEN CITY', 'MURK PALACE'}
 SKY_Y = 92               # rows from here down are the Sky Islands
 SKY_RECT = (0, 92, 59, 127)
 GEYSERS = [((53, 49), (8, 102)), ((10, 28), (14, 119)), ((140, 18), (52, 100))]   # (sea tile, sky tile) pairs
+# one mini-boss guards each region: (style id, tile x, tile y) -- see entities.MINIBOSS_STYLES
+MINIBOSSES = [('pinch', 48, 28), ('wraith', 13, 20), ('thorn', 83, 14), ('blowhard', 16, 31),
+              ('gloom', 82, 44), ('captain', 50, 64), ('frostmaw', 115, 7), ('magma', 118, 41),
+              ('warden', 107, 66), ('storm', 33, 113)]
 WORLD_H = 80             # rows below this are the trial rooms, reached only by portal
 
 # Trial portals: step in, get warped to a one-screen trial room, win a new form.

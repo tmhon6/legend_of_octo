@@ -11,7 +11,7 @@ import pygame
 import gfx
 import sound
 import world
-from entities import (DIRS, ENEMY_TYPES, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
+from entities import (DIRS, ENEMY_TYPES, MiniBoss, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
                       EnemyShot, Hermie, Particle, Pickup, Player, Puff, Shelly, Urchin)
 from settings import FPS, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
 from world import ARENAS, Level
@@ -74,6 +74,7 @@ def quit_game():
     pygame.quit()
     sys.exit()
 BOMB_KEYS = {pygame.K_b}
+MAP_KEYS = {pygame.K_m}
 CONFIRM_KEYS = {pygame.K_RETURN, pygame.K_KP_ENTER}
 
 AREA_INFO = {
@@ -201,6 +202,10 @@ class Game:
             x, y = tile_to_px(tx, ty)
             self.spawns.append({'kind': kind, 'x': x, 'y': y, 'killed': False, 'inst': None,
                                 'arena': world.arena_of(int(tx), int(ty))})
+        for bid, tx, ty in world.MINIBOSSES:
+            x, y = tile_to_px(tx, ty)
+            self.spawns.append({'kind': 'mini:' + bid, 'x': x, 'y': y, 'killed': False, 'inst': None,
+                                'arena': None})
         self.enemies, self.shots, self.pickups, self.effects = [], [], [], []
         for i, (kind, tx, ty) in enumerate(world.ITEMS):
             self.place_item(kind, tx, ty, ('item', i))
@@ -270,6 +275,20 @@ class Game:
         for _ in range(5):
             self.effects.append(Particle(cx, cy, random.uniform(-1.2, 1.2), random.uniform(-1.2, 1.2),
                                          color, 14, size=2))
+
+    def miniboss_defeated(self, boss):
+        beaten = self.flags.setdefault('minis', [])
+        if boss.bid not in beaten:
+            beaten.append(boss.bid)
+        cx, cy = boss.rect.center
+        for i, kind in enumerate(('bluepearl', 'bluepearl', 'bluepearl', 'heart', 'heart')):
+            a = i / 5 * math.tau
+            it = Pickup(0, 0, kind, life=900)
+            w, h = it._img().get_size()
+            it.x, it.y = cx + math.cos(a) * 14 - w / 2, cy + math.sin(a) * 14 - h / 2
+            self.pickups.append(it)
+        self.burst((cx, cy), (255, 220, 120), 20)
+        self.toast = (f"{boss.name} DEFEATED!  {len(beaten)}/{len(world.MINIBOSSES)}", 180)
 
     def drop_loot(self, center, chance=1.0):
         if self.trial:
@@ -825,7 +844,7 @@ class Game:
                     pygame.display.toggle_fullscreen()
                 except pygame.error:
                     pass
-            if k == pygame.K_m:
+            if k == pygame.K_n:
                 sound.toggle_music()        # mutes music and sound effects together
                 self.toast = ('SOUND ON' if sound.music_on else 'MUTED', 90)
             if k in DIR_KEYS:
@@ -873,6 +892,8 @@ class Game:
                 sound.play('pause')
             elif k in WARP_KEYS:
                 self.open_warp()
+            elif k in MAP_KEYS:
+                self.open_map()
             elif k in FORM_KEYS:
                 self.player.pick_form(FORM_KEYS[k])
         elif st == 'pause':
@@ -883,6 +904,14 @@ class Game:
                 self.save_game()
             elif k == pygame.K_q:
                 quit_game()
+        elif st == 'map':
+            if k in MAP_KEYS or k in PAUSE_KEYS:
+                self.state = 'play'
+                sound.play('pause')
+            elif k in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_a, pygame.K_d) and self.sky_seen():
+                self.map_page = 'sky' if self.map_page == 'sea' else 'sea'
+                self.map_cache = None
+                sound.play('text')
         elif st == 'warp':
             spots = self.warp_spots()
             if k in (pygame.K_UP, pygame.K_w):
@@ -1011,7 +1040,9 @@ class Game:
         self.cam = (x, y)
         self.view_rect = pygame.Rect(x, y, PLAY_W, PLAY_H)
         # reveal the minimap
-        for ty in range(y // TILE, min(world.WORLD_H, (y + PLAY_H) // TILE + 1)):
+        for ty in range(y // TILE, min(lv.h, (y + PLAY_H) // TILE + 1)):
+            if world.WORLD_H <= ty < world.SKY_Y:
+                continue                # trial rooms aren't on the map
             row = self.seen[ty]
             for tx in range(x // TILE, min(lv.w, (x + PLAY_W) // TILE + 1)):
                 if not row[tx]:
@@ -1048,7 +1079,9 @@ class Game:
             if e is None:
                 pt = pygame.Rect(sp['x'], sp['y'], 16, 16)
                 if near.colliderect(pt) and math.hypot(pt.centerx - pc[0], pt.centery - pc[1]) > 56:
-                    e = ENEMY_TYPES[sp['kind']](sp['x'], sp['y'])
+                    if sp['kind'].startswith('mini:') and sp['kind'][5:] in self.flags.get('minis', []):
+                        continue
+                    e = make_enemy(sp['kind'], sp['x'], sp['y'])
                     e.spawn = sp
                     sp['inst'] = e
                     self.enemies.append(e)
@@ -1060,7 +1093,7 @@ class Game:
     def spawn_arena(self, name):
         for sp in self.spawns:
             if sp['arena'] == name and not sp['killed'] and sp['inst'] is None:
-                e = ENEMY_TYPES[sp['kind']](sp['x'], sp['y'])
+                e = make_enemy(sp['kind'], sp['x'], sp['y'])
                 e.spawn = sp
                 sp['inst'] = e
                 self.enemies.append(e)
@@ -1258,6 +1291,8 @@ class Game:
             gfx.text(scr, msg, SCREEN_W // 2, box.y + 6, (160, 230, 160), center=True)
         if st == 'play' and self.shop_focus:
             self.draw_shop_info(scr)
+        if st == 'play' and not self.trial:
+            self.draw_boss_bar(scr)
         if self.trial and st in ('play', 'pause'):
             self.draw_trial_hud(scr)
         if self.flash_t:
@@ -1266,8 +1301,16 @@ class Game:
             veil.fill((255, 255, 255))
             veil.set_alpha(int(255 * self.flash_t / 20))
             scr.blit(veil, (0, HUD_H))
+        if st in ('warp', 'map'):
+            veil = pygame.Surface((PLAY_W, PLAY_H))
+            veil.fill((0, 0, 16))
+            veil.set_alpha(150)
+            scr.blit(veil, (0, HUD_H))
         if st == 'warp':
             self.draw_warp(scr)
+            gfx.text(scr, "PAUSED", SCREEN_W // 2, SCREEN_H - 10, (150, 160, 200), center=True)
+        elif st == 'map':
+            self.draw_map(scr)
         if st == 'dialog':
             self.draw_dialog(scr)
         elif st == 'pause':
@@ -1379,6 +1422,18 @@ class Game:
     def portal_color(self, t):
         return FORM_COLORS[t['form']] if t['form'] else t.get('color', (255, 255, 255))
 
+    def draw_boss_bar(self, scr):
+        """Name and health of a mini-boss that's on screen."""
+        for e in self.enemies:
+            if isinstance(e, MiniBoss) and not e.dead and not e.spawn_t and self.view_rect.colliderect(e.rect):
+                w = 120
+                x, y = SCREEN_W // 2 - w // 2, SCREEN_H - 14
+                gfx.text(scr, e.name, SCREEN_W // 2, y - 9, (255, 220, 120), center=True)
+                pygame.draw.rect(scr, (0, 0, 0), (x - 1, y - 1, w + 2, 6))
+                pygame.draw.rect(scr, (90, 20, 30), (x, y, w, 4))
+                pygame.draw.rect(scr, (230, 60, 80), (x, y, int(w * max(0, e.hp) / e.max_hp), 4))
+                return
+
     def draw_trial_hud(self, scr):
         tr = self.trial
         t = world.TRIALS[tr['name']]
@@ -1455,6 +1510,113 @@ class Game:
             if pr.colliderect(dark.get_rect()):
                 dark.fill((0, 0, 12, 60), pr, special_flags=pygame.BLEND_RGBA_MIN)
         ps.blit(dark, (0, 0))
+
+    # ---- full map (M) -----------------------------------------------------
+    def tile_color(self, tx, ty):
+        lv = self.level
+        ch = lv.tiles[ty][tx]
+        if ch == 'v':
+            if ty >= world.SKY_Y:
+                return (150, 200, 245)
+            return (10, 10, 20) if world.area_at(tx, ty) == 'dungeon' else (30, 52, 112)
+        if ch in '.,':
+            return THEME_MINI.get(lv.themes[ty][tx], (196, 178, 128))
+        if ch == '=' and ty >= world.SKY_Y:
+            return (150, 110, 60)          # sky bridges
+        return MINIMAP_COLORS.get(ch, (0, 0, 0))
+
+    def sky_seen(self):
+        x0, y0, x1, y1 = world.SKY_RECT
+        return any(any(self.seen[ty][x0:x1 + 1]) for ty in range(y0, y1 + 1))
+
+    def open_map(self):
+        if self.trial:
+            sound.play('nope')
+            return
+        self.map_page = 'sky' if self.area == 'sky' else 'sea'
+        self.map_cache = None
+        self.state = 'map'
+        sound.play('pause')
+
+    def map_layout(self):
+        if self.map_page == 'sky':
+            x0, y0, x1, y1 = world.SKY_RECT
+            return x0, y0, x1 - x0 + 1, y1 - y0 + 1, 4
+        return 0, 0, self.level.w, world.WORLD_H, 1.5
+
+    def draw_map(self, scr):
+        x0, y0, w, h, k = self.map_layout()
+        mw, mh = int(w * k), int(h * k)
+        ox, oy = (SCREEN_W - mw) // 2, HUD_H + 16 + (PLAY_H - 30 - mh) // 2
+        if self.map_cache is None:
+            surf = pygame.Surface((w, h))
+            surf.fill((6, 8, 22))
+            for ty in range(y0, y0 + h):
+                row = self.seen[ty]
+                for tx in range(x0, x0 + w):
+                    if row[tx]:
+                        surf.set_at((tx - x0, ty - y0), self.tile_color(tx, ty))
+            self.map_cache = pygame.transform.scale(surf, (mw, mh))
+        title = "SKY ISLANDS" if self.map_page == 'sky' else "THE SEA"
+        gfx.text(scr, "MAP - " + title, SCREEN_W // 2, HUD_H + 4, (255, 220, 120), center=True)
+        pygame.draw.rect(scr, (90, 100, 150), (ox - 2, oy - 2, mw + 4, mh + 4), 1)
+        scr.blit(self.map_cache, (ox, oy))
+
+        def spot(tx, ty):
+            return ox + int((tx - x0 + 0.5) * k), oy + int((ty - y0 + 0.5) * k)
+
+        def inside(tx, ty):
+            return x0 <= tx < x0 + w and y0 <= ty < y0 + h and self.seen[int(ty)][int(tx)]
+        blink = (self.t // 15) % 2
+        # trial portals
+        for name, t in world.TRIALS.items():
+            px, py = t['portal']
+            if inside(px, py):
+                c = (120, 120, 130) if name in self.trials_done else self.portal_color(t)
+                sx, sy = spot(px, py)
+                pygame.draw.circle(scr, c, (sx, sy), 2)
+        # geysers
+        for a, b in world.GEYSERS:
+            for gx, gy in (a, b):
+                if inside(gx, gy):
+                    sx, sy = spot(gx, gy)
+                    pygame.draw.line(scr, (220, 250, 255), (sx, sy + 2), (sx, sy - 2))
+                    pygame.draw.line(scr, (220, 250, 255), (sx - 2, sy - 1), (sx, sy - 3))
+                    pygame.draw.line(scr, (220, 250, 255), (sx + 2, sy - 1), (sx, sy - 3))
+        # mini-bosses (crowns), red while still undefeated
+        beaten = self.flags.get('minis', [])
+        for bid, bx, by in world.MINIBOSSES:
+            if inside(bx, by):
+                sx, sy = spot(bx, by)
+                c = (110, 110, 120) if bid in beaten else (255, 80, 80)
+                pygame.draw.polygon(scr, c, [(sx - 3, sy + 2), (sx - 3, sy - 2), (sx - 1, sy),
+                                             (sx, sy - 3), (sx + 1, sy), (sx + 3, sy - 2), (sx + 3, sy + 2)])
+        # big bosses
+        for boss in ('throne', 'murk'):
+            bx0, by0, bx1, by1 = ARENAS[boss]['rect']
+            bx, by = (bx0 + bx1) // 2, (by0 + by1) // 2
+            if inside(bx, by) and boss not in self.cleared:
+                sx, sy = spot(bx, by)
+                pygame.draw.circle(scr, (230, 40, 60), (sx, sy), 3)
+                pygame.draw.circle(scr, (255, 255, 255), (sx, sy), 3, 1)
+        # Octo
+        cx, cy = self.player.rect.center
+        ptx, pty = cx / TILE, cy / TILE
+        if x0 <= ptx < x0 + w and y0 <= pty < y0 + h and blink:
+            sx, sy = ox + int((ptx - x0) * k), oy + int((pty - y0) * k)
+            pygame.draw.rect(scr, (255, 255, 255), (sx - 2, sy - 2, 5, 5))
+            pygame.draw.rect(scr, (40, 90, 220), (sx - 1, sy - 1, 3, 3))
+        # legend
+        ly = SCREEN_H - 11
+        pygame.draw.rect(scr, (255, 255, 255), (8, ly, 4, 4))
+        gfx.text(scr, "YOU", 15, ly - 1, (220, 220, 230))
+        pygame.draw.circle(scr, (180, 120, 255), (44, ly + 2), 2)
+        gfx.text(scr, "TRIAL", 49, ly - 1, (220, 220, 230))
+        pygame.draw.polygon(scr, (255, 80, 80), [(82, ly + 4), (82, ly), (84, ly + 2), (85, ly - 1),
+                                                 (86, ly + 2), (88, ly), (88, ly + 4)])
+        gfx.text(scr, f"BOSS {len(beaten)}/{len(world.MINIBOSSES)}", 92, ly - 1, (220, 220, 230))
+        hint = "<> SKY/SEA" if self.sky_seen() else "M: CLOSE"
+        gfx.text(scr, hint, SCREEN_W - 6 - gfx.text_width(hint), ly - 1, (150, 160, 200))
 
     def draw_minimap(self, scr, x, y):
         lv = self.level
@@ -1564,11 +1726,11 @@ class Game:
         lines = ["PAUSED", "ARROWS/WASD  MOVE", "Z / SPACE    ATTACK / TALK / BUY",
                  "X / 1-9      CHANGE FORM", "C            INK: LINE/BURST",
                  "V            INK JET (DASH)", "B            BUBBLE BOMB", "T            WARP TO PORTALS",
-                 "P/ENTER/ESC  RESUME", "M  MUTE      F11  FULLSCREEN"]
+                 "M            WORLD MAP", "N            MUTE", "P/ENTER/ESC  RESUME"]
         for i, l in enumerate(lines):
-            gfx.text(scr, l, box.x + 10 if i else SCREEN_W // 2, box.y + 7 + i * 11,
+            gfx.text(scr, l, box.x + 10 if i else SCREEN_W // 2, box.y + 6 + i * 10,
                      (255, 220, 120) if i == 0 else (255, 255, 255), center=(i == 0))
-        y = box.y + 7 + len(lines) * 11 + 4
+        y = box.y + 6 + len(lines) * 10 + 3
         gfx.text(scr, "S/L-SHIFT  SAVE" if WEB else "S/L-SHIFT  SAVE    Q  QUIT", SCREEN_W // 2, y, (160, 230, 160), center=True)
         forms = "  ".join(f"{i + 1}:{gfx.MOOD_NAMES[f]}" for i, f in enumerate(self.player.forms))
         for j, line in enumerate(gfx.wrap("FORMS  " + forms, 36)):

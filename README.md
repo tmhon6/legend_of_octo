@@ -38,7 +38,8 @@ In the browser, saves go to the browser's local storage instead of `savegame.jso
 | T                  | Warp to a completed trial portal                    |
 | Left Shift         | Save the game                                       |
 | P / Enter / Esc    | Pause. In the pause menu: **S** saves, **Q** quits  |
-| M                  | Mute / unmute all sound (music and effects)         |
+| M                  | World map (game pauses; ←/→ flips between sea and sky) |
+| N                  | Mute / unmute all sound (music and effects)         |
 | F11                | Fullscreen                                          |
 
 ## Forms
