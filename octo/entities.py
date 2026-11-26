@@ -92,6 +92,7 @@ class Player(Entity):
         self.fog_t = 0
         self.fog_cd = 0
         self.regen_t = 0
+        self.analog = None       # (x, y) from the touch joystick, length up to 1
         self.roll_t = 0
         self.roll_dir = (0, 0)
         self.decoy = (0.0, 0.0)
@@ -510,7 +511,20 @@ class Player(Entity):
         if self.in_sky and self.sphere > 0:
             self._roll(room, move_dir)
             return
-        if move_dir:
+        if self.analog:
+            # touch joystick: swim at any angle, faster the further the stick is pushed
+            ax, ay = self.analog
+            self.facing = cardinal(ax, ay)
+            sp = self.speed()
+            moved = self.move(ax * sp, ay * sp, room)
+            if not moved:
+                dx, dy = DIRS[self.facing]
+                self._assist(dx, dy, room)
+                self._try_unlock(game, dx, dy)
+            self.walk_t += 1
+            if self.walk_t % 9 == 0:
+                self.anim ^= 1
+        elif move_dir:
             dx, dy = DIRS[move_dir]
             self.facing = move_dir
             sp = self.speed()
@@ -526,7 +540,13 @@ class Player(Entity):
         """Inside the water sphere Octo rolls: he speeds up and slows down gently, and bounces off things."""
         v = self.roll_v
         tx = ty = 0.0
-        if move_dir:
+        if self.analog:
+            ax, ay = self.analog
+            self.facing = cardinal(ax, ay)
+            sp = self.speed() * 1.15
+            tx, ty = ax * sp, ay * sp
+            move_dir = self.facing
+        elif move_dir:
             dx, dy = DIRS[move_dir]
             self.facing = move_dir
             sp = self.speed() * 1.15

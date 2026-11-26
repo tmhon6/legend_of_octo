@@ -18,6 +18,7 @@ from settings import HUD_H, SCREEN_H, SCREEN_W
 
 WEB = sys.platform == 'emscripten'
 PANEL_H = 176
+STICK_R = 30                    # how far the joystick knob can travel
 MIN_SIDE = 70                   # narrowest side panel worth using in landscape
 
 # name, label, key sent (None = handled specially)
@@ -104,7 +105,9 @@ class TouchControls:
         self.side = 0               # width of each landscape side panel
         self.gx = 0                 # where the game picture sits on the display
         self.vp = None
-        self.stick = None           # where the thumb landed: the D-pad floats there while held
+        self.stick = None           # joystick base: where the thumb landed (it follows a long drag)
+        self.knob = None            # where the thumb is now
+        self.vec = None             # joystick push: (x, y), length up to 1
         self.layout()
 
     # ---- setup -------------------------------------------------------------
@@ -230,12 +233,6 @@ class TouchControls:
         x, y = pos
         st = g.state
         if st != 'title':
-            dx, dy, r = self.dpad
-            if math.hypot(x - dx, y - dy) <= r + 10:
-                self.fingers[fid] = 'dpad'
-                self.stick = None
-                self.move(fid, pos)
-                return
             for name, (bx, by, br, key, _) in self.buttons.items():
                 if math.hypot(x - bx, y - by) <= br + 6:
                     self.fingers[fid] = name
@@ -254,12 +251,13 @@ class TouchControls:
                     else:
                         self.press(key)
                     return
-            # anywhere else on the left half: the D-pad appears under your thumb
+            # anywhere else on the left half: a joystick appears under your thumb -- drag to swim
             w = pygame.display.get_surface().get_width() if pygame.display.get_surface() else SCREEN_W
             if st in ('play', 'warp', 'fuse') and x < w / 2:
                 self.fingers[fid] = 'dpad'
                 self.stick = (x, y)
-                self.dir = None
+                self.knob = (x, y)
+                self.dir, self.vec = None, None
                 return
         # a tap anywhere else
         self.fingers[fid] = 'tap'
@@ -282,14 +280,20 @@ class TouchControls:
     def move(self, fid, pos):
         if self.fingers.get(fid) != 'dpad':
             return
-        dx, dy = self.stick or self.dpad[:2]
-        vx, vy = pos[0] - dx, pos[1] - dy
-        if math.hypot(vx, vy) < 6:
-            new = None
-        elif abs(vx) > abs(vy):
-            new = 'right' if vx > 0 else 'left'
+        R = STICK_R
+        bx, by = self.stick or pos
+        vx, vy = pos[0] - bx, pos[1] - by
+        d = math.hypot(vx, vy)
+        if d > R:                    # dragged past the rim: the base follows the thumb
+            bx, by = pos[0] - vx / d * R, pos[1] - vy / d * R
+            vx, vy, d = vx / d * R, vy / d * R, R
+        self.stick, self.knob = (bx, by), pos
+        if d < 5:
+            new, self.vec = None, None
         else:
-            new = 'down' if vy > 0 else 'up'
+            k = min(1.0, max(0.45, d / R))       # a light push still swims at a decent pace
+            self.vec = (vx / d * k, vy / d * k)
+            new = ('right' if vx > 0 else 'left') if abs(vx) > abs(vy) else ('down' if vy > 0 else 'up')
         if new != self.dir:
             self.dir = new
             if new and self.game.state not in ('play',):
@@ -297,8 +301,8 @@ class TouchControls:
 
     def up(self, fid):
         if self.fingers.pop(fid, None) == 'dpad':
-            self.dir = None
-            self.stick = None
+            self.dir = self.vec = None
+            self.stick = self.knob = None
 
     # ---- drawing -----------------------------------------------------------
     def present(self, disp):
@@ -360,24 +364,28 @@ class TouchControls:
             if name == 'mute' and not __import__('sound').music_on:
                 label = "SOUND"
             gfx.text(s, label, rect.centerx, rect.centery - 3, (230, 235, 255), center=True)
-        # D-pad (drawn under the thumb while it floats)
-        r = self.dpad[2]
-        dx, dy = self.stick or self.dpad[:2]
-        arm = r * 2 // 3
-        for d, (ux, uy) in {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}.items():
-            cx, cy = dx + ux * (r - arm // 2), dy + uy * (r - arm // 2)
-            rect = pygame.Rect(0, 0, arm, arm)
-            rect.center = (cx, cy)
-            lit = self.dir == d
-            pygame.draw.rect(s, col((60, 66, 96), lit), rect, border_radius=4)
-            pygame.draw.rect(s, col((150, 160, 210)), rect, 1, border_radius=4)
-            tip = (cx + ux * arm // 4, cy + uy * arm // 4)
-            perp = (uy, ux)
-            pygame.draw.polygon(s, col((220, 225, 255)), [
-                (tip[0] + ux * 3, tip[1] + uy * 3),
-                (tip[0] - ux * 3 + perp[0] * 4, tip[1] - uy * 3 + perp[1] * 4),
-                (tip[0] - ux * 3 - perp[0] * 4, tip[1] - uy * 3 - perp[1] * 4)])
-        pygame.draw.rect(s, col((60, 66, 96)), (dx - arm // 2, dy - arm // 2, arm, arm))
+        # joystick: under the thumb while held, a faint hint where it usually sits otherwise
+        if self.stick:
+            bx, by = self.stick
+            kx, ky = self.knob
+            base = pygame.Surface((STICK_R * 2 + 4, STICK_R * 2 + 4), pygame.SRCALPHA)
+            c = STICK_R + 2
+            pygame.draw.circle(base, (60, 66, 96, min(alpha, 150)), (c, c), STICK_R)
+            pygame.draw.circle(base, (150, 160, 210, min(alpha, 220)), (c, c), STICK_R, 2)
+            s.blit(base, (bx - c, by - c))
+            pygame.draw.circle(s, col((40, 44, 70)), (int(kx) + 1, int(ky) + 2), 13)
+            pygame.draw.circle(s, col((130, 145, 210)), (int(kx), int(ky)), 13)
+            pygame.draw.circle(s, col((255, 255, 255)), (int(kx), int(ky)), 13, 1)
+        else:
+            dx, dy, r = self.dpad
+            hint = pygame.Surface((r * 2 + 4, r * 2 + 4), pygame.SRCALPHA)
+            c = r + 2
+            pygame.draw.circle(hint, (60, 66, 96, min(alpha, 110)), (c, c), r)
+            pygame.draw.circle(hint, (150, 160, 210, min(alpha, 160)), (c, c), r, 1)
+            pygame.draw.circle(hint, (150, 160, 210, min(alpha, 160)), (c, c), 12)
+            s.blit(hint, (dx - c, dy - c))
+            gfx.text(s, "DRAG", dx, dy + r + 4, (150, 160, 210), center=True)
+            gfx.text(s, "TO MOVE", dx, dy + r + 13, (150, 160, 210), center=True)
         # action buttons
         colours = {'atk': (200, 60, 80), 'form': (60, 120, 220), 'jet': (40, 150, 120)}
         for name, (bx, by, br, _, label) in self.buttons.items():

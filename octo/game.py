@@ -1277,6 +1277,7 @@ class Game:
         p.in_sky = self.area == 'sky'
         if p.in_sky and p.sphere <= 0:
             p.sphere = p.SPHERE_MAX         # e.g. loading a save made up in the sky
+        p.analog = self.touch.vec if not self.held else None
         p.update(self, move_dir)
         self.update_camera()
         self.update_area()
