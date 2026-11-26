@@ -270,6 +270,8 @@ class TouchControls:
             g.on_key(pygame.K_RETURN)
         elif st == 'dialog':
             g.on_key(pygame.K_z)
+        elif st == 'versus':
+            g.on_key(pygame.K_RETURN)
         elif st == 'map':
             g.on_key(pygame.K_m)
         elif st in ('fuse', 'altar', 'forms', 'catalogue', 'wardrobe', 'megafuse'):

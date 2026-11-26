@@ -14,6 +14,7 @@ import gfx
 import sound
 import world
 from title import TitleScene
+from cinema import Intro3D, VersusCut
 from touch import TouchControls, touch_device
 from entities import (CATALOGUE, max_bombs, Altar, DIRS, ENEMY_TYPES, FusionMachine, MegaMachine, MiniBoss, Patroller, Thief, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
                       EnemyShot, Hermie, Jelly, Particle, Pickup, Player, Puff, Shelly, Urchin)
@@ -228,7 +229,11 @@ class Game:
         if touch_device():
             self.touch.activate()
         self.title_sel = 0
-        self.state = 'title'
+        self.state = 'intro'
+        self.intro = Intro3D()
+        self.versus = None
+        self.vs_seen = set()
+        self.fight_t = self.ko_t = 0
         sound.music('title')
         self.t = 0
         self.held = []
@@ -371,6 +376,7 @@ class Game:
     # ---- 1-on-1 mini-boss fights in the boss lair ------------------------------
     def enter_boss(self, lurker):
         p = self.player
+        lair_of = self.region or 'THE DEEP'
         back = ((p.x + 8) / TILE - 0.5, (p.y + 8) / TILE - 0.5 + 0.0)
         # step back a little from the boss so coming out doesn't pull you straight in again
         lx, ly = lurker.rect.center
@@ -402,7 +408,100 @@ class Game:
         self.update_camera()
         self.area = self.region = None
         self.update_area()
-        self.toast = (f"!! {boss.name} !!", 150)
+        self.start_versus(boss, "GUARDIAN OF " + lair_of)
+
+    # ---- the versus entrance -------------------------------------------------
+    def start_versus(self, boss, subtitle):
+        p = self.player
+        img = boss.frames()[0]
+        px = [img.get_at((x, y)) for y in range(0, img.get_height(), 2) for x in range(0, img.get_width(), 2)]
+        px = [c for c in px if c.a > 128 and c.r + c.g + c.b > 150] or [pygame.Color(255, 80, 90)]
+        avg = [sum(c[i] for c in px) / len(px) for i in range(3)]
+        hi = max(avg) or 1
+        lo = min(avg)
+        accent = tuple(min(255, int(40 + (c - lo) / ((hi - lo) or 1) * 215)) for c in avg)
+        self.versus = VersusCut(self.screen.copy(), gfx.OCTO[p.mood]['down'][0], img, boss.name, subtitle,
+                                accent, style.icon(getattr(p, 'hat', 'none')))
+        self.vs_t = 0
+        self.state = 'versus'
+        self.flash_t = 0
+        self.shake = 0
+        sound.play('whoosh')
+
+    def update_versus(self):
+        self.vs_t += 1
+        t, v = self.vs_t, self.versus
+        if t == v.VS_AT:
+            sound.play('boom')
+            sound.play('roar')
+        elif t == v.SHATTER + 2:
+            sound.play('whoosh')
+        elif t == v.OPEN:
+            sound.play('door')
+        if t >= v.LENGTH:
+            self.versus = None
+            self.state = 'play'
+            self.fight_t = 70
+
+    def skip_versus(self):
+        v = self.versus
+        if v and self.vs_t > 30 and self.vs_t < v.OPEN:
+            if self.vs_t < v.VS_AT:
+                sound.play('boom')
+            self.vs_t = v.OPEN
+
+    def draw_fight_text(self, scr):
+        t = 70 - self.fight_t
+        if t < 50:
+            sc = max(3.0, 8 - t * 0.6)
+            col = (255, 240, 120) if (t // 3) % 2 else (255, 255, 255)
+            w = gfx.text_width("FIGHT!") + 2
+            tmp = pygame.Surface((w + 2, 11), pygame.SRCALPHA)
+            for ox, oy in ((0, 1), (2, 1), (1, 0), (1, 2), (2, 2)):
+                gfx.text(tmp, "FIGHT!", ox, oy, (120, 20, 20), shadow=False)
+            gfx.text(tmp, "FIGHT!", 1, 1, col, shadow=False)
+            img = pygame.transform.scale(tmp, (int((w + 2) * sc), int(11 * sc)))
+            if t > 36:
+                img.set_alpha(255 - (t - 36) * 18)
+            scr.blit(img, img.get_rect(center=(SCREEN_W // 2, HUD_H + PLAY_H // 2 - 10)))
+
+    def draw_ko(self, scr):
+        t = 110 - self.ko_t
+        if t < 6:
+            v = pygame.Surface((PLAY_W, PLAY_H))
+            v.fill((255, 255, 255))
+            v.set_alpha(220 - t * 36)
+            scr.blit(v, (0, HUD_H))
+        if 20 <= t < 104:
+            u = t - 20
+            k = min(1.0, u / 10)
+            y = HUD_H + PLAY_H // 2 - 22
+            band_h = int(30 * k) if u < 74 else int(30 * (104 - t) / 10)
+            band = pygame.Surface((SCREEN_W, max(1, band_h)), pygame.SRCALPHA)
+            band.fill((0, 0, 0, 190))
+            for i in range(0, SCREEN_W + 40, 12):              # gold stripes sliding along
+                x = (i + u * 3) % (SCREEN_W + 40) - 20
+                pygame.draw.line(band, (255, 200, 60, 50), (x, 0), (x - 10, band_h), 4)
+            scr.blit(band, (0, y + 15 - band_h // 2))
+            if band_h > 20:
+                w = gfx.text_width("VICTORY!") + 2
+                tmp = pygame.Surface((w + 2, 11), pygame.SRCALPHA)
+                for ox, oy in ((0, 1), (2, 1), (1, 0), (1, 2), (2, 2)):
+                    gfx.text(tmp, "VICTORY!", ox, oy, (90, 50, 0), shadow=False)
+                gfx.text(tmp, "VICTORY!", 1, 1, (255, 230, 120), shadow=False)
+                img = pygame.transform.scale(tmp, ((w + 2) * 2, 22))
+                scr.blit(img, img.get_rect(center=(SCREEN_W // 2 + max(0, 30 - u * 3) * 8, y + 13)))
+                gfx.text(scr, getattr(self, 'ko_name', ''), SCREEN_W // 2, y + 28, (255, 255, 255), center=True)
+
+    def boss_vignette(self):
+        v = getattr(self, '_boss_vig', None)
+        if v is None:
+            v = pygame.Surface((PLAY_W, PLAY_H), pygame.SRCALPHA)
+            for i in range(18):
+                a = int(150 * (1 - i / 18) ** 2)
+                pygame.draw.rect(v, (10, 0, 20, a), (i, i, PLAY_W - 2 * i, PLAY_H - 2 * i), 1)
+            self._boss_vig = v
+        return v
 
     def update_bossfight(self):
         bf = self.bossfight
@@ -410,7 +509,7 @@ class Game:
         boss = next((e for e in self.enemies if isinstance(e, MiniBoss)), None)
         if boss is None and not any(isinstance(f, Puff) and f.loud for f in self.effects):
             bf['won_t'] = bf.get('won_t', 0) + 1
-            if bf['won_t'] > 50:                    # let the loot rain for a moment, then head home
+            if bf['won_t'] > 50 and not self.ko_t:                    # let the loot rain for a moment, then head home
                 self.finish_boss(True)
 
     def finish_boss(self, won):
@@ -444,6 +543,7 @@ class Game:
         if getattr(boss, 'in_trial', False):          # a trial duel, not the region's guardian
             self.burst(boss.rect.center, (255, 220, 120), 20)
             return
+        self.ko_t, self.ko_name = 110, boss.name + " DEFEATED"
         if getattr(boss, 'in_temple', False):         # a temple boss: its room opens on the Tide Bell
             self.burst(boss.rect.center, (255, 220, 120), 24)
             self.toast = (f"{boss.name} DEFEATED!", 180)
@@ -1840,6 +1940,12 @@ class Game:
     def handle_event(self, ev):
         if ev.type == pygame.QUIT:
             quit_game()
+        if self.state == 'intro' and ev.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
+            if ev.type == pygame.FINGERDOWN and not self.touch.active:
+                self.touch.activate()
+            if self.t > 20:
+                self.end_intro()
+            return
         if self.touch.handle(ev):
             return
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and self.state == 'title':
@@ -1873,8 +1979,17 @@ class Game:
                                           if dd == d):
                 self.held.remove(d)
 
+    def end_intro(self):
+        self.intro = None
+        self.state = 'title'
+        self.t = 0
+
     def on_key(self, k):
         st = self.state
+        if st == 'versus':
+            if k in CONFIRM_KEYS or k in ACTION_KEYS:
+                self.skip_versus()
+            return
         if st == 'title':
             menu = self.title_menu()
             if k in (pygame.K_UP, pygame.K_w, pygame.K_DOWN, pygame.K_s) and len(menu) > 1:
@@ -2066,8 +2181,21 @@ class Game:
         if self.state in ('play', 'dialog', 'pause', 'title', 'win'):
             self.update_bubbles()
         st = self.state
+        if st == 'intro':
+            if self.intro.done:
+                self.end_intro()
+            return
+        if st == 'versus':
+            self.update_versus()
+            return
         if st == 'play':
             self.frames += 1
+            if self.fight_t:
+                self.fight_t -= 1
+            if self.ko_t:                       # the final blow: a moment of slow motion
+                self.ko_t -= 1
+                if self.ko_t > 70 and self.ko_t % 3:
+                    return
             self.update_play()
         elif st == 'dialog':
             d = self.dialog
@@ -2275,7 +2403,9 @@ class Game:
             p.sphere = p.SPHERE_MAX         # e.g. loading a save made up in the sky
         p.analog = self.touch.vec if not self.held else None
         p.update(self, move_dir)
+        cam0 = getattr(self, 'cam', None)
         self.update_camera()
+        self.cam_still = cam0 == self.cam
         self.update_area()
         if self.trial:
             self.update_trial()
@@ -2298,6 +2428,14 @@ class Game:
         for e in self.enemies:
             if e.spawn['arena'] is None and not awake.colliderect(e.rect):
                 continue            # frozen while off-screen
+            if isinstance(e, MiniBoss) and getattr(e, 'in_temple', False) and e.bid not in self.vs_seen \
+                    and not e.dead and self.cam_still and self.view_rect.contains(e.rect) \
+                    and self.view_rect.contains(p.rect):
+                self.vs_seen.add(e.bid)
+                tid = world.temple_at(p.rect.centerx // TILE, p.rect.centery // TILE)
+                where = world.TEMPLES[tid]['title'] if tid else 'THE TEMPLE'
+                self.start_versus(e, "MASTER OF " + where)
+                return
             e.update(self)
             if isinstance(e, MiniBoss) and e.lurk and e.active and not self.trial and \
                     math.hypot(e.rect.centerx - p.rect.centerx, e.rect.centery - p.rect.centery) < 60:
@@ -2430,6 +2568,9 @@ class Game:
     def draw(self):
         scr = self.screen
         st = self.state
+        if st == 'intro':
+            self.intro.draw(scr, self.t)
+            return
         if st == 'title':
             self.draw_title(scr)
             return
@@ -2480,6 +2621,14 @@ class Game:
             veil.fill((0, 0, 16))
             veil.set_alpha(150)
             scr.blit(veil, (0, HUD_H))
+        if self.bossfight and st in ('play', 'versus', 'dialog', 'pause'):
+            scr.blit(self.boss_vignette(), (0, HUD_H))
+        if st == 'play' and self.fight_t:
+            self.draw_fight_text(scr)
+        if st == 'play' and self.ko_t:
+            self.draw_ko(scr)
+        if st == 'versus' and self.versus:
+            self.versus.draw(scr, self.vs_t)
         if st == 'warp':
             self.draw_warp(scr)
             gfx.text(scr, "PAUSED", SCREEN_W // 2, SCREEN_H - 10, (150, 160, 200), center=True)

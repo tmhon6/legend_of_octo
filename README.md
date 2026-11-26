@@ -108,6 +108,18 @@ Each region has a mini-boss waiting in it. Swim close and you're pulled into its
 and so on - and each stage makes them faster and adds new moves. Fall and you're swept back out
 to try again.
 
+Every 1-on-1 starts with a **versus entrance**: the screen cracks and shatters, Octo (hat and all)
+and the guardian face off across a slash of light, **VS** slams down, and the panels split apart
+on the arena with a **FIGHT!**. Temple bosses get the same entrance the first time you reach their
+room. The final blow lands in slow motion with a **VICTORY!** banner. Press Enter or Z (or tap) to
+skip ahead.
+
+### The 3D opening
+
+The game opens with a short 3D intro, all drawn in code: the camera skims a dawn ocean, dives
+under, Octo swims up out of the deep as a spinning voxel model, and the logo builds itself out of
+tumbling cubes. Press any key (or tap) to skip to the title.
+
 ### Hermie's shop
 
 Walk onto an item on the counter to buy it, or talk to Hermie for his whole catalogue: sea
@@ -227,6 +239,7 @@ a shell shield, deep ink and a heart shell. Bubble bombs blast open cracked rock
 * `entities.py`: Player (forms, jet, bombs), enemies and bosses, NPCs, projectiles, pickups, effects
 * `gfx.py`: every sprite, themed tileset and the bitmap font, drawn in code
 * `sound.py`: chiptune synth for SFX and music (cached to `.sound_cache.pkl`)
+* `cinema.py`: the 3D opening (a tiny voxel renderer and a mode-7 ocean) and the versus entrance for boss fights
 * `game.py`: state machine, trials, shop, save/load, warping, HUD and drawing
 
 Desktop saves go to `savegame_<version>.json` in the project folder (one per version). Browser saves stay in that browser.
