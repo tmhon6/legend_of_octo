@@ -1,5 +1,10 @@
 # Legend of Octo
 
+## ▶ [Play it in your browser](https://tmhon6.github.io/legend_of_octo/)
+
+No download needed. Wait about 15 seconds for it to load, click the page, then press Enter or click again.
+You need a keyboard to play.
+
 A top-down undersea adventure starring Octo, the reversible octopus. It's a fan tribute to the
 1st-gen 2D action-adventure style, built in pygame.
 

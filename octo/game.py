@@ -838,6 +838,13 @@ class Game:
     def handle_event(self, ev):
         if ev.type == pygame.QUIT:
             quit_game()
+        if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and self.state == 'title':
+            # clicking a menu item picks it; clicking anywhere else starts the highlighted one
+            for i, r in enumerate(getattr(self.title_scene, 'menu_rects', [])):
+                if r.collidepoint(ev.pos):
+                    self.title_sel = i
+            self.on_key(pygame.K_RETURN)
+            return
         if ev.type == pygame.KEYDOWN:
             k = ev.key
             if k == pygame.K_ESCAPE and self.state in ('title', 'gameover', 'win'):

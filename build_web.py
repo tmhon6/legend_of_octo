@@ -52,6 +52,9 @@ def main():
     index = os.path.join(OUT, 'index.html')
     html = open(index).read()
     html = html.replace("canvas.emscripten {", "canvas.emscripten {\n            image-rendering: pixelated;", 1)
+    # clearer loading / start messages
+    html = html.replace("Loading, please wait ...", "Loading Legend of Octo... (about 15 seconds)", 1)
+    html = html.replace('msg  = "Ready to start ! Please click/touch page"', 'msg  = "Ready! Click here to play"', 1)
     open(index, 'w').write(html)
     print("built:", OUT)
     for f in sorted(os.listdir(OUT)):

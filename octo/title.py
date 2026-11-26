@@ -277,13 +277,17 @@ class TitleScene:
         pygame.draw.rect(panel, (120, 160, 230, 200), panel.get_rect(), 1)
         px, py = W // 2 - 56, FLOOR_Y + 2 - ph // 2 + 10
         scr.blit(panel, (px, py))
+        self.menu_rects = []
         for i, item in enumerate(menu):
             y = py + 6 + i * 11
+            self.menu_rects.append(pygame.Rect(px, y - 2, 112, 11))
             on = i == sel
             if on:
                 arrow = ">" if (t // 20) % 2 else " >"
                 gfx.text(scr, arrow, px + 10, y, (255, 220, 120))
             gfx.text(scr, item, W // 2 + 4, y, (255, 255, 255) if on else (140, 160, 200), center=True)
+        if (t // 25) % 2:
+            gfx.text(scr, "PRESS ENTER OR CLICK TO PLAY", W // 2, py - 10, (255, 255, 255), center=True)
         gfx.text(scr, "A FAN TRIBUTE", W // 2, H - 8, (110, 120, 150), center=True)
         # fade in from black when the game starts
         if t < 60:
