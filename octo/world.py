@@ -811,14 +811,13 @@ class Level:
     def _blit_tile(self, tiles, tx, ty, surf=None, off=(0, 0)):
         surf = surf or self.surface
         ch = self.tiles[ty][tx]
-        art = CITY_ART.get((tx, ty))
-        if art:                          # a piece of a building or a town gate, on top of the floor
-            key, i, j = art
-            themed = tiles['themes'].get(self.themes[ty][tx], {})
+        if (tx, ty) in _props3d.FLAT:       # a 3D building stands here: just the ground under it
+            themed = tiles['themes'].get(self.themes[ty][tx], {}) if area_at(tx, ty) == 'overworld' else {}
             floor = themed.get('.') or tiles['overworld']['.']
             pos = (tx * TILE - off[0], ty * TILE - off[1])
             surf.blit(floor[(tx * 7 + ty * 13) % len(floor)], pos)
-            surf.blit(gfx.SPR['city_art'][key], pos, (i * TILE, j * TILE, TILE, TILE))
+            shade = _flat_shade()
+            surf.blit(shade, pos)
             return
         top = ch == '=' and region_at(tx, ty) == 'OCTO TEMPLE'
         if ch in 'PQH' or top:
@@ -968,3 +967,18 @@ def validate():
                     (int(x) + 1 + x0, int(y) + y0) not in inside:
                 problems.append(f"{name}: {k} at {(x, y)} overlaps a wall")
     return problems
+
+
+_FLAT_SHADE = []
+
+
+def _flat_shade():
+    if not _FLAT_SHADE:
+        s_ = pygame.Surface((TILE, TILE), pygame.SRCALPHA)
+        s_.fill((0, 0, 20, 70))
+        _FLAT_SHADE.append(s_)
+    return _FLAT_SHADE[0]
+
+
+import props3d as _props3d  # noqa: E402  (3D buildings stand on these tiles)
+_props3d.build_props(__import__(__name__))

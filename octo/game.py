@@ -25,6 +25,7 @@ import temples
 import style
 from people import Citizen, LegendStatue
 from town import TownLife
+from scene3d import Scene3D
 
 DIR_KEYS = {
     pygame.K_UP: 'up', pygame.K_w: 'up',
@@ -215,7 +216,7 @@ def tile_to_px(tx, ty):
     return tx * TILE + TILE / 2 - 8, ty * TILE + TILE / 2 - 8
 
 
-class Game(TownLife):
+class Game(TownLife, Scene3D):
     def __init__(self):
         problems = [] if WEB else world.validate()     # a developer check: skipped in the browser to load faster
         if problems:
@@ -228,6 +229,14 @@ class Game(TownLife):
         self.screen = pygame.Surface((SCREEN_W, SCREEN_H))
         self.hires = pygame.Surface((SCREEN_W * HI, SCREEN_H * HI), pygame.SRCALPHA)
         self.hires_on = False
+        # the play area is built in layers: the pixel-art world, then the 3D layer (Octo, buildings,
+        # portals) at full resolution, then menus and messages, then the cinematic overlays
+        self.hr_world = pygame.Surface((SCREEN_W * HI, SCREEN_H * HI), pygame.SRCALPHA)
+        self.hrw_on = False
+        self.ui = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+        self.ui_big = pygame.Surface((SCREEN_W * HI, SCREEN_H * HI), pygame.SRCALPHA)
+        self.ui_on = False
+        self.scene_setup()
         gfx.load()
         sound.init()
         self.clock = pygame.time.Clock()
@@ -331,6 +340,7 @@ class Game(TownLife):
             cy = world.SHOP_ROW * TILE + 8
             self.wares.append((ware, pygame.Rect(cx - 7, cy - 7, 14, 14)))
         self.town_setup()
+        self.scene_setup()
         lv.blockers = [n.rect for n in self.npcs]
         self.active_arena = None
         self.checkpoint = world.START
@@ -435,9 +445,10 @@ class Game(TownLife):
         lo = min(avg)
         accent = tuple(min(255, int(40 + (c - lo) / ((hi - lo) or 1) * 215)) for c in avg)
         small = pygame.transform.scale(img, (img.get_width() // 2, img.get_height() // 2))
-        mad = p.mood in ('mad', 'spiky', 'prickly', 'quaky', 'stony', 'magnet')
-        self.versus = VersusCut(self.screen.copy(), gfx.OCTO_PAL[p.mood], small, boss.name, subtitle,
-                                accent, style.icon(getattr(p, 'hat', 'none')), mad)
+        gx = self.touch.gx if self.touch.active else 0
+        snap = self.window.subsurface((gx * HI, 0, SCREEN_W * HI, SCREEN_H * HI)).copy()   # the last frame, 3D and all
+        self.versus = VersusCut(snap, p.mood, small, boss.name, subtitle, accent,
+                                getattr(p, 'hat', 'none'))
         self.vs_t = 0
         self.state = 'versus'
         self.flash_t = 0
@@ -1271,7 +1282,7 @@ class Game(TownLife):
         if touching is None:
             self.portal_armed = True
         elif self.portal_armed and touching not in self.trials_done:
-            self.enter_trial(touching)
+            self.start_portal(touching)
 
     # ---- the deep temples ----------------------------------------------------
     def check_temple_doors(self):
@@ -1955,10 +1966,51 @@ class Game(TownLife):
             gfx.text(self.display, f"{self.clock.get_fps():.0f} FPS", 2, 2, (120, 255, 120))
         win = self.window
         pygame.transform.scale(self.display, win.get_size(), win)
+        gx = self.touch.gx if self.touch.active else 0
+        if self.hrw_on:
+            win.blit(self.hr_world, (gx * HI, 0))
+            self.hrw_on = False
+        if self.ui_on:
+            pygame.transform.scale(self.ui, self.ui_big.get_size(), self.ui_big)
+            win.blit(self.ui_big, (gx * HI, 0))
+            self.ui_on = False
         if self.hires_on:
-            gx = self.touch.gx if self.touch.active else 0
             win.blit(self.hires, (gx * HI, 0))
             self.hires_on = False
+        if self.zoom:                                   # rushing into a portal
+            (wx, wy), k = self.zoom
+            gw, gh = SCREEN_W * HI, SCREEN_H * HI
+            cx = (wx - self.cam[0]) * HI + gx * HI
+            cy = (wy - self.cam[1] + HUD_H) * HI
+            w, h = int(gw / k), int(gh / k)
+            x0 = int(max(gx * HI, min(gx * HI + gw - w, cx - w / 2)))
+            y0 = int(max(0, min(gh - h, cy - h / 2)))
+            part = win.subsurface((x0, y0, w, h)).copy()
+            pygame.transform.smoothscale(part, (gw, gh), win.subsurface((gx * HI, 0, gw, gh)))
+
+    def tint_layer(self, col, alpha):
+        """A see-through wash over the play area (per-pixel alpha, so it layers properly)."""
+        key = (col, alpha)
+        cache = self.__dict__.setdefault('_tints', {})
+        v = cache.get(key)
+        if v is None:
+            if len(cache) > 64:
+                cache.clear()
+            v = cache[key] = pygame.Surface((PLAY_W, PLAY_H), pygame.SRCALPHA)
+            v.fill(tuple(col) + (max(0, min(255, alpha)),))
+        return v
+
+    def world_layer(self):
+        if not self.hrw_on:
+            self.hr_world.fill((0, 0, 0, 0))
+            self.hrw_on = True
+        return self.hr_world
+
+    def ui_layer(self):
+        if not self.ui_on:
+            self.ui.fill((0, 0, 0, 0))
+            self.ui_on = True
+        return self.ui
 
     def hires_layer(self, clear=True):
         """The hi-res canvas for this frame (cleared the first time it's asked for)."""
@@ -2262,6 +2314,13 @@ class Game(TownLife):
         if st == 'medal':
             self.update_medal()
             return
+        if st == 'portal':
+            self.update_portal()
+            return
+        if self.player is not None:
+            self.update_yaw()
+            if self.arrive_t and st == 'play':
+                self.arrive_t -= 1
         if st == 'cityintro':
             self.update_cityintro()
             return
@@ -2689,6 +2748,10 @@ class Game(TownLife):
             sx, sy = random.randint(-2, 2), random.randint(-2, 2)
         scr.blit(self.play_surf, (sx, HUD_H + sy))
         self.draw_hud(scr)
+        self.draw_world3d(self.world_layer(), (sx, sy))
+        # everything from here on goes over the 3D layer
+        scr = self.ui_layer()
+        self.draw_world_post(scr.subsurface((0, HUD_H, PLAY_W, PLAY_H)))
 
         if self.banner_t and st == 'play':
             name = self.region
@@ -2713,16 +2776,10 @@ class Game(TownLife):
             self.draw_trial_hud(scr)
         if self.flash_t:
             self.flash_t -= 1
-            veil = pygame.Surface((PLAY_W, PLAY_H))
-            veil.fill((255, 255, 255))
-            veil.set_alpha(int(255 * self.flash_t / 20))
-            scr.blit(veil, (0, HUD_H))
+            scr.blit(self.tint_layer((255, 255, 255), int(255 * self.flash_t / 20)), (0, HUD_H))
         if st in ('warp', 'map', 'fuse', 'altar', 'forms', 'catalogue', 'wardrobe', 'megafuse', 'journal', 'trade',
                   'name', 'radio'):
-            veil = pygame.Surface((PLAY_W, PLAY_H))
-            veil.fill((0, 0, 16))
-            veil.set_alpha(150)
-            scr.blit(veil, (0, HUD_H))
+            scr.blit(self.tint_layer((0, 0, 16), 150), (0, HUD_H))
         if self.bossfight and st in ('play', 'versus', 'dialog', 'pause'):
             scr.blit(self.boss_vignette(), (0, HUD_H))
         if st == 'play' and self.fight_t:
@@ -2732,6 +2789,8 @@ class Game(TownLife):
                                 (HUD_H + PLAY_H // 2 - 8) * HI)
         if st == 'versus' and self.versus:
             self.versus.draw(self.hires_layer(), self.vs_t)
+        if st == 'portal':
+            self.draw_portal_fx(self.hires_layer())
         if st == 'warp':
             self.draw_warp(scr)
             gfx.text(scr, "PAUSED", SCREEN_W // 2, SCREEN_H - 10, (150, 160, 200), center=True)
@@ -2768,10 +2827,7 @@ class Game(TownLife):
             self.draw_pause(scr)
         elif st == 'dying':
             a = min(1.0, self.die_t / 100)
-            veil = pygame.Surface((PLAY_W, PLAY_H))
-            veil.fill((120, 0, 30))
-            veil.set_alpha(int(170 * a))
-            scr.blit(veil, (0, HUD_H))
+            scr.blit(self.tint_layer((120, 0, 30), int(170 * a)), (0, HUD_H))
             ox, oy = -self.cam[0], -self.cam[1]
             self.player.draw(scr, ox, HUD_H + oy)
 
@@ -2809,22 +2865,28 @@ class Game(TownLife):
                 pygame.draw.circle(ps, (200, 60, 230), (cx, cy), r)
                 pygame.draw.circle(ps, (255, 240, 255), (cx, cy), r // 2)
         # soft shadows first, so everything sits on the sea floor
+        p3d = self.player_in_3d() and self.state != 'dying'
+        raised = [n for n in self.npcs if self.ground_height(n) > 0]      # up on the pyramid: drawn in 3D
         for n in self.npcs:
-            if vis.colliderect(n.rect) and not getattr(n, 'hidden', False):
+            if vis.colliderect(n.rect) and not getattr(n, 'hidden', False) and n not in raised:
                 fx.shadow(ps, n.rect, ox, oy)
         for e in self.enemies:
             if vis.colliderect(e.rect) and not e.spawn_t:
                 fx.shadow(ps, e.rect, ox, oy, lift=8 if e.who == 'flyer' else 0)
-        if self.state != 'dying' and not self.player.tumble:
+        if self.state not in ('dying', 'portal') and not self.player.tumble and \
+                not (p3d and self.ground_height(self.player) > 0):
             fx.shadow(ps, self.player.rect, ox, oy, lift=6 if self.player.in_sky else 0)
         for n in self.npcs:
-            if vis.colliderect(n.rect):
+            if vis.colliderect(n.rect) and n not in raised:
                 n.draw(ps, ox, oy)
         for e in sorted(self.enemies, key=lambda e: e.y):
             if vis.colliderect(e.rect):
                 e.draw(ps, ox, oy)
-        if self.state != 'dying':
-            self.player.draw(ps, ox, oy)
+        if self.state not in ('dying', 'portal'):
+            if p3d:
+                self.player.draw_extras(ps, ox, oy)       # Octo himself is drawn in 3D
+            else:
+                self.player.draw(ps, ox, oy)
         for s in self.shots:
             s.draw(ps, ox, oy)
         for eff in self.effects:
@@ -2833,16 +2895,8 @@ class Game(TownLife):
             b.draw(ps)
         theme = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
         tfx = THEME_FX.get(theme)
-        if tfx:
-            col, alpha, parts = tfx
-            if self.theme_veil[0] != (col, alpha):
-                v = pygame.Surface((PLAY_W, PLAY_H))
-                v.fill(col)
-                v.set_alpha(alpha)
-                self.theme_veil = ((col, alpha), v)
-            ps.blit(self.theme_veil[1], (0, 0))
-            if parts and self.state == 'play':
-                self.ambient(parts)
+        if tfx and tfx[2] and self.state == 'play':
+            self.ambient(tfx[2])
         for a in self.motes:
             a[0] += a[2]
             a[1] += a[3]
@@ -2852,12 +2906,21 @@ class Game(TownLife):
             if a[6]:
                 ps.set_at((int(a[0]) + 1, int(a[1])), c)
         self.motes = [a for a in self.motes if a[4] > 0 and -2 < a[1] < PLAY_H + 2]
+        if self.trial:
+            self.draw_trial_props(ps, ox, oy)
+
+    def draw_world_post(self, ps):
+        """Tints, light rays, the vignette and darkness: drawn over the 3D layer as well."""
+        ox, oy = -self.cam[0], -self.cam[1]
+        theme = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
+        tfx = THEME_FX.get(theme)
+        if tfx:
+            col, alpha, parts = tfx
+            ps.blit(self.tint_layer(col, alpha), (0, 0))
         if self.area in ('overworld', 'sky') and theme not in ('abyss', 'vents', 'city'):
             off = int(math.sin(self.t * 0.01) * 30) - 60
             ps.blit(self.rays, (off, 0))
         fx.depth_vignette(ps, 0.6 if self.area == 'sky' else 1.0)
-        if self.trial:
-            self.draw_trial_props(ps, ox, oy)
         if (self.region in world.DARK_REGIONS and self.area == 'overworld' and not self.trial) or \
                 (self.trial and world.TRIALS[self.trial['name']].get('dark')):
             self.draw_darkness(ps, ox, oy)
@@ -2868,10 +2931,7 @@ class Game(TownLife):
                         pygame.draw.circle(ps, (150, 255, 210), (c[0] + ox, c[1] + oy), 2)
         if self.glow_flash:
             self.glow_flash -= 1
-            v = pygame.Surface((PLAY_W, PLAY_H))
-            v.fill((220, 255, 220))
-            v.set_alpha(int(200 * self.glow_flash / 14))
-            ps.blit(v, (0, 0))
+            ps.blit(self.tint_layer((220, 255, 220), int(200 * self.glow_flash / 14)), (0, 0))
 
     def draw_portals(self, ps, ox, oy):
         for tid, t in world.TEMPLES.items():          # a sealed temple door shows its guardian's sigil
@@ -2891,17 +2951,12 @@ class Game(TownLife):
             if not self.view_rect.inflate(32, 32).collidepoint(cx, cy):
                 continue
             sx, sy = cx + ox, cy + oy
-            pygame.draw.ellipse(ps, (40, 40, 60), (sx - 10, sy - 7, 20, 16))
             if name in self.trials_done:
-                pygame.draw.ellipse(ps, (110, 110, 130), (sx - 8, sy - 5, 16, 12), 2)
                 continue
             col = self.portal_color(t)
-            for i in range(3):
-                ph = self.t * 0.12 + i * 2.1
-                w = 16 - i * 5
-                pygame.draw.ellipse(ps, col if i != 1 else (255, 255, 255),
-                                    (sx - w // 2 + int(math.cos(ph) * 1.5), sy - w * 3 // 8 - 1 + int(math.sin(ph) * 1.5),
-                                     w, max(2, w * 3 // 4)), 1 if i else 2)
+            glow = pygame.Surface((24, 10), pygame.SRCALPHA)
+            pygame.draw.ellipse(glow, tuple(col) + (70,), glow.get_rect())
+            ps.blit(glow, (sx - 12, sy + 1))
             if self.state == 'play' and self.t % 6 == 0:
                 a = random.uniform(0, math.tau)
                 self.effects.append(Particle(cx + math.cos(a) * 9, cy + math.sin(a) * 7,

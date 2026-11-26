@@ -204,8 +204,9 @@ class TitleScene:
                                                 ("OCTO", 62 * HI, (255, 244, 150), (250, 140, 40), (150, 60, 10), 28)):
                 img = hifi.text3d(word, px, top, bot, side)
                 words.append((img, hifi.W / 2 - img.get_width() / 2, y * HI))
-            self._hifi = {'words': words, 'blue': hifi.Octo3D(gfx.OCTO_PAL['blue']),
-                          'mad': hifi.Octo3D(gfx.OCTO_PAL['mad'], mad=True), 'tmp': None}
+            import voxel
+            self._hifi = {'words': words, 'blue': voxel.VoxelFigure('blue'), 'mad': voxel.VoxelFigure('mad'),
+                          'tmp': None}
         return self._hifi
 
     def draw_hifi(self, hr, t, mood, flip_w):
@@ -227,7 +228,7 @@ class TitleScene:
         bob = math.sin(t * 0.05) * 4 * HI
         cy = 134 * HI + bob
         items = parts[mood].items((0, (cy - hifi.H / 2) / k, z), yaw=math.sin(t * 0.02) * 0.45 + spin, pitch=0.18,
-                                  t=t, size=21 * HI / k, blink=(t % 200) < 6, wave=max(0.0, math.sin(t * 0.013)) ** 4)
+                                  t=t, size=26 * HI / k)
         hifi.render(dest, items)
         if dest is not hr:
             dest.set_alpha(int(255 * t / 60))

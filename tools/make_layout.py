@@ -85,6 +85,27 @@ def px(tx, ty, ox=0, oy=0):
 
 
 FULL = world.Level().render(gfx.TILES)
+
+
+def _add_3d_buildings(full):
+    """The 3D buildings, pyramid, gates and portals, shrunk onto the map picture."""
+    import props3d
+    from settings import HI
+    for prop in sorted(props3d.PROPS, key=lambda pr: pr.base):
+        if prop.kind == 'portal':
+            col = tuple(world.TRIALS[prop.data].get('color', (255, 255, 255)))
+            img, (ax, ay) = props3d.image(('portal', col, False), lambda c=col: props3d.portal(c))
+            sw = props3d.swirl(col, int(8 * HI))
+            sw = pygame.transform.smoothscale(sw, (sw.get_width() // HI, int(sw.get_height() * props3d.KZ) // HI))
+            cx, cy = prop.x + 8 - props3d.KX * 16, prop.y + 12.5 - props3d.KZ * 16
+            full.blit(sw, (cx - sw.get_width() / 2, cy - sw.get_height() / 2))
+        else:
+            img, (ax, ay) = props3d.image(prop.key, prop.builder)
+        small = pygame.transform.smoothscale(img, (max(1, img.get_width() // HI), max(1, img.get_height() // HI)))
+        full.blit(small, (prop.x - ax / HI, prop.y - ay / HI))
+
+
+_add_3d_buildings(FULL)
 CREATURE_OF = {k: r for r, k in [('CORAL REEF', 'eel'), ('KELP WOODS', 'clam'), ('CORAL GARDENS', 'lionfish'),
                                  ('THE LAGOON', 'ray'), ('THE ABYSS', 'angler'), ('SHIP GRAVEYARD', 'bilge'),
                                  ('FROZEN SHELF', 'squid'), ('EMBER VENTS', 'slug'), ('SUNKEN CITY', 'wisp'),

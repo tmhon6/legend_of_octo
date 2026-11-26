@@ -14,6 +14,8 @@ import pygame
 
 import gfx
 import hifi
+import townart
+import voxel
 from hifi import F, H, HI, W, clamp, ease, ease_io, mix
 from settings import AUTHOR
 
@@ -160,7 +162,7 @@ class Intro3D:
                          rnd.uniform(2, 6)] for _ in range(70)]
         self.snow = [[rnd.uniform(-200, 200) * HI, rnd.uniform(-180, 180) * HI, rnd.uniform(60, 900) * HI]
                      for _ in range(120)]
-        self.octo = hifi.Octo3D(gfx.OCTO_PAL['blue'])
+        self.octo = voxel.VoxelFigure('blue')
         self.sparkles = Sparkles()
         self.letters = None
         self.landed = set()
@@ -366,7 +368,7 @@ class VersusCut:
     VS_AT = 62
     OPEN = 160
 
-    def __init__(self, snapshot, octo_pal, boss_img, name, subtitle, accent=(255, 80, 90), hat=None, mad=False):
+    def __init__(self, snapshot, mood, boss_img, name, subtitle, accent=(255, 80, 90), hat=None):
         self.accent = accent
         self.name, self.subtitle = name, subtitle
         big = pygame.transform.scale(snapshot, (W, H))
@@ -400,8 +402,8 @@ class VersusCut:
         dark = tuple(c // 3 for c in accent)
         self.bot = self._panel([(0, self.mid + self.slope), (W, self.mid - self.slope), (W, H), (0, H)],
                                mix(dark, (60, 10, 20), 0.3), mix(accent, (90, 20, 30), 0.45))
-        self.octo = hifi.Octo3D(octo_pal, hat=hat, mad=mad)
-        self.boss = hifi.Beads3D(boss_img)
+        self.octo = voxel.VoxelFigure(mood, hat)
+        self.boss = voxel.VoxelFigure(sprite=boss_img)
         self.vs = hifi.text3d("VS", 50 * HI, (255, 252, 190), (255, 170, 40), (150, 40, 20), outline=(60, 0, 0))
         self.tag = hifi.text("OCTO", 22 * HI, (175, 220, 255))
         n = 22 if len(name) <= 10 else 17 if len(name) <= 14 else 13
@@ -625,11 +627,11 @@ class CityIntro:
                                     'z': 260 + i * 120, 'r': rnd.uniform(40, 70), 'h': rnd.uniform(110, 190),
                                     'c': rnd.choice(cols)})
             self.things.append({'k': 'hall', 'x': 0, 'z': 2000, 'r': 230, 'h': 120, 'c': (255, 200, 80)})
-            pals = ['blue', 'zap', 'bubble', 'glow', 'starry', 'leafy', 'wobbly']
+            pals = ['cit_octavia', 'cit_inky', 'cit_tenta', 'cit_bubbles', 'cit_ollie', 'cit_ziggy', 'cit_coraline']
             for i in range(9):
                 side = -1 if i % 2 else 1
                 self.things.append({'k': 'octo', 'x': side * rnd.uniform(35, 80), 'z': 300 + i * 160,
-                                    'm': hifi.Octo3D(gfx.OCTO_PAL[rnd.choice(pals)]), 'ph': rnd.uniform(0, 6)})
+                                    'm': voxel.VoxelFigure(rnd.choice(pals)), 'ph': rnd.uniform(0, 6)})
             self.title = hifi.text3d("OCTO CITY", 40 * HI, (255, 245, 170), (250, 150, 60), (140, 60, 20))
             self.sub = hifi.text("HOME OF THE FRIENDLIEST OCTOPUSES IN THE SEA", 9 * HI, (220, 240, 255))
             self.cam_h = 46
@@ -648,7 +650,7 @@ class CityIntro:
             for i in range(8):
                 side = -1 if i % 2 else 1
                 self.things.append({'k': 'turtle', 'x': side * rnd.uniform(40, 90), 'z': 320 + i * 170,
-                                    'm': hifi.Turtle3D(shell=rnd.choice(shells), skin=(150, 210, 140)),
+                                    'm': voxel.VoxelFigure(sprite=townart.turtle_folk(rnd.choice(shells), (150, 210, 140))[0]),
                                     'ph': rnd.uniform(0, 6)})
             self.title = hifi.text3d("TURTLE TOWN", 38 * HI, (255, 255, 200), (120, 210, 110), (40, 100, 50))
             self.sub = hifi.text("SLOW DOWN AND STAY A WHILE", 10 * HI, (60, 90, 60), outline=(255, 255, 240))

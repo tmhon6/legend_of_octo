@@ -1005,19 +1005,17 @@ class TownLife:
         m = cache.get(key)
         if m is None:
             look = folk.RIVAL_LOOK.get(name)
+            import townart
+            import voxel
             if me or kind in ('you', 'run'):
-                mood = self.player.mood if me else 'blue'
-                m = hifi.Octo3D(gfx.OCTO_PAL[mood], hat=style.icon(self.player.hat) if me else None)
+                m = voxel.VoxelFigure(self.player.mood if me else 'blue', self.player.hat if me else None)
             elif kind == 'turtle':
-                d = folk.NPCS.get(look, {})
-                m = hifi.Turtle3D(shell=d.get('shell', (80, 150, 90)), skin=d.get('skin', (150, 210, 140)),
-                                  beard=d.get('beard', False), specs=d.get('specs', False))
+                d = folk.NPCS.get(look, {'shell': (80, 150, 90), 'skin': (150, 210, 140)})
+                m = voxel.VoxelFigure(sprite=townart.turtle_folk(tuple(d['shell']), tuple(d['skin']))[0])
             elif look == 'kraken':
-                m = hifi.Octo3D({'B': (150, 30, 50), 'P': (255, 200, 80), 'e': (255, 220, 60), 'c': (255, 90, 90)},
-                                mad=True)
+                m = voxel.VoxelFigure('cit_kraken', 'crown')
             else:
-                m = hifi.Octo3D(gfx.OCTO_PAL['cit_' + look] if look and 'cit_' + look in gfx.OCTO_PAL
-                                else gfx.OCTO_PAL['blue'])
+                m = voxel.VoxelFigure('cit_' + look if look and 'cit_' + look in gfx.OCTO_PAL else 'blue')
             cache[key] = m
         return m
 
@@ -1108,7 +1106,8 @@ class TownLife:
         name, sprite, where = ex[self.mus_i]
         m = self.mus_models.get(name)
         if m is None:
-            m = self.mus_models[name] = hifi.Beads3D(sprite)
+            import voxel
+            m = self.mus_models[name] = voxel.VoxelFigure(sprite=sprite)
         z = 520 * H_
         k = hifi.F / z
         items = m.items(((cx - hifi.W / 2) / k, (118 * H_ - hifi.H / 2) / k, z), yaw=self.t * 0.02,

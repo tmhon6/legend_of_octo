@@ -116,20 +116,25 @@ on the arena with a **FIGHT!**. Temple bosses get the same entrance the first ti
 room. The final blow lands in slow motion with a **VICTORY!** banner. Press Enter or Z (or tap) to
 skip ahead.
 
-### Hi-fi 3D
+### 3D
 
-The game itself is pixel art, but its big moments are drawn in smooth 3D at three times the
-resolution (twice in the browser), all in code: shiny shaded spheres with glints and soft glows,
-squishy 3D Octos with wiggling tentacles, turtles with patterned shells, puffy bead-figure bosses,
-and bevelled 3D lettering.
-* **The opening:** skim a sunset ocean, dive under, and Octo swims up out of the deep as the logo
-  flies together letter by letter. Any key (or a tap) skips it.
-* **The title screen:** the 3D logo and a 3D Octo that flips between moods.
-* **Boss entrances:** the versus screen faces a 3D Octo (in your form, wearing your hat) off against
-  a 3D bead figure of the boss, with **FIGHT!** and **VICTORY!** in 3D letters.
-* **Town fly-overs:** the first time you reach Octo City or Turtle Town.
-* **Milestones:** a gold medal spins in on a sunburst.
-* **The leaderboard podium** and the **3D Museum** of the guardians you've beaten.
+The ground is pixel art, but everything that stands up is drawn in 3D at three times the
+resolution (twice in the browser), all in code:
+* **Octo is a 3D figure in his own pixel style.** Every pixel of his sprite becomes a little lit
+  cube, bulging where he's round, with his back drawn from his back sprite. He turns smoothly in
+  3D, sways when he's idle, spins round when he changes form, and wears his hat in 3D too, in
+  every form.
+* **3D buildings:** the Octo Temple pyramid (walk up its stairs onto the top), the stone Octo
+  statues in front of it, Hermie's Pearl Shop, both town gates, and every house, hall, stall,
+  fountain, tower, lighthouse and hut in Octo City and Turtle Town. Things behind a building
+  disappear behind it.
+* **Trial portals** are stone rings with a swirling vortex. Step into one and Octo is pulled in:
+  the view rushes towards the portal as he spirals into the vortex, then he pops out in the trial.
+* **The opening:** skim a sunset ocean, dive under, and 3D Octo swims up out of the deep as the
+  logo flies together letter by letter. Any key (or a tap) skips it.
+* **The title screen**, **boss entrances** (the versus screen faces 3D Octo, in your form and hat,
+  off against a 3D figure of the boss, with **FIGHT!** and **VICTORY!** in 3D letters),
+  **town fly-overs**, **milestone medals**, the **leaderboard podium** and the **3D Museum**.
 
 ### Hermie's shop
 
@@ -305,7 +310,10 @@ Saves from before scores existed are scored for the progress they've already mad
 * `entities.py`: Player (forms, jet, bombs), enemies and bosses, NPCs, projectiles, pickups, effects
 * `gfx.py`: every sprite, themed tileset and the bitmap font, drawn in code
 * `sound.py`: chiptune synth for SFX and music (cached to `.sound_cache.pkl`)
-* `hifi.py`: the hi-fi 3D toolkit: pre-shaded sphere impostors, 3D Octo, turtle and bead-figure models, smooth 3D text
+* `voxel.py`: Octo (and any sprite) as a pixel-style 3D figure made of little cubes, with cached renders
+* `props3d.py`: the 3D buildings, pyramid, statues, gates and portals, and what stands where
+* `scene3d.py`: the 3D layer of the world (drawn in depth order with Octo) and the portal animation
+* `hifi.py`: the smooth 3D toolkit for the cinematics: shaded sphere impostors, glows and 3D text
 * `cinema.py`: the 3D scenes: the opening, the versus entrance, town fly-overs and the milestone medal
 * `cities.py`, `townart.py`: the two towns' maps and their pixel art
 * `folk.py`: who lives in the towns, their shops and side quests, and the leaderboard rivals

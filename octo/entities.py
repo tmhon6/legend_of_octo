@@ -825,6 +825,29 @@ class Player(Entity):
             img = pygame.transform.scale(img, (20, 12) if dx else (12, 20))
             x -= 2 if dx else -2
             y += 2 if dx else -2
+        self._draw_slap(surf, ox, oy)
+        if self.fog_t:
+            img = img.copy()
+            img.set_alpha(110 if self.fog_t > 50 or (self.fog_t // 4) % 2 else 220)
+        if not (self.dash_t or self.flip_t or self.attack_t or self.knock_t):
+            if getattr(self, 'moving', False) and (self.walk_t // 6) % 2:
+                img = pygame.transform.scale(img, (17, 15))        # squash on each stroke
+                y += 1
+            else:
+                y += round(math.sin(self.idle_t * 0.07))           # floating in the water
+        surf.blit(img, (x, y))
+        if not self.dash_t and not self.flip_t:
+            style.draw_hat(surf, getattr(self, 'hat', 'none'), x, y, self.facing, self.idle_t)
+        self._draw_aura(surf, x, y)
+
+    def draw_extras(self, surf, ox=0, oy=0):
+        """Everything but Octo himself (the slap, fog, bubble shield): used when he's drawn in 3D."""
+        if self.invuln and (self.invuln // 3) % 2 and not self.knock_t:
+            return
+        self._draw_slap(surf, ox, oy)
+        self._draw_aura(surf, round(self.x) + ox, round(self.y) + oy)
+
+    def _draw_slap(self, surf, ox, oy):
         if self.attack_t and self.mood == 'mad':
             r = self.slap_rect()
             t = gfx.SLAP['mad'][self.facing]
@@ -842,18 +865,8 @@ class Player(Entity):
                     surf.blit(t, (r.x + 12 + ox, r.y - 2 + oy), (0, th - ch, tw, ch))
                 else:
                     surf.blit(t, (r.x + 12 + ox, r.bottom + 2 - ch + oy), (0, 0, tw, ch))
-        if self.fog_t:
-            img = img.copy()
-            img.set_alpha(110 if self.fog_t > 50 or (self.fog_t // 4) % 2 else 220)
-        if not (self.dash_t or self.flip_t or self.attack_t or self.knock_t):
-            if getattr(self, 'moving', False) and (self.walk_t // 6) % 2:
-                img = pygame.transform.scale(img, (17, 15))        # squash on each stroke
-                y += 1
-            else:
-                y += round(math.sin(self.idle_t * 0.07))           # floating in the water
-        surf.blit(img, (x, y))
-        if not self.dash_t and not self.flip_t:
-            style.draw_hat(surf, getattr(self, 'hat', 'none'), x, y, self.facing, self.idle_t)
+
+    def _draw_aura(self, surf, x, y):
         if self.fog_t:
             fog = pygame.Surface((36, 36), pygame.SRCALPHA)
             t = self.fog_t
