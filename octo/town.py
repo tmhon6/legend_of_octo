@@ -10,6 +10,7 @@ import math
 
 import pygame
 
+import beasts
 import cinema
 import folk
 import forms
@@ -27,7 +28,7 @@ CONFIRM = {pygame.K_RETURN, pygame.K_KP_ENTER}
 UP, DOWN = {pygame.K_UP, pygame.K_w}, {pygame.K_DOWN, pygame.K_s}
 LEFT, RIGHT = {pygame.K_LEFT, pygame.K_a}, {pygame.K_RIGHT, pygame.K_d}
 CLOSE = {pygame.K_ESCAPE, pygame.K_q, pygame.K_p, pygame.K_m, pygame.K_x, pygame.K_t}
-TABS = ['QUESTS', 'SCORE', 'LEADERS', 'EXTRAS']
+TABS = ['QUESTS', 'SCORE', 'LEADERS', 'BEASTS', 'EXTRAS']
 NAME_MAX = 10
 GREETING = {
     'octo': ["WELCOME TO OCTO CITY!",
@@ -90,6 +91,11 @@ class TownLife:
             if st['s'] == 'active' and folk.QUESTS[qid]['kind'] == 'collect':
                 self.spawn_quest_items(qid)
         self.update_tilly()
+        for bid in self.flags.get('minis', []) + self.flags.get('tbosses', []):   # guardians already met
+            self.flags.setdefault('beasts_seen', [])
+            if 'g:' + bid not in self.flags['beasts_seen']:
+                self.flags['beasts_seen'].append('g:' + bid)
+            self.flags.setdefault('beasts_beaten', {}).setdefault('g:' + bid, 1)
         if not had_score:                             # a save from before scores: count its progress
             base = {'base_form': 2, 'heart': 3}
             pts = sum(max(0, v - base.get(k, 0)) * score.POINTS.get(k, 0) for k, v in self._counts().items())
@@ -143,6 +149,11 @@ class TownLife:
 
     def score_kill(self, e):
         from entities import MiniBoss
+        bk = beasts.beast_key(e)
+        if bk:
+            beaten = self.flags.setdefault('beasts_beaten', {})
+            beaten[bk] = beaten.get(bk, 0) + 1
+            self.see_beast(bk)
         if isinstance(e, MiniBoss):
             if getattr(e, 'in_temple', False):
                 self.flags.setdefault('tbosses', [])
@@ -172,6 +183,23 @@ class TownLife:
                 continue
             st['n'] += 1
             self.toast = (f"{q['title']}: {st['n']}/{q['n']}", 80)
+
+    def see_beast(self, key):
+        seen = self.flags.setdefault('beasts_seen', [])
+        if key not in seen:
+            seen.append(key)
+            e = next((x for x in beasts.entries() if x['key'] == key), None)
+            if e and self.state == 'play':
+                self.toast = (f"NEW IN THE BESTIARY: {e['name']}", 110)
+
+    def watch_beasts(self):
+        """Fill in the bestiary for every creature that shows itself on the screen."""
+        seen = self.flags.setdefault('beasts_seen', [])
+        for e in self.enemies:
+            if e.active and self.view_rect.colliderect(e.rect):
+                k = beasts.beast_key(e)
+                if k and k not in seen:
+                    self.see_beast(k)
 
     def town_region(self, region):
         """Octo swam into a new region (first visits score; postcard quests note them)."""
@@ -380,6 +408,8 @@ class TownLife:
             for nid, c in self.citizens.items():
                 c.icon = self.npc_icon(nid)
         self.score_watch()
+        if self.t % 10 == 0:
+            self.watch_beasts()
         if self.medal_queue and self.state == 'play' and not (self.trial or self.bossfight or self.active_arena):
             self.start_medal()
         if getattr(self, 'say_later', None) and self.state == 'play':
@@ -803,6 +833,8 @@ class TownLife:
             return score.MILESTONES
         if self.jtab == 2:
             return self.ranking()
+        if self.jtab == 3:
+            return beasts.entries()
         return ['museum', 'radio', 'name']
 
     def journal_key(self, k):
@@ -819,7 +851,7 @@ class TownLife:
         elif k in DOWN and rows:
             self.jsel = (self.jsel + 1) % len(rows)
             sound.play('text')
-        elif (k in ACTION or k in CONFIRM) and self.jtab == 3:
+        elif (k in ACTION or k in CONFIRM) and self.jtab == 4:
             what = rows[self.jsel]
             if what == 'name':
                 self.open_name(back='journal')
@@ -853,6 +885,8 @@ class TownLife:
             self._draw_milestones(scr, box, rows, y0)
         elif self.jtab == 2:
             self._draw_leaders(scr, box, rows, y0)
+        elif self.jtab == 3:
+            self._draw_beasts(scr, box, rows, y0)
         else:
             self._draw_extras(scr, box, rows, y0)
         gfx.text(scr, "<> TABS   Q: CLOSE", SCREEN_W // 2, box.bottom - 9, (130, 140, 180), center=True)
@@ -1018,6 +1052,69 @@ class TownLife:
                 m = voxel.VoxelFigure('cit_' + look if look and 'cit_' + look in gfx.OCTO_PAL else 'blue')
             cache[key] = m
         return m
+
+    def _draw_beasts(self, scr, box, rows, y0):
+        seen = set(self.flags.get('beasts_seen', []))
+        beaten = self.flags.get('beasts_beaten', {})
+        n_seen = sum(1 for e in rows if e['key'] in seen)
+        gfx.text(scr, f"SEEN {n_seen}/{len(rows)}", box.x + 8, y0, (170, 200, 255))
+        tag = f"BEATEN {sum(beaten.values())}"
+        gfx.text(scr, tag, box.right - 8 - gfx.text_width(tag), y0, (255, 200, 120))
+        self.jsel = min(self.jsel, len(rows) - 1)
+        top, vis = self._list(rows, 7)
+        for j, e in enumerate(vis):
+            i = top + j
+            y = y0 + 11 + j * 10
+            known = e['key'] in seen
+            if i == self.jsel:
+                gfx.text(scr, ">", box.x + 4, y, (255, 220, 120))
+            if beaten.get(e['key']):
+                self._check(scr, box.x + 11, y)
+            name = e['name'] if known else "?????"
+            col = (255, 255, 255) if known else (110, 115, 150)
+            if i == self.jsel:
+                col = (255, 230, 150) if known else (170, 170, 200)
+            gfx.text(scr, name[:15], box.x + 21, y, col)
+        e = rows[self.jsel]
+        self._beast = e if e['key'] in seen else ('?', e)
+        y = box.bottom - 61
+        pygame.draw.line(scr, (60, 70, 110), (box.x + 4, y - 3), (box.right - 4, y - 3))
+        if e['key'] in seen:
+            lines = [(ln, (170, 200, 255)) for ln in gfx.wrap(f"{e['cat']}: {e['where']}", 38)[:2]]
+            lines.append((f"HP {e['hp']}   HITS FOR {e['dmg']}   BEATEN {beaten.get(e['key'], 0)}", (255, 220, 140)))
+            lines += [(ln, (210, 220, 245)) for ln in gfx.wrap(e['note'], 38)]
+            for j, (line, col) in enumerate(lines[:5]):
+                gfx.text(scr, line, box.x + 8, y + j * 10, col)
+        else:
+            gfx.text(scr, f"{e['cat']}: NOT MET YET.", box.x + 8, y, (150, 155, 190))
+            gfx.text(scr, "KEEP EXPLORING!", box.x + 8, y + 10, (150, 155, 190))
+
+    def draw_beast3d(self, hr):
+        """The selected creature, turning slowly on a little stand (on the hi-res layer)."""
+        import voxel
+        what = getattr(self, '_beast', None)
+        if what is None:
+            return
+        unknown = isinstance(what, tuple)
+        e = what[1] if unknown else what
+        spr = e['sprite']
+        cache = self.__dict__.setdefault('_beast_figs', {})
+        fig = cache.get(e['key'])
+        if fig is None:
+            fig = cache[e['key']] = voxel.VoxelFigure(sprite=spr)
+        H_ = HI
+        cx, base = 190 * H_, (HUD_H + 96) * H_
+        stand = pygame.Surface((60 * H_, 12 * H_), pygame.SRCALPHA)
+        pygame.draw.ellipse(stand, (40, 46, 90), stand.get_rect())
+        pygame.draw.ellipse(stand, (90, 100, 170), stand.get_rect(), max(1, H_))
+        hr.blit(stand, (cx - stand.get_width() / 2, base - stand.get_height() / 2))
+        size = max(spr.get_width(), spr.get_height())
+        s = 56 * H_ / size
+        img, (ax, ay) = fig.image(s, self.t * 0.025, 0.6, flash=False, tint=(22, 20, 40) if unknown else None)
+        hr.blit(img, (cx - ax, base - ay))
+        if unknown:
+            q = cinema.big_word("?", 30 * H_, (200, 200, 255), (120, 120, 200), (40, 40, 90))
+            hr.blit(q, q.get_rect(center=(cx, base - 34 * H_)))
 
     def _draw_extras(self, scr, box, rows, y0):
         names = {'museum': ("3D MUSEUM", "SEE EVERY GUARDIAN YOU'VE BEATEN AS A 3D STATUE."),

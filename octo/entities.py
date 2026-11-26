@@ -2927,6 +2927,8 @@ class EnemyShot(Entity):
         if self.kind == 'ember':                 # a patch of fire on the floor: only hurts if touched
             if r.colliderect(game.player.rect) and self.t > 20 and not game.player.stat('heatproof', 0):
                 game.player.hurt(game, self.damage, r.center)
+            if self.t > 20 and getattr(game, 'snail', None) is not None:
+                game.coop_hit_by_shot(self)
             return
         if game.level.blocked(r, 'shot') and self.kind != 'bubble' or not game.view_rect.colliderect(r):
             self.dead = True
@@ -2944,6 +2946,8 @@ class EnemyShot(Entity):
             else:
                 p.hurt(game, self.damage, r.center)
             self.dead = True
+        elif getattr(game, 'snail', None) is not None and game.coop_hit_by_shot(self):
+            self.dead = True                    # Pebble took it
 
     def draw(self, surf, ox=0, oy=0):
         img = gfx.SPR['shots'][self.kind]

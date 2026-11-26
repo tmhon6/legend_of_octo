@@ -26,6 +26,9 @@ import style
 from people import Citizen, LegendStatue
 from town import TownLife
 from scene3d import Scene3D
+from coop import Coop
+import coop
+from hud3d import Hud3D
 
 DIR_KEYS = {
     pygame.K_UP: 'up', pygame.K_w: 'up',
@@ -216,7 +219,7 @@ def tile_to_px(tx, ty):
     return tx * TILE + TILE / 2 - 8, ty * TILE + TILE / 2 - 8
 
 
-class Game(TownLife, Scene3D):
+class Game(TownLife, Scene3D, Coop, Hud3D):
     def __init__(self):
         problems = [] if WEB else world.validate()     # a developer check: skipped in the browser to load faster
         if problems:
@@ -237,6 +240,7 @@ class Game(TownLife, Scene3D):
         self.ui_big = pygame.Surface((SCREEN_W * HI, SCREEN_H * HI), pygame.SRCALPHA)
         self.ui_on = False
         self.scene_setup()
+        self.coop_setup()
         gfx.load()
         sound.init()
         self.clock = pygame.time.Clock()
@@ -341,6 +345,8 @@ class Game(TownLife, Scene3D):
             self.wares.append((ware, pygame.Rect(cx - 7, cy - 7, 14, 14)))
         self.town_setup()
         self.scene_setup()
+        self.snail = None
+        self.p2_held = []
         lv.blockers = [n.rect for n in self.npcs]
         self.active_arena = None
         self.checkpoint = world.START
@@ -689,6 +695,8 @@ class Game(TownLife, Scene3D):
         self.state = 'play'
         self.flags.setdefault('run', __import__('score').new_run_id())
         self.town_after_load('score' in data['flags'])
+        if self.flags.get('coop'):
+            self.coop_join(quiet=True)
         self.say(["WELCOME BACK, OCTO!"])
 
     # ---- warping between completed trial portals ---------------------------
@@ -2032,6 +2040,8 @@ class Game(TownLife, Scene3D):
             if self.t > 20:
                 self.end_intro()
             return
+        if self.coop_event(ev):
+            return
         if self.touch.handle(ev):
             return
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and self.state == 'title':
@@ -2109,6 +2119,12 @@ class Game(TownLife, Scene3D):
             elif k in CONFIRM_KEYS or k in ACTION_KEYS:
                 if menu[self.title_sel] == 'CONTINUE':
                     self.load_game()
+                elif menu[self.title_sel] == '2 PLAYERS':
+                    self.new_game()
+                    self.coop_join(quiet=True)
+                    self.dialog['pages'].append(coop.NAME + " THE SNAIL, OCTO'S PET, COMES ALONG! PLAYER TWO: ARROW KEYS "
+                                                "TO MOVE, RIGHT CTRL OR . TO SPIT SLIME, / OR RIGHT SHIFT TO SPIN IN "
+                                                "HIS SHELL. A GAMEPAD WORKS TOO.")
                 else:
                     self.new_game()
             elif k == pygame.K_l and save_exists():
@@ -2150,7 +2166,13 @@ class Game(TownLife, Scene3D):
             elif k in FORM_KEYS:
                 self.player.pick_form(FORM_KEYS[k])
         elif st == 'pause':
-            if k in PAUSE_KEYS:
+            if k == pygame.K_r:
+                if self.coop:
+                    self.coop_leave()
+                else:
+                    self.coop_join()
+                self.state = 'play'
+            elif k in PAUSE_KEYS:
                 self.state = 'play'
                 sound.play('pause')
             elif k == pygame.K_s or k in SAVE_KEYS:
@@ -2545,6 +2567,7 @@ class Game(TownLife, Scene3D):
         cam0 = getattr(self, 'cam', None)
         self.update_camera()
         self.cam_still = cam0 == self.cam
+        self.coop_update()
         self.update_area()
         if self.trial:
             self.update_trial()
@@ -2650,8 +2673,15 @@ class Game(TownLife, Scene3D):
         if p.hp <= 2 and self.t % 48 == 0:
             sound.play('lowhp')
 
-    def collect(self, it):
+    def collect(self, it, by=None):
         p = self.player
+        if by is not None and it.kind in ('heart', 'shrimp'):      # Pebble eats it himself
+            it.dead = True
+            if it.item_id:
+                self.collected.add(it.item_id)
+            by.hp = min(by.max_hp, by.hp + (2 if it.kind == 'heart' else 1))
+            sound.play('heart' if it.kind == 'heart' else 'munch')
+            return
         it.dead = True
         if it.item_id:
             self.collected.add(it.item_id)
@@ -2749,6 +2779,7 @@ class Game(TownLife, Scene3D):
         scr.blit(self.play_surf, (sx, HUD_H + sy))
         self.draw_hud(scr)
         self.draw_world3d(self.world_layer(), (sx, sy))
+        self.draw_hud3d(self.world_layer())
         # everything from here on goes over the 3D layer
         scr = self.ui_layer()
         self.draw_world_post(scr.subsurface((0, HUD_H, PLAY_W, PLAY_H)))
@@ -2813,6 +2844,8 @@ class Game(TownLife, Scene3D):
             self.draw_journal(scr)
             if self.jtab == 2:
                 self.draw_podium(self.hires_layer())
+            elif self.jtab == 3:
+                self.draw_beast3d(self.hires_layer())
         elif st == 'trade':
             self.draw_trade(scr)
         elif st == 'name':
@@ -2876,6 +2909,8 @@ class Game(TownLife, Scene3D):
         if self.state not in ('dying', 'portal') and not self.player.tumble and \
                 not (p3d and self.ground_height(self.player) > 0):
             fx.shadow(ps, self.player.rect, ox, oy, lift=6 if self.player.in_sky else 0)
+        if self.snail is not None and self.ground_height(self.snail) == 0:
+            self.draw_snail_2d(ps, ox, oy)
         for n in self.npcs:
             if vis.colliderect(n.rect) and n not in raised:
                 n.draw(ps, ox, oy)
@@ -3443,6 +3478,7 @@ class Game(TownLife, Scene3D):
             hx = (188 + (i % 7) * 9) if per == 7 else (186 + (i % 10) * 7)
             hy = 24 + (i // per) * 9
             scr.blit(img, (hx, hy))
+        self.draw_snail_hud(scr, 186, 46)
 
     def draw_box(self, scr, rect):
         pygame.draw.rect(scr, (0, 0, 0), rect)
@@ -3469,7 +3505,8 @@ class Game(TownLife, Scene3D):
         lines = ["PAUSED", "ARROWS/WASD  MOVE", "Z / SPACE    ATTACK / TALK / BUY",
                  "X / 1-9      CHANGE FORM", "C            INK: LINE/BURST",
                  "V            INK JET (DASH)", "B            BUBBLE BOMB", "T            WARP TO PORTALS",
-                 "M / Q        MAP / JOURNAL", "N / H        MUTE / HATS", "P/ENTER/ESC  RESUME"]
+                 "M / Q        MAP / JOURNAL", "N / H        MUTE / HATS",
+                 "R            " + ("PEBBLE LEAVES" if self.coop else "PEBBLE JOINS (2P)"), "P/ENTER/ESC  RESUME"]
         for i, l in enumerate(lines):
             gfx.text(scr, l, box.x + 10 if i else SCREEN_W // 2, box.y + 6 + i * 10,
                      (255, 220, 120) if i == 0 else (255, 255, 255), center=(i == 0))
@@ -3502,7 +3539,10 @@ class Game(TownLife, Scene3D):
     def title_menu(self):
         if self.t % 30 == 1 or not hasattr(self, 'has_save'):
             self.has_save = save_exists()
-        return ['CONTINUE', 'NEW GAME'] if self.has_save else ['NEW GAME']
+        menu = ['CONTINUE', 'NEW GAME'] if self.has_save else ['NEW GAME']
+        if not self.touch.active or getattr(self, 'joys', None):      # player two needs keys or a gamepad
+            menu.append('2 PLAYERS')
+        return menu
 
     def draw_title(self, scr):
         menu = self.title_menu()

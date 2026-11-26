@@ -21,14 +21,18 @@ class VoxelModel:
     """Surface voxels of a figure: (x, y, z, colour, normal). x right, y towards the viewer, z up,
     in voxel units, with the feet at z = 0 and the middle at x = y = 0."""
 
-    def __init__(self, cells):
+    def __init__(self, cells, normals=None):
         occ = set(cells)
+        normals = normals or {}
         self.vox = []
         dirs = [(dx, dy, dz) for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1) if dx or dy or dz]
         for (x, y, z), col in cells.items():
             if all((x + d[0], y + d[1], z + d[2]) in occ for d in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0),
                                                                    (0, 0, 1), (0, 0, -1))):
                 continue                                    # buried inside: never seen
+            if (x, y, z) in normals:                        # a smooth, known shape (Octo's round head)
+                self.vox.append((x, y, z, col, normals[(x, y, z)]))
+                continue
             nx = ny = nz = 0.0
             for dx, dy, dz in dirs:                         # points out of the body, towards empty space
                 if (x + dx, y + dy, z + dz) not in occ:
@@ -42,8 +46,10 @@ class VoxelModel:
         self.top = max(zs) + 1
 
 
-def _profile_cells(front, back=None, depth=4.0, legs_from=None, z0=0, x_off=0.0):
-    """Extrude a sprite into voxels, round in the middle. legs_from: rows from here down stay thin."""
+def _profile_cells(front, back=None, depth=4.0, legs_from=None, z0=0, x_off=0.0, ball=False, fill=None,
+                   outline=None, normals=None):
+    """Extrude a sprite into voxels, round in the middle. legs_from: rows from here down stay thin.
+    ball: the body is a true ellipsoid, as deep as it is wide (round from every side)."""
     w, h = front.get_size()
     cells = {}
     rows = []
@@ -57,6 +63,10 @@ def _profile_cells(front, back=None, depth=4.0, legs_from=None, z0=0, x_off=0.0)
     body_bottom = (legs_from - 1) if legs_from is not None else bottom
     cy = (top + body_bottom) / 2
     ry = max(1.0, (body_bottom - top) / 2 + 0.5)
+    if ball:
+        bx0 = min(r[0] for r in rows[top:body_bottom + 1] if r)
+        bx1 = max(r[1] for r in rows[top:body_bottom + 1] if r)
+        bcx, brx = (bx0 + bx1) / 2, (bx1 - bx0) / 2 + 0.5
     for py in range(h):
         r = rows[py]
         if not r:
@@ -68,18 +78,40 @@ def _profile_cells(front, back=None, depth=4.0, legs_from=None, z0=0, x_off=0.0)
             if c.a <= 128:
                 continue
             if legs_from is not None and py >= legs_from:
-                t = 1
+                t = 2 if ball else 1
+                if ball:                                      # tentacles curl round the body
+                    u = (px - bcx) / brx
+                    t = max(1, int(round(depth * 0.55 * math.sqrt(max(0.0, 1 - u * u)))))
+            elif ball:
+                u = (px - bcx) / brx
+                v = (py - cy) / ry
+                t = int(round(depth * math.sqrt(max(0.0, 1 - u * u - v * v * 0.85))))
             else:
                 u = (px - mid) / half
                 v = (py - cy) / ry
                 t = int(round(depth * math.sqrt(max(0.0, 1 - u * u)) * math.sqrt(max(0.0, 1 - (v * 0.75) ** 2))))
+            front_col = (c.r, c.g, c.b)
+            legs = legs_from is not None and py >= legs_from
+            if ball and front_col == outline:
+                if legs:
+                    continue                              # gaps between tentacles are just water
+                front_col = fill                          # a round head's outline is its edge, drawn later
+            inside = fill if (fill is not None and not legs and (outline is None or front_col == outline or ball)) \
+                else front_col
             for d in range(-t, t + 1):
-                col = (c.r, c.g, c.b)
-                if d < 0 and back is not None:
+                if d == t:
+                    col = front_col                       # his face, exactly as the pixel art
+                elif d == -t and back is not None:
                     b = back.get_at((w - 1 - px, py))
-                    if b.a > 128:
-                        col = (b.r, b.g, b.b)
-                cells[(px - w // 2 + int(x_off), d, z0 + (h - 1 - py))] = col
+                    col = (b.r, b.g, b.b) if b.a > 128 and (b.r, b.g, b.b) != outline else inside
+                else:
+                    col = inside if fill is not None else front_col
+                pos = (px - w // 2 + int(x_off), d, z0 + (h - 1 - py))
+                cells[pos] = col
+                if ball and normals is not None and not legs:
+                    nx_, ny_, nz_ = (px - bcx) / brx, d / max(1.0, depth), -(py - cy) / ry
+                    nn = math.sqrt(nx_ * nx_ + ny_ * ny_ + nz_ * nz_) or 1.0
+                    normals[pos] = (nx_ / nn, ny_ / nn, nz_ / nn)
     return cells
 
 
@@ -93,12 +125,15 @@ def octo_model(mood, frame, hat=None):
     if m is None:
         front = gfx.OCTO[mood]['down'][frame]
         back = gfx.OCTO[mood]['up'][frame]
-        cells = _profile_cells(front, back, depth=4.0, legs_from=11)
+        pal = gfx.OCTO_PAL[mood]
+        normals = {}
+        cells = _profile_cells(front, back, depth=7.0, legs_from=11, ball=True, fill=tuple(pal['B']),
+                               outline=tuple(pal['k']), normals=normals)
         if hat and hat != 'none':
             import style
             # where draw_hat puts it: the hat's bottom rows sit on the top of his head
             cells.update(_profile_cells(style._hat(hat), None, depth=3.0, z0=12))
-        m = _models[key] = VoxelModel(cells)
+        m = _models[key] = VoxelModel(cells, normals)
     return m
 
 
@@ -141,7 +176,7 @@ def _cube(col, s, fh, th, side):
     return img
 
 
-def render(model, s, yaw=0.0, pitch=0.6, tint=None, flash=False):
+def render(model, s, yaw=0.0, pitch=0.6, tint=None, flash=False, outline=None):
     """Draw a model with cubes of s pixels. Returns (surface, (ax, ay)): the point where the
     figure's feet touch the ground, in the surface's pixels.
 
@@ -151,8 +186,8 @@ def render(model, s, yaw=0.0, pitch=0.6, tint=None, flash=False):
     sp = math.sin(pitch)
     si = max(1, int(round(s)))
     fh = si                                               # figures stand up: no squashing
-    th = int(round(s * sp * 0.55))
-    side = -int(round(s * sy_ * 0.55)) if s >= 6 else 0   # turned: the cubes' sides show (big cubes only)
+    th = int(round(s * sp * 0.55)) if s >= 4 else 0       # tiny cubes: smooth, no stair-step tops
+    side = 0                                              # (light and shade show which way he's turned)
     if s >= 5:
         si += 1                                           # overlap a hair: no gaps between turned cubes
     lx, ly, lz = LIGHT
@@ -165,8 +200,8 @@ def render(model, s, yaw=0.0, pitch=0.6, tint=None, flash=False):
         lam = rnx * lx + rny * ly + nz * lz
         if s >= 6:
             k = 0.6 + 0.55 * max(0.0, lam) + 0.1 * max(0.0, rny)
-        else:                                             # small: gentler, so columns don't stripe
-            k = 0.8 + 0.3 * max(0.0, lam)
+        else:                                             # small: smooth, like a shaded ball
+            k = 0.66 + 0.48 * max(0.0, lam) - 0.12 * max(0.0, -rny)
         if flash:
             c = (255, 255, 255)
         else:
@@ -192,18 +227,28 @@ def render(model, s, yaw=0.0, pitch=0.6, tint=None, flash=False):
         surf.blit(_cube(c, si, fh, th, side), (int(px - minx - si / 2) - off, int(py - miny - fh / 2 - th)))
     ax = -minx
     ay = -miny + fh / 2                                   # the bottom of the lowest cubes
+    if outline is not None and not flash:                 # a crisp outline round the whole figure
+        ow = max(1, int(round(s / 4)))
+        sil = surf.copy()
+        sil.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        sil.fill(tuple(outline) + (0,), special_flags=pygame.BLEND_RGBA_ADD)
+        out = pygame.Surface((w + ow * 2, h + ow * 2), pygame.SRCALPHA)
+        for dx, dy in ((-ow, 0), (ow, 0), (0, -ow), (0, ow)):
+            out.blit(sil, (ow + dx, ow + dy))
+        out.blit(surf, (ow, ow))
+        return out, (ax + ow, ay + ow)
     return surf, (ax, ay)
 
 
 _renders = {}
 
 
-def cached(key, model, s, yaw, pitch, tint=None, flash=False):
+def cached(key, model, s, yaw, pitch, tint=None, flash=False, outline=None):
     out = _renders.get(key)
     if out is None:
         if len(_renders) > 900:
             _renders.clear()
-        out = _renders[key] = render(model, s, yaw, pitch, tint, flash)
+        out = _renders[key] = render(model, s, yaw, pitch, tint, flash, outline)
     return out
 
 
@@ -213,7 +258,8 @@ def octo_image(mood, frame, yaw, s, pitch=0.6, hat=None, flash=False, tint=None)
     pq = round(pitch * 20)
     sq = round(s * 4) / 4
     key = ('o', mood, frame, hat, yq, pq, sq, flash, tint)
-    return cached(key, octo_model(mood, frame, hat), sq, yq * math.pi / 24, pq / 20, tint, flash)
+    edge = tuple(gfx.OCTO_PAL[mood]['k']) if not tint else None
+    return cached(key, octo_model(mood, frame, hat), sq, yq * math.pi / 24, pq / 20, tint, flash, edge)
 
 
 REFS = (2, 3, 4, 6, 9, 13, 19, 28, 40)              # sizes renders are made at, then shrunk to fit
@@ -239,7 +285,8 @@ class VoxelFigure:
         pq = round(pitch * 20)
         key = ('f', id(self.sprite) if self.sprite is not None else (self.mood, self.hat, frame), self.depth,
                ref, yq, pq, flash, tint)
-        img, (ax, ay) = cached(key, self.model(frame), ref, yq * math.tau / steps, pq / 20, tint, flash)
+        edge = tuple(gfx.OCTO_PAL[self.mood]['k']) if self.sprite is None and not tint else None
+        img, (ax, ay) = cached(key, self.model(frame), ref, yq * math.tau / steps, pq / 20, tint, flash, edge)
         if abs(s - ref) > 0.05:
             k = s / ref
             img = pygame.transform.smoothscale(img, (max(1, int(img.get_width() * k)), max(1, int(img.get_height() * k))))

@@ -18,7 +18,7 @@ import voxel
 import world
 from settings import HI, HUD_H, PLAY_H, PLAY_W, TILE
 
-FACING_YAW = {'down': 0.22, 'up': math.pi + 0.22, 'left': 1.0, 'right': -1.0}
+FACING_YAW = {'down': 0.22, 'up': math.pi + 0.22, 'left': 0.62, 'right': -0.62}
 PORTAL_LEN = 66                  # frames from stepping in to arriving in the trial
 ARRIVE_LEN = 34
 
@@ -72,6 +72,11 @@ class Scene3D:
             h = self.ground_height(p)
             key = (pyr_base + 1) if h > 0 and pyr_base is not None else p.rect.bottom
             items.append((key, 2, 'player'))
+        sn = getattr(self, 'snail', None)
+        if sn is not None and self.state not in ('dying',) and self.portal_anim is None:
+            h = self.ground_height(sn)
+            key = (pyr_base + 1.2) if h > 0 and pyr_base is not None else sn.rect.bottom
+            items.append((key, 2, 'snail'))
         for n in self.npcs:                                   # someone standing up on the pyramid
             if getattr(n, 'hidden', False) or not view.colliderect(n.rect):
                 continue
@@ -85,6 +90,8 @@ class Scene3D:
                 self._draw_player(hr, shake)
             elif what == 'portal_octo':
                 self._draw_portal_octo(hr, shake)
+            elif what == 'snail':
+                self._draw_snail(hr, shake)
             else:
                 self._draw_raised(hr, what, shake)
         hr.set_clip(None)
@@ -212,6 +219,35 @@ class Scene3D:
             for i in range(2):
                 r = int((6 + k * 30 + i * 8) * HI)
                 pygame.draw.ellipse(hr, col, (x - r, y - 8 * HI - r * 0.6, r * 2, r * 1.2), max(1, HI))
+
+    SNAIL_YAW = {'right': -0.35, 'left': 0.35, 'down': 0.25, 'up': math.pi + 0.25}
+
+    def _draw_snail(self, hr, shake):
+        """Pebble, as a little 3D snail in the same pixel style as Octo."""
+        import coop
+        s = self.snail
+        if s.invuln and (s.invuln // 3) % 2 and not s.knock_t and not s.resting:
+            return
+        img2d = s.image()
+        if s.spin_t or s.resting:
+            yaw = (self.t * 0.5) if s.spin_t else 0.3
+        else:
+            yaw = self.SNAIL_YAW[s.facing]
+        yq = round(yaw / (math.tau / 48)) % 48
+        key = ('snail', id(img2d), yq, bool(s.knock_t))
+        model = voxel.sprite_model(img2d, depth=4.0)
+        img, (ax, ay) = voxel.cached(key, model, HI, yq * math.tau / 48, 0.6, None, bool(s.knock_t), coop.INK)
+        h = self.ground_height(s)
+        fx, fy = s.x + 8 - props3d.KX * h, s.y + 15.5 - props3d.KZ * h
+        if s.resting:
+            fy += math.sin(self.t * 0.2)
+        x, y = self._hr(fx, fy, shake)
+        hr.blit(img, (x - ax, y - ay))
+        if s.resting:                                     # Zzz while he rests
+            for i in range(2):
+                zy = y - (22 + ((self.t // 2 + i * 15) % 30)) * HI
+                pygame.draw.lines(hr, (230, 240, 255), False, [(x + 6 * HI, zy), (x + 9 * HI, zy), (x + 6 * HI, zy + 3 * HI),
+                                                              (x + 9 * HI, zy + 3 * HI)], max(1, HI // 2 + 1))
 
     # ---- the trip into a portal --------------------------------------------------
     def start_portal(self, name):

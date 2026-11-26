@@ -66,8 +66,25 @@ In the browser, saves go to the browser's local storage instead of `savegame.jso
 | N                  | Mute / unmute all sound (music and effects)         |
 | H                  | Wardrobe: pick a hat and the ink jet's colour       |
 | Q                  | Journal: side quests, score and milestones, the leaderboard, extras (←/→ switch tabs) |
+| R (in the pause menu) | Pebble the snail joins or leaves (two players)   |
 | F11                | Fullscreen                                          |
 | F3                 | Show the frame rate                                 |
+
+### Player two: Pebble the snail
+
+Octo's pet snail **Pebble** can join on the same screen. Pick **2 PLAYERS** on the title screen,
+or have player two press their spit key during the game (or R in the pause menu).
+
+| Player two          | Keyboard                         | Gamepad  |
+|---------------------|----------------------------------|----------|
+| Move                | Arrow keys                       | Stick / d-pad |
+| Spit slime (slows what it hits) | Right Ctrl, `.` or numpad 0 | A |
+| Shell spin (can't be hurt, bowls enemies over) | `/`, Right Shift or numpad `.` | B |
+
+With Pebble playing, Octo moves with WASD. Pebble has his own three hearts. If he loses them he
+hides in his shell for a few seconds, then pops back out next to Octo, so only Octo can lose the
+game. He picks up pearls and hearts too, his kills count towards the score, and he always stays on
+screen with Octo, following him through every door, portal and town gate.
 
 ## Forms
 
@@ -120,10 +137,13 @@ skip ahead.
 
 The ground is pixel art, but everything that stands up is drawn in 3D at three times the
 resolution (twice in the browser), all in code:
-* **Octo is a 3D figure in his own pixel style.** Every pixel of his sprite becomes a little lit
-  cube, bulging where he's round, with his back drawn from his back sprite. He turns smoothly in
-  3D, sways when he's idle, spins round when he changes form, and wears his hat in 3D too, in
-  every form.
+* **Octo is a round 3D figure in his own pixel style.** Every pixel of his sprite becomes a little
+  lit cube, and his head is a smoothly shaded ball, with his back drawn from his back sprite. He
+  turns smoothly in 3D, sways when he's idle, spins round when he changes form, and wears his hat
+  in 3D too, in every form. Pebble the snail is a little 3D snail in the same style.
+* **The top of the screen is 3D:** a raised panel with shiny pearls, a 3D key and bombs, voxel
+  hearts that bob (and beat when you're low), a 3D Octo turning in the form box, and smooth
+  lettering.
 * **3D buildings:** the Octo Temple pyramid (walk up its stairs onto the top), the stone Octo
   statues in front of it, Hermie's Pearl Shop, both town gates, and every house, hall, stall,
   fountain, tower, lighthouse and hut in Octo City and Turtle Town. Things behind a building
@@ -269,7 +289,10 @@ you're working on it, a yellow **?** means you've done it, and a gold coin means
   conch) between the two towns. Rewards include pearls, spirit pearls, potions, a heart shell, new
   hats and a new ink colour.
 * **The journal (Q):** your quests with their progress and where to go, your score and milestones,
-  the leaderboard, and the extras you've unlocked.
+  the leaderboard, the **bestiary**, and the extras you've unlocked.
+* **The bestiary** lists all 85 creatures, guardians and bosses. Each one fills in when you first
+  see it: a 3D model turning on a stand, where it lives, its hit points and damage, what it does,
+  and how many you've beaten.
 
 ## Score, milestones and the leaderboard
 
@@ -320,6 +343,9 @@ Saves from before scores existed are scored for the progress they've already mad
 * `town.py`: talking, trading, side quests, the journal, the score, milestones, the leaderboard, the museum and the radio
 * `people.py`: the townsfolk and the Living Legend statue
 * `score.py`: points, milestones and the leaderboard file
+* `coop.py`: player two, Pebble the snail (keys, gamepads, slime, shell spin)
+* `beasts.py`: the bestiary's entries, built from the game's creature data
+* `hud3d.py`: the 3D top of the screen
 * `game.py`: state machine, trials, shop, save/load, warping, HUD and drawing
 
 Desktop saves go to `savegame_<version>.json` in the project folder (one per version). Browser saves stay in that browser.
