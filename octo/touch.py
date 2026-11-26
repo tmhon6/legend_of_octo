@@ -120,10 +120,11 @@ class TouchControls:
         if vh > vw:
             ph = max(150, min(380, int(SCREEN_W * vh / vw) - SCREEN_H))
             return 'panel', (SCREEN_W, SCREEN_H + ph)
-        total = min(int(SCREEN_H * vw / vh), SCREEN_W * 3)
-        if (total - SCREEN_W) // 2 >= MIN_SIDE:
-            return 'sides', (total, SCREEN_H)
-        return 'overlay', (SCREEN_W, SCREEN_H)
+        # sideways: always give the controls their own columns beside the game. On squarer screens
+        # (tablets) that makes the game a little smaller, but no button ever covers it.
+        side = max((int(SCREEN_H * vw / vh) - SCREEN_W) // 2, 96)
+        side = min(side, SCREEN_W)
+        return 'sides', (SCREEN_W + 2 * side, SCREEN_H)
 
     def activate(self, mode=None):
         g = self.game
@@ -173,7 +174,7 @@ class TouchControls:
             r = min(46, s // 2 - 6)
             self.dpad = (s // 2, 6 + 4 * 18 + (SCREEN_H - 78) // 2 + 4, r)
             rx = W - s // 2
-            k = min(1.0, s / 110)
+            k = min(1.0, max(0.88, s / 110))     # never so small the labels don't fit
             cy = 6 + 4 * 18 + (SCREEN_H - 78) // 2
             self.buttons = {'atk': (int(rx + 18 * k), int(cy - 16 * k), int(24 * k), pygame.K_z, "ATTACK"),
                             'form': (int(rx - 24 * k), int(cy + 22 * k), int(17 * k), pygame.K_x, "FORM"),
