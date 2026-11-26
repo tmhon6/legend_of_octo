@@ -128,6 +128,7 @@ MINIMAP_COLORS = {
     'K': (50, 150, 80), '=': (72, 82, 132), 'd': (100, 106, 142), 'W': (30, 34, 64), 'S': (120, 120, 140),
     'L': (220, 170, 40), 'X': (150, 150, 170), 'R': (86, 90, 128),
     'I': (170, 220, 255), 'G': (150, 100, 220), 'l': (240, 110, 30),
+    'P': (150, 128, 92), 'Q': (184, 162, 118), 'H': (196, 176, 132),
 }
 MINIMAP_SIZE = (52, 26)
 
@@ -435,6 +436,8 @@ class Game:
             for x, c in enumerate(row[:len(self.seen[y])]):
                 self.seen[y][x] = c == '1'
         p.x, p.y = tile_to_px(*data['pos'])
+        if self.level.blocked(p.rect, 'player'):     # the map changed under an old save
+            p.x, p.y = tile_to_px(*world.START)
         p.facing = 'down'
         self.update_camera()
         self.area = self.region = None

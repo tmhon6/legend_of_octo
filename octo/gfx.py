@@ -763,6 +763,64 @@ def _dfloor(rnd):
     return s
 
 
+_pyr_cache = {}
+PYR_STONE = {'P': (150, 128, 92), 'Q': (184, 162, 118)}
+
+
+def pyramid_tile(ch, lower, rail):
+    """A block of the stepped Octo Temple. lower = (north, south, west, east) neighbour is lower,
+    rail = (left, right) edge of a staircase."""
+    key = (ch, lower, rail)
+    if key in _pyr_cache:
+        return _pyr_cache[key]
+    s = pygame.Surface((TILE, TILE))
+    n, so, w, e = lower
+    if ch == 'T':
+        # the sanctuary on top: big pale flagstones
+        s.fill((214, 196, 152))
+        pygame.draw.rect(s, (188, 168, 124), (0, 0, TILE, TILE), 1)
+        pygame.draw.line(s, (236, 222, 186), (1, 1), (TILE - 2, 1))
+        pygame.draw.line(s, (236, 222, 186), (1, 1), (1, TILE - 2))
+        pygame.draw.circle(s, (200, 180, 136), (8, 8), 2)
+        if so:
+            pygame.draw.rect(s, (130, 112, 80), (0, 12, TILE, 4))
+            pygame.draw.line(s, (240, 228, 196), (0, 11), (TILE, 11))
+    elif ch == 'H':
+        # stairs: four steps, each a light tread over a dark riser
+        for i in range(4):
+            y = i * 4
+            pygame.draw.rect(s, (196, 176, 132), (0, y, TILE, 3))
+            pygame.draw.rect(s, (120, 100, 72), (0, y + 3, TILE, 1))
+        if rail[0]:
+            pygame.draw.rect(s, (110, 92, 66), (0, 0, 2, TILE))
+        if rail[1]:
+            pygame.draw.rect(s, (110, 92, 66), (TILE - 2, 0, 2, TILE))
+    else:
+        base = PYR_STONE[ch]
+        dark = tuple(int(c * 0.72) for c in base)
+        light = tuple(min(255, int(c * 1.15)) for c in base)
+        s.fill(base)
+        # masonry: two courses of blocks with staggered joints
+        for y, joints in ((0, (5, 13)), (8, (1, 9))):
+            pygame.draw.line(s, dark, (0, y + 7), (TILE, y + 7))
+            for x in joints:
+                pygame.draw.line(s, dark, (x, y), (x, y + 6))
+            pygame.draw.line(s, light, (0, y), (TILE, y))
+        if so:          # the step's riser faces us
+            pygame.draw.rect(s, tuple(int(c * 0.55) for c in base), (0, 11, TILE, 5))
+            for x in (3, 9, 15):
+                pygame.draw.line(s, tuple(int(c * 0.42) for c in base), (x, 11), (x, 15))
+            pygame.draw.line(s, light, (0, 10), (TILE, 10))
+        if n:
+            pygame.draw.line(s, (240, 226, 190), (0, 0), (TILE, 0))
+        if w:
+            pygame.draw.line(s, tuple(int(c * 0.8) for c in base), (0, 0), (0, TILE))
+        if e:
+            pygame.draw.rect(s, tuple(int(c * 0.6) for c in base), (TILE - 2, 0, 2, TILE))
+    _pyr_cache[key] = s
+    return s
+
+
 def _dwall(rnd):
     s = pygame.Surface((TILE, TILE))
     s.fill((22, 24, 50))

@@ -8,6 +8,7 @@ Tile legend
           'l' lava (Chilly's ice shard cools it into rock)
           'Y' geyser: blasts Octo up to the Sky Islands (and back down)
   shrine/temple: '=' floor  'W' wall  'S' statue  'v' pit  'L' locked door
+  Octo Temple pyramid: 'P' lower tier  'Q' upper tier  'H' stairs
           'X' shutter: open until you step into its arena, then it closes
               until every enemy in the arena is beaten
 
@@ -18,6 +19,8 @@ on floor, and everything can be reached.
 from collections import deque
 
 import pygame
+
+import gfx
 
 from settings import TILE
 
@@ -68,15 +71,15 @@ LEVEL = [
     "#........vvvvv....C.....#....,........CC..C..........,..##.............#ddddddd#ddddddddddddddd#......###..#....,.ll....................ll,.###..........###...#",
     "#..,....#.C..........C..#####.....##########........##########,....#####ddddddddddddd#dvvvddddd#..........###..,,,ll....................ll,#..............#....#",
     "#.,.,C............#####.#..........,...#..........,.....#.......,...vvv#dddddddddddddd#vvdddddd#.###.....#....#.,ll..........v.........ll,,......#.............#",
-    "#....,............#...#.#.WWWWWWWWW....#.....WWWWWW.....#...........vvv#dddddddddddddddvvdddddd#.####...###....#.ll...................,ll,......###............#",
-    "#...,....C,C.....,#...#.#.W=======W....#.....W====W.....................dddddddddddddddvvdddddd#.####....#.......ll......v.......,.....,ll.,..,..#......###....#",
-    "#.....C..,.......,##R##.#.W=======W.....,....W====W...,.....vv.....,....ddddddddddddddddddddddd#.####............ll.....vvv.....,,,.....ll,,,,,,......######...#",
-    "#.....,C....,...........#.W=======W..........W====W..Y......vv..........ddddddddddddddddddddddd#.####........#....ll.....v......,,,.....ll.,..,..v....,#####...#",
-    "#..#............,....,..#.W=======W.....,....W====W.....C...vv..........ddddddddddddddddddddddd#.###........###...ll.....#.......v.....ll..............#####...#",
-    "#..C......,.C...........#.WWWW=WWWW..........WW==WW.,...#...vv.........#dd#dddd#ddddddddddddddd#..........v..#....ll.........,..vvv....ll........#.....,###....#",
-    "#....,..................#...C..........#......S..S......#.,..........vv#ddddddddddddddddddddddd#.................ll.....................ll.....................#",
-    "#......C...C...C..,.....#..............#.........,......#vv,.,...,...vv#ddddddddddddddddddddddd#################################################################",
-    "#.......................#..............#................#vv..........vv#ddddddddddddddddddddddd#...............................................................#",
+    "#....,............#...#.#.WWWWWWWWW....#...PPPPPPPP.....#...........vvv#dddddddddddddddvvdddddd#.####...###....#.ll...................,ll,......###............#",
+    "#...,....C,C.....,#...#.#.W=======W....#...PQQQQQQP.....................dddddddddddddddvvdddddd#.####....#.......ll......v.......,.....,ll.,..,..#......###....#",
+    "#.....C..,.......,##R##.#.W=======W.....,..PQ====QP...,.....vv.....,....ddddddddddddddddddddddd#.####............ll.....vvv.....,,,.....ll,,,,,,......######...#",
+    "#.....,C....,...........#.W=======W........PQ====QP..Y......vv..........ddddddddddddddddddddddd#.####........#....ll.....v......,,,.....ll.,..,..v....,#####...#",
+    "#..#............,....,..#.W=======W.....,..PQ====QP.....C...vv..........ddddddddddddddddddddddd#.###........###...ll.....#.......v.....ll..............#####...#",
+    "#..C......,.C...........#.WWWW=WWWW........PQ====QP.,...#...vv.........#dd#dddd#ddddddddddddddd#..........v..#....ll.........,..vvv....ll........#.....,###....#",
+    "#....,..................#...C..........#...PQQHHQQP.....#.,..........vv#ddddddddddddddddddddddd#.................ll.....................ll.....................#",
+    "#......C...C...C..,.....#..............#...PPPHHPPP.....#vv,.,...,...vv#ddddddddddddddddddddddd#################################################################",
+    "#.......................#..............#.....S..S.......#vv..........vv#ddddddddddddddddddddddd#...............................................................#",
     "#########.....################....############....############....##################.....#######........C..,......C.......C...WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW.#",
     "#..............................................................................................#.....C....................C...W==============================W.#",
     "#..,.....................#C#...............,.,.........,..#..............,........,........,...#.#.........C.#.C...#.....#,...W===S==================S=======W.#",
@@ -240,7 +243,7 @@ TRIALS = {
 SHRINE_RECT = (28, 0, 67, 21)     # tiles (x0, y0, x1, y1) of the Sunken Shrine
 
 REGIONS = [   # (banner name, tile rect x0, y0, x1, y1); anywhere else is the Coral Reef
-    ('OCTO TEMPLE', (46, 47, 49, 51)),
+    ('OCTO TEMPLE', (43, 46, 50, 53)),
     ('PEARL SHOP', (27, 47, 33, 50)),
     ('MURK PALACE', (126, 55, 157, 77)),
     ('FROZEN SHELF', (96, 1, 158, 25)), ('EMBER VENTS', (96, 27, 158, 52)), ('SUNKEN CITY', (96, 54, 158, 78)),
@@ -257,9 +260,9 @@ REGIONS = [   # (banner name, tile rect x0, y0, x1, y1); anywhere else is the Co
     ('SHIP GRAVEYARD', (1, 56, 94, 78)),
 ]
 
-START = (47.5, 48)       # tile coords of Octo's spawn: inside the Octo Temple
+START = (46.5, 49.5)     # tile coords of Octo's spawn: the sanctuary on top of the Octo Temple pyramid
 SHRINE_CHECKPOINT = (47.5, 19)
-NPC = ('shelly', 44, 53)
+NPC = ('shelly', 43, 54)
 SHOPKEEPER = (30, 47)     # Hermie the hermit crab, behind the counter
 SHOP_ROW = 49            # tile row the wares sit on
 
@@ -502,9 +505,9 @@ ARENAS = {
     'murk': {'rect': (127, 56, 156, 64), 'reward': ('halfpearl', 141.5, 60), 'boss': True},
 }
 
-SOLID_ALL = set('#CKWSLRI')
+SOLID_ALL = set('#CKWSLRIPQ')
 OPENABLE = set('KLRIl')       # tiles that can be opened for good (saved in savegames)
-FLOOR_CHARS = set('.,=d')
+FLOOR_CHARS = set('.,=dH')
 
 
 def in_rect(tx, ty, r):
@@ -632,8 +635,23 @@ class Level:
         return out
 
     # -- drawing -----------------------------------------------------------
+    PYRAMID_HEIGHT = {'P': 1, 'Q': 2, 'H': 1}
+
+    def _height(self, tx, ty):
+        ch = self.tile(tx, ty)
+        if ch == '=' and region_at(tx, ty) == 'OCTO TEMPLE':
+            return 3                     # the sanctuary on top
+        return self.PYRAMID_HEIGHT.get(ch, 0)
+
     def _blit_tile(self, tiles, tx, ty):
         ch = self.tiles[ty][tx]
+        top = ch == '=' and region_at(tx, ty) == 'OCTO TEMPLE'
+        if ch in 'PQH' or top:
+            h = self._height(tx, ty)
+            lower = tuple(self._height(tx + dx, ty + dy) < h for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)))
+            rail = (self.tile(tx - 1, ty) != 'H', self.tile(tx + 1, ty) != 'H')
+            self.surface.blit(gfx.pyramid_tile('T' if top else ch, lower, rail), (tx * TILE, ty * TILE))
+            return
         area = 'dungeon' if area_at(tx, ty) in ('dungeon', 'trial') else 'overworld'
         other = 'overworld' if area == 'dungeon' else 'dungeon'
         themed = tiles['themes'].get(self.themes[ty][tx], {}) if area == 'overworld' else {}
@@ -674,7 +692,7 @@ def validate():
     for a, b in GEYSERS:
         links[a] = b
         links[b] = a     # R: cracked rock, bombs open it
-    seen = {(int(START[0]), START[1])}
+    seen = {(int(START[0]), int(START[1]))}
     q = deque(seen)
     while q:
         x, y = q.popleft()
