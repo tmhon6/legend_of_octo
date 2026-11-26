@@ -141,17 +141,17 @@ LEVEL = [
     "vvvvvvvvvvvvvvvvvvvvvvv...............vvvvvv=vvvvvvvvvvvvvvvW==============W#W==============W#W==============W#W==============W#W==============WW==============W",
     "vvvvvvvvvvvvvvvvvvvvvv.................=========vvvvvvvvvvvvWWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
     "vvvvvvvvvvvvvv.vvvvvvv................vvvvvvvvv=vvvvvvvvvvvv####################################################################################################",
-    "vvvvvvvvvv........vvvvv..............vvvvvvvvv.=vvvvvvvvvvvvWWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW##################################################",
-    "vvvvvvvvvv..........vvv.v........C..v.vvvvvv......CvvvvvvvvvW==============W#W==============W#W==============W##################################################",
-    "vvvvvvvvv...........vvvvv.........vvvvvvvvv.........vvvvvvvvW=WWWWW==WWWWW=W#W=vv========vv=W#W======WW======W##################################################",
-    "vvvvvvvv......Y......vvvvvv.vv..vvvvvvvvvv............vvvvvvW==============W#W=vv========vv=W#W======WW======W##################################################",
-    "vvvvvvvv............vvvvvvvvvvvvvvvvvvvvv........C...vvvvvvvW==============W#W==============W#W==============W##################################################",
-    "vvvvvvvvv..........vvvvvvvvvvvvvvvvvvvvvvv...........vvvvvvvW==============W#W==============W#W=WW========WW=W##################################################",
-    "vvvvvvvvvvv.......vvvvvvvvvvvvvvvvvvvvvvvv.C.........vvvvvvvW==============W#W==============W#W==============W##################################################",
-    "vvvvvvvvvvvvvv..vvvvvvvvvvvvvvvvvvvvvvvvvvvv........vvvvvvvvW==============W#W=vv========vv=W#W======WW======W##################################################",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv..vvvvvvvvvvvvW=WWWWW==WWWWW=W#W=vv========vv=W#W======WW======W##################################################",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvW==============W#W==============W#W==============W##################################################",
-    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvWWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW##################################################",
+    "vvvvvvvvvv........vvvvv..............vvvvvvvvv.=vvvvvvvvvvvvWWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW##################################WWWWWWWWWWWWWWWW",
+    "vvvvvvvvvv..........vvv.v........C..v.vvvvvv......CvvvvvvvvvW==============W#W==============W#W==============W##################################W==============W",
+    "vvvvvvvvv...........vvvvv.........vvvvvvvvv.........vvvvvvvvW=WWWWW==WWWWW=W#W=vv========vv=W#W======WW======W##################################W==============W",
+    "vvvvvvvv......Y......vvvvvv.vv..vvvvvvvvvv............vvvvvvW==============W#W=vv========vv=W#W======WW======W##################################W==W========W==W",
+    "vvvvvvvv............vvvvvvvvvvvvvvvvvvvvv........C...vvvvvvvW==============W#W==============W#W==============W##################################W==============W",
+    "vvvvvvvvv..........vvvvvvvvvvvvvvvvvvvvvvv...........vvvvvvvW==============W#W==============W#W=WW========WW=W##################################W==============W",
+    "vvvvvvvvvvv.......vvvvvvvvvvvvvvvvvvvvvvvv.C.........vvvvvvvW==============W#W==============W#W==============W##################################W==============W",
+    "vvvvvvvvvvvvvv..vvvvvvvvvvvvvvvvvvvvvvvvvvvv........vvvvvvvvW==============W#W=vv========vv=W#W======WW======W##################################W==W========W==W",
+    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv..vvvvvvvvvvvvW=WWWWW==WWWWW=W#W=vv========vv=W#W======WW======W##################################W==============W",
+    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvW==============W#W==============W#W==============W##################################W==============W",
+    "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvWWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW##################################WWWWWWWWWWWWWWWW",
     "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv####################################################################################################",
     "################################################################################################################################################################",
     "WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW#WWWWWWWWWWWWWWWW########",
@@ -285,6 +285,7 @@ REGIONS = [   # (banner name, tile rect x0, y0, x1, y1); anywhere else is the Co
     ('TRIAL OF MAGMA', (102, 141, 117, 151)),
     ('TRIAL OF SPIRES', (119, 141, 134, 151)),
     ('TRIAL OF THUNDER', (136, 141, 151, 151)),
+    ('BOSS LAIR', (144, 116, 159, 126)),
     ('SKY ISLANDS', (0, 92, 59, 127)),
     ('TRIAL OF STORMS', (0, 80, 15, 90)), ('TRIAL OF CURRENTS', (20, 80, 35, 90)),
     ('TRIAL OF SHADOWS', (40, 80, 55, 90)),
@@ -300,6 +301,7 @@ START = (46.5, 49.5)     # tile coords of Octo's spawn: the sanctuary on top of 
 SHRINE_CHECKPOINT = (47.5, 19)
 NPC = ('shelly', 43, 54)
 SHOPKEEPER = (30, 47)     # Hermie the hermit crab, behind the counter
+BOSS_LAIR = (144, 116, 159, 126)   # the 1-on-1 room every mini-boss fight happens in
 ALTAR = (46, 48)          # left tile of the 2-wide spirit altar in the temple sanctuary
 FUSION_MACHINE = (36, 47)  # top-left tile of the 2x2 Fusion Machine, just east of the shop
 SHOP_ROW = 49            # tile row the wares sit on

@@ -80,21 +80,35 @@ which is on while you're in that form.
 | Glowy   | Flash that stuns the whole screen                          | Lucky: double treasure drops; lights the dark | Trial of Echoes |
 | Airy    | Fog cloak: enemies lose sight of you                       | Steady: never knocked back, a bit faster   | Trial of Winds    |
 
+### Spirit pearls and the temple altar
+
+Every trial portal (there are 41) gives a **spirit pearl** the first time you beat it. Take three to the
+altar on top of the Octo Temple and it teaches you a form of your choice: Zappy, Chilly, Spooky,
+Bubbly, Spiky, Glowy, Airy, Magnety, Clammy, Starry, Wobbly or Stony (or +1 heart).
+
+Trials come in seven kinds: waves of enemies, orb grabs, survival barrages, mini-boss duels,
+thief chases, defending a giant clam, and sentry races. Some are in the dark or in a strong current.
+
 ### The Fusion Machine
 
-Next to Hermie's Pearl Shop. For 40 pearls it fuses two forms into a new one with **its own new
-attack** (not the two old attacks stuck together) and boosted versions of both parents' strengths.
+Next to Hermie's Pearl Shop. For 25 pearls it fuses **any two** base forms. All 91 pairs make their
+own fused form with a brand-new attack (one of 13 shapes - hail, whip, roll, quake, lantern,
+whirlpool, trap, chain bolt, nova, boomerang, seeker stars, mines, boulder - powered by one of
+7 elements: frost, ember, dazzle, crush, leech, gold, volt) and boosted versions of both parents'
+strengths. Press **F** (or the FORMS button) to pick any form from a list.
 
-| Fusion  | Made from        | New attack                                                      |
-|---------|------------------|-----------------------------------------------------------------|
-| Whippy  | Happy + Grumpy   | Ink Whip: a long tentacle that sweeps a wide arc                |
-| Stormy  | Zappy + Chilly   | Hail: hailstones crash down on up to six enemies and freeze them |
-| Sparky  | Zappy + Airy     | Chain Bolt: lightning that jumps between up to five enemies     |
-| Quaky   | Grumpy + Spiky   | Quake: shockwaves run out four ways and crack rock              |
-| Prickly | Bubbly + Spiky   | Spike Roll: roll through enemies as an untouchable spiky ball   |
-| Wispy   | Spooky + Glowy   | Lantern: a spirit lantern circles you, burning what it touches  |
-| Breezy  | Happy + Airy     | Whirlpool: drags enemies in and churns them up                  |
-| Frosty  | Chilly + Bubbly  | Frost Trap: a bubble traps an enemy, then pops for big damage   |
+### Mini-bosses
+
+Each region has a mini-boss waiting in it. Swim close and you're pulled into its lair for a
+1-on-1 fight in three stages: crabs lose a claw, then the other, jellies lose their tentacles,
+and so on - and each stage makes them faster and adds new moves. Fall and you're swept back out
+to try again.
+
+### Hermie's shop
+
+Walk onto an item on the counter to buy it, or talk to Hermie for his whole catalogue: sea
+potions, a big bomb bag, the trial compass, a lucky charm, deep goggles, jet ink, coral armor,
+a pearl magnet and even spirit pearls.
 
 Jellies ignore ink, and slapping an urchin hurts *you*.
 

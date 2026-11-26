@@ -9,6 +9,7 @@ import sys
 import pygame
 
 import forms
+import fx
 import gfx
 import sound
 import world
@@ -154,6 +155,13 @@ for _f, _d in forms.FUSIONS.items():
                      f"{_d['attack']}: {_d['desc']}",
                      f"STRENGTH - {forms.STRENGTHS[_f][0]}: {forms.STRENGTHS[_f][1]}"]
 CLAM_HP = 12
+
+
+def MINIBOSS_NAME(bid):
+    from entities import MINIBOSS_STYLES
+    return MINIBOSS_STYLES[bid]['name']
+
+
 ALTAR_FORMS = forms.ALTAR_FORMS        # what the temple altar teaches
 FUSE_KEYS_CLOSE = {pygame.K_ESCAPE, pygame.K_t, pygame.K_m, pygame.K_x, pygame.K_p}
 
@@ -207,6 +215,7 @@ class Game:
         self.player = None
         self.level = None
         self.trial = None
+        self.bossfight = None
         self.flash_t = 0
         self.glow_flash = 0
         self.motes = []
@@ -265,6 +274,7 @@ class Game:
         self.bought = set()
         self.shop_focus = None
         self.trial = None
+        self.bossfight = None
         self.trials_done = set()
         self.portal_armed = True
         self.geyser_armed = True
@@ -325,6 +335,77 @@ class Game:
         for _ in range(5):
             self.effects.append(Particle(cx, cy, random.uniform(-1.2, 1.2), random.uniform(-1.2, 1.2),
                                          color, 14, size=2))
+
+    # ---- 1-on-1 mini-boss fights in the boss lair ------------------------------
+    def enter_boss(self, lurker):
+        p = self.player
+        back = ((p.x + 8) / TILE - 0.5, (p.y + 8) / TILE - 0.5 + 0.0)
+        # step back a little from the boss so coming out doesn't pull you straight in again
+        lx, ly = lurker.rect.center
+        dx, dy = p.rect.centerx - lx, p.rect.centery - ly
+        d = math.hypot(dx, dy) or 1
+        for k in range(6, 0, -1):
+            bx, by = p.x + dx / d * k * 10, p.y + dy / d * k * 10
+            r = pygame.Rect(bx + 3, by + 5, 10, 10)
+            if not self.level.blocked(r, 'player'):
+                back = ((bx + 8) / TILE - 0.5, (by + 8) / TILE - 0.5)
+                break
+        for sp in self.spawns:
+            sp['inst'] = None
+        self.enemies, self.shots = [], []
+        self.pickups = [i for i in self.pickups if i.life is None]
+        x0, y0 = world.BOSS_LAIR[:2]
+        p.x, p.y = tile_to_px(x0 + 7.5, y0 + 8)
+        p.facing = 'up'
+        p.knock_t = p.attack_t = p.dash_t = p.roll_t = 0
+        boss = MiniBoss(lurker.bid, *tile_to_px(x0 + 7.5, y0 + 3), hp_mult=2.5)
+        boss.spawn = {'kind': 'mini', 'arena': 'trial', 'inst': boss, 'killed': False}
+        boss.in_lair = True
+        boss.home = (boss.x, boss.y)
+        self.enemies.append(boss)
+        self.bossfight = {'bid': lurker.bid, 'back': back, 't': 0}
+        self.flash_t = 20
+        self.shake = 12
+        sound.play('roar')
+        self.update_camera()
+        self.area = self.region = None
+        self.update_area()
+        self.toast = (f"!! {boss.name} !!", 150)
+
+    def update_bossfight(self):
+        bf = self.bossfight
+        bf['t'] += 1
+        boss = next((e for e in self.enemies if isinstance(e, MiniBoss)), None)
+        if boss is None and not any(isinstance(f, Puff) and f.loud for f in self.effects):
+            bf['won_t'] = bf.get('won_t', 0) + 1
+            if bf['won_t'] > 50:                    # let the loot rain for a moment, then head home
+                self.finish_boss(True)
+
+    def finish_boss(self, won):
+        bf = self.bossfight
+        p = self.player
+        self.bossfight = None
+        self.enemies, self.shots = [], []
+        keep = [i for i in self.pickups if i.life is None]
+        loot = [i for i in self.pickups if i.life is not None]
+        self.pickups = keep
+        p.x, p.y = tile_to_px(*bf['back'])
+        p.knock_t = p.attack_t = p.dash_t = p.roll_t = 0
+        p.invuln = 90
+        self.flash_t = 20
+        self.update_camera()
+        self.area = self.region = None
+        self.update_area()
+        if won:
+            for i, it in enumerate(loot):          # the boss's treasure comes home with you
+                a = i / max(1, len(loot)) * math.tau
+                it.x, it.y = p.x + math.cos(a) * 16, p.y + math.sin(a) * 16
+                self.pickups.append(it)
+        else:
+            p.hp = max(p.hp, max(2, p.max_hp // 2))
+            sound.play('warp')
+            self.say([f"{MINIBOSS_NAME(bf['bid'])} WAS TOO STRONG... YOU WERE SWEPT BACK OUT OF ITS LAIR.",
+                      "RECOVER, THEN SWIM BACK IN TO TRY AGAIN. IT GETS FIERCER EVERY TIME IT BREAKS!"])
 
     def miniboss_defeated(self, boss):
         if getattr(boss, 'in_trial', False):          # a trial duel, not the region's guardian
@@ -406,7 +487,9 @@ class Game:
     # ---- save / load -----------------------------------------------------
     def save_game(self):
         p = self.player
-        if self.trial:
+        if self.bossfight:
+            pos = self.bossfight['back']
+        elif self.trial:
             px, py = world.TRIALS[self.trial['name']]['portal']
             pos = (px, py + 1)
         elif self.active_arena:
@@ -760,7 +843,7 @@ class Game:
         gfx.text(scr, forms.STRENGTHS[f][0], box.x + 6, box.bottom - 10, (150, 160, 200))
 
     def open_warp(self):
-        if self.trial or self.active_arena:
+        if self.trial or self.active_arena or self.bossfight:
             sound.play('nope')
             return
         if len(self.warp_spots()) < 2:
@@ -876,8 +959,8 @@ class Game:
     def update_tumble(self):
         p = self.player
         p.tumble += 1
-        for fx in self.effects:
-            fx.update(self)
+        for eff in self.effects:
+            eff.update(self)
         self.effects = [f for f in self.effects if not f.dead]
         if p.tumble < 80:
             return
@@ -1433,6 +1516,7 @@ class Game:
         p = self.player
         p.hp = min(p.max_hp, 6)
         self.trial = None
+        self.bossfight = None
         if self.active_arena:
             self.level.set_doors(self.active_arena, False)
             self.active_arena = None
@@ -1481,8 +1565,8 @@ class Game:
             if self.die_t == 80:
                 self.player.mood = 'mad'
                 self.burst(self.player.rect.center, (255, 255, 255), 16)
-            for fx in self.effects:
-                fx.update(self)
+            for eff in self.effects:
+                eff.update(self)
             self.effects = [f for f in self.effects if not f.dead]
             if self.die_t > 150:
                 self.state = 'gameover'
@@ -1503,6 +1587,8 @@ class Game:
         if self.trial:
             r = self.room_px(self.trial['name'])
             x, y = r.x, r.y
+        elif self.bossfight:
+            x, y = world.BOSS_LAIR[0] * TILE, world.BOSS_LAIR[1] * TILE
         elif cy >= world.SKY_Y * TILE:
             x0, y0, x1, y1 = world.SKY_RECT
             x = max(x0 * TILE, min((x1 + 1) * TILE - PLAY_W, cx - PLAY_W // 2))
@@ -1599,6 +1685,9 @@ class Game:
             sound.play('key')
 
     def update_play(self):
+        if getattr(self, 'hitstop', 0):        # a hit lands: the world freezes for a heartbeat
+            self.hitstop -= 1
+            return
         p = self.player
         move_dir = self.held[-1] if self.held else self.touch.dir
         self.level.ghost_ok = p.mood == 'ghost'
@@ -1616,6 +1705,10 @@ class Game:
             self.update_trial()
             if self.trial is None:
                 return
+        elif self.bossfight:
+            self.update_bossfight()
+            if self.bossfight is None:
+                return
         else:
             self.update_spawns()
             self.check_portals()
@@ -1628,6 +1721,10 @@ class Game:
             if e.spawn['arena'] is None and not awake.colliderect(e.rect):
                 continue            # frozen while off-screen
             e.update(self)
+            if isinstance(e, MiniBoss) and e.lurk and e.active and not self.trial and \
+                    math.hypot(e.rect.centerx - p.rect.centerx, e.rect.centery - p.rect.centery) < 60:
+                self.enter_boss(e)
+                return
             if e.active and not e.frozen and e.rect.colliderect(p.rect):
                 thorns = p.stat('thorns', 0)
                 if thorns and not e.hurt_t:
@@ -1650,8 +1747,8 @@ class Game:
                     it.y += (pcy - iy) / d * 2.5
             if not it.dead and it.rect.colliderect(p.rect):
                 self.collect(it)
-        for fx in self.effects:
-            fx.update(self)
+        for eff in self.effects:
+            eff.update(self)
         self.shop_focus = None
         if world.region_at(p.rect.centerx // TILE, p.rect.centery // TILE) == 'PEARL SHOP':
             for ware, r in self.wares:
@@ -1674,6 +1771,9 @@ class Game:
             return
         if p.hp <= 0 and self.trial:
             self.finish_trial(False)
+            return
+        if p.hp <= 0 and self.bossfight:
+            self.finish_boss(False)
             return
         if p.hp <= 0 and p.potions > 0:          # a sea potion saves Octo
             p.potions -= 1
@@ -1779,12 +1879,12 @@ class Game:
             msg, t = self.toast
             self.toast = (msg, t - 1)
             w = gfx.text_width(msg) + 16
-            box = pygame.Rect(SCREEN_W // 2 - w // 2, SCREEN_H - 26, w, 18)
+            box = pygame.Rect(SCREEN_W // 2 - w // 2, SCREEN_H - (52 if getattr(self, 'bossbar_on', False) else 26), w, 18)
             self.draw_box(scr, box)
             gfx.text(scr, msg, SCREEN_W // 2, box.y + 6, (160, 230, 160), center=True)
         if st == 'play' and self.shop_focus:
             self.draw_shop_info(scr)
-        if st == 'play' and not self.trial:
+        if st in ('play', 'dialog') and not self.trial:
             self.draw_boss_bar(scr)
         if self.trial and st in ('play', 'pause'):
             self.draw_trial_hud(scr)
@@ -1828,6 +1928,10 @@ class Game:
     def draw_world(self, ps):
         ps.blit(self.level.render(gfx.TILES), (0, 0), self.view_rect)
         ox, oy = -self.cam[0], -self.cam[1]
+        theme0 = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
+        if self.area == 'overworld' and theme0 not in ('abyss', 'city') and \
+                self.region not in world.DARK_REGIONS:
+            fx.caustics(ps, self.cam, self.t)
         vis = self.view_rect.inflate(32, 32)
         for it in self.pickups:
             if vis.colliderect(it.rect):
@@ -1851,6 +1955,15 @@ class Game:
                 pygame.draw.circle(ps, (40, 10, 60), (cx, cy), r + 2)
                 pygame.draw.circle(ps, (200, 60, 230), (cx, cy), r)
                 pygame.draw.circle(ps, (255, 240, 255), (cx, cy), r // 2)
+        # soft shadows first, so everything sits on the sea floor
+        for n in self.npcs:
+            if vis.colliderect(n.rect):
+                fx.shadow(ps, n.rect, ox, oy)
+        for e in self.enemies:
+            if vis.colliderect(e.rect) and not e.spawn_t:
+                fx.shadow(ps, e.rect, ox, oy, lift=8 if e.who == 'flyer' else 0)
+        if self.state != 'dying' and not self.player.tumble:
+            fx.shadow(ps, self.player.rect, ox, oy, lift=6 if self.player.in_sky else 0)
         for n in self.npcs:
             n.draw(ps, ox, oy)
         for e in sorted(self.enemies, key=lambda e: e.y):
@@ -1860,14 +1973,14 @@ class Game:
             self.player.draw(ps, ox, oy)
         for s in self.shots:
             s.draw(ps, ox, oy)
-        for fx in self.effects:
-            fx.draw(ps, ox, oy)
+        for eff in self.effects:
+            eff.draw(ps, ox, oy)
         for b in self.bubbles:
             b.draw(ps)
         theme = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
-        fx = THEME_FX.get(theme)
-        if fx:
-            col, alpha, parts = fx
+        tfx = THEME_FX.get(theme)
+        if tfx:
+            col, alpha, parts = tfx
             if self.theme_veil[0] != (col, alpha):
                 v = pygame.Surface((PLAY_W, PLAY_H))
                 v.fill(col)
@@ -1888,6 +2001,7 @@ class Game:
         if self.area in ('overworld', 'sky') and theme not in ('abyss', 'vents', 'city'):
             off = int(math.sin(self.t * 0.01) * 30) - 60
             ps.blit(self.rays, (off, 0))
+        fx.depth_vignette(ps, 0.6 if self.area == 'sky' else 1.0)
         if self.trial:
             self.draw_trial_props(ps, ox, oy)
         if (self.region in world.DARK_REGIONS and self.area == 'overworld' and not self.trial) or \
@@ -1933,14 +2047,23 @@ class Game:
 
     def draw_boss_bar(self, scr):
         """Name and health of a mini-boss that's on screen."""
+        self.bossbar_on = False
         for e in self.enemies:
-            if isinstance(e, MiniBoss) and not e.dead and not e.spawn_t and self.view_rect.colliderect(e.rect):
+            if isinstance(e, MiniBoss) and not e.dead and not e.spawn_t and not e.lurk and \
+                    self.view_rect.colliderect(e.rect):
                 w = 120
                 x, y = SCREEN_W // 2 - w // 2, SCREEN_H - 14
                 gfx.text(scr, e.name, SCREEN_W // 2, y - 9, (255, 220, 120), center=True)
                 pygame.draw.rect(scr, (0, 0, 0), (x - 1, y - 1, w + 2, 6))
                 pygame.draw.rect(scr, (90, 20, 30), (x, y, w, 4))
                 pygame.draw.rect(scr, (230, 60, 80), (x, y, int(w * max(0, e.hp) / e.max_hp), 4))
+                for k in (1, 2):                    # stage marks: where it breaks
+                    sx = x + w * k // 3
+                    pygame.draw.line(scr, (255, 240, 200), (sx, y - 1), (sx, y + 4))
+                self.bossbar_on = True
+                for k in range(3):
+                    c = (255, 220, 120) if k < e.stage else (90, 80, 60)
+                    pygame.draw.circle(scr, c, (x + w + 6 + k * 5, y + 2), 2)
                 return
 
     def draw_trial_hud(self, scr):
@@ -2074,7 +2197,7 @@ class Game:
         return any(any(self.seen[ty][x0:x1 + 1]) for ty in range(y0, y1 + 1))
 
     def open_map(self):
-        if self.trial:
+        if self.trial or self.bossfight:
             sound.play('nope')
             return
         self.map_page = 'sky' if self.area == 'sky' else 'sea'

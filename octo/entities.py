@@ -5,6 +5,7 @@ import random
 import pygame
 
 import forms
+import fx
 import gfx
 import sound
 from settings import PLAYER_SPEED
@@ -93,6 +94,7 @@ class Player(Entity):
         self.fog_t = 0
         self.fog_cd = 0
         self.regen_t = 0
+        self.idle_t = 0
         self.spirit = 0          # spirit pearls from trials, traded at the temple altar
         self.potions = 0         # sea potions: save Octo once each when he'd fall
         self.analog = None       # (x, y) from the touch joystick, length up to 1
@@ -498,6 +500,16 @@ class Player(Entity):
     # -- update ------------------------------------------------------------
     def update(self, game, move_dir):
         room = game.level
+        self.idle_t += 1
+        cx, cy = self.rect.center
+        moving = bool(move_dir or self.analog or self.dash_t)
+        self.moving = moving
+        if moving and not self.in_sky and self.idle_t % 11 == 0:
+            game.effects.append(fx.SwimBubble(cx + random.uniform(-3, 3), cy - 6))
+        elem = fx.element_of(self.mood)
+        if elem and self.idle_t % 5 == 0:
+            a = random.uniform(0, math.tau)
+            game.effects.append(fx.AuraMote(cx + math.cos(a) * 8, cy + math.sin(a) * 7, elem))
         if self.invuln:
             self.invuln -= 1
         if self.shoot_cd:
@@ -737,6 +749,12 @@ class Player(Entity):
         if self.fog_t:
             img = img.copy()
             img.set_alpha(110 if self.fog_t > 50 or (self.fog_t // 4) % 2 else 220)
+        if not (self.dash_t or self.flip_t or self.attack_t or self.knock_t):
+            if getattr(self, 'moving', False) and (self.walk_t // 6) % 2:
+                img = pygame.transform.scale(img, (17, 15))        # squash on each stroke
+                y += 1
+            else:
+                y += round(math.sin(self.idle_t * 0.07))           # floating in the water
         surf.blit(img, (x, y))
         if self.fog_t:
             fog = pygame.Surface((36, 36), pygame.SRCALPHA)
@@ -852,6 +870,9 @@ class Enemy(Entity):
         self.hp -= dmg
         self.hurt_t = 18
         sound.play('hit')
+        cx, cy = self.rect.center
+        game.effects.append(fx.ImpactRing(cx, cy, big=self.hp <= 0))
+        game.hitstop = max(getattr(game, 'hitstop', 0), 4 if self.hp <= 0 else 2)
         if self.hp <= 0:
             self.die(game)
         elif self.knockback:
@@ -884,7 +905,8 @@ class Enemy(Entity):
         if self.hurt_t and (self.hurt_t // 2) % 2:
             img = gfx.flash(img)
         jx = 1 if self.frozen and self.frozen < 30 and self.frozen % 4 < 2 else 0
-        surf.blit(img, (round(self.x) + ox + jx, round(self.y) + oy))
+        bob = 0 if self.frozen or self.who != 'flyer' else round(math.sin(self.t * 0.09) * 1.5)
+        surf.blit(img, (round(self.x) + ox + jx, round(self.y) + oy + bob))
         if self.trapped:
             r = self.rect
             pygame.draw.circle(surf, (200, 240, 255), (r.centerx + ox, r.centery + oy), max(r.w, r.h) // 2 + 4, 1)
@@ -1236,13 +1258,19 @@ class MiniBoss(Enemy):
     hb = (4, 6, 24, 22)
     _frames = {}
 
-    def __init__(self, bid, x, y):
+    STAGE_SPEED = {1: 1.0, 2: 1.3, 3: 1.6}
+    STAGE_REST = {1: (80, 120), 2: (55, 85), 3: (35, 60)}
+    CRABS = ('crab', 'icecrab', 'lavacrab')
+
+    def __init__(self, bid, x, y, lurk=False, hp_mult=1.0):
         super().__init__(x - 8, y - 8)
         cfg = MINIBOSS_STYLES[bid]
         self.bid, self.cfg = bid, cfg
         self.name = cfg['name']
-        self.max_hp = self.hp = cfg['hp']
-        self.damage = cfg['dmg']
+        self.max_hp = self.hp = int(cfg['hp'] * hp_mult)
+        self.damage = 0 if lurk else cfg['dmg'] + 1
+        self.lurk = lurk          # waiting in its region: harmless until Octo comes close
+        self.stage = 1            # battle stages: it breaks apart and gets fiercer as it's hurt
         self.who = 'flyer' if cfg.get('fly') else 'walker'
         self.home = (self.x, self.y)
         self.state, self.state_t = 'roam', 90
@@ -1252,15 +1280,65 @@ class MiniBoss(Enemy):
         self.minions = []
         self.fade = 255
 
+    def _cuts(self, stage):
+        """Which pixels of the 16x16 sprite are gone at this stage (a lost claw, torn fins...)."""
+        base = self.cfg['base']
+        if base in self.CRABS:
+            boxes = [(0, 1, 5, 6)] if stage >= 2 else []
+            if stage >= 3:
+                boxes.append((10, 1, 15, 6))
+            return lambda x, y: any(x0 <= x <= x1 and y0 <= y <= y1 for x0, y0, x1, y1 in boxes)
+        if stage == 1:
+            return lambda x, y: False
+        keep = 0.55 if stage == 2 else 0.1          # ragged edges: tentacles, spines, fins torn away
+        rnd = random.Random(sum(map(ord, self.bid)) * 7 + stage)
+        torn = {(x, y) for y in range(16) for x in range(16)
+                if math.hypot(x - 7.5, y - 7.5) > 5.2 and rnd.random() > keep}
+        return lambda x, y: (x, y) in torn
+
     def frames(self):
-        key = self.bid
+        key = (self.bid, self.stage)
         if key not in MiniBoss._frames:
             out = []
+            cut = self._cuts(self.stage)
             for f in gfx.SPR[self.cfg['base']]:
-                f = gfx.tint(f, self.cfg['tint']) if self.cfg.get('tint') else f
+                f = gfx.tint(f, self.cfg['tint']) if self.cfg.get('tint') else f.copy()
+                if self.stage >= 2:
+                    for y in range(f.get_height()):
+                        for x in range(f.get_width()):
+                            if cut(x, y):
+                                f.set_at((x, y), (0, 0, 0, 0))
+                if self.stage == 3:                  # bruised and furious
+                    f.fill((255, 170, 160, 255), special_flags=pygame.BLEND_RGBA_MULT)
                 out.append(pygame.transform.scale(f, (f.get_width() * 2, f.get_height() * 2)))
             MiniBoss._frames[key] = out
         return MiniBoss._frames[key]
+
+    def _break(self, game, new_stage):
+        """A stage of the fight ends: a piece breaks off, the boss roars and gets fiercer."""
+        old_cut, self.stage = self._cuts(self.stage), new_stage
+        new_cut = self._cuts(new_stage)
+        src = gfx.SPR[self.cfg['base']][0]
+        src = gfx.tint(src, self.cfg['tint']) if self.cfg.get('tint') else src
+        w, h = src.get_size()
+        piece = pygame.Surface((w, h), pygame.SRCALPHA)
+        for y in range(h):
+            for x in range(w):
+                if new_cut(x, y) and not old_cut(x, y):
+                    piece.set_at((x, y), src.get_at((x, y)))
+        game.effects.append(Debris(pygame.transform.scale(piece, (w * 2, h * 2)), self.x, self.y,
+                                   -1.5 if self.stage == 2 else 1.5))
+        self.hurt_t = 40
+        self.frozen = 0
+        self.state, self.state_t = 'roam', 50
+        game.shake = 18
+        game.hitstop = 10
+        sound.play('roar')
+        game.toast = (f"{self.name} {'BREAKS' if self.stage == 2 else 'IS FURIOUS'}!", 90)
+        for i in range(14):
+            a = i / 14 * math.tau
+            game.effects.append(Particle(self.rect.centerx, self.rect.centery, math.cos(a) * 2.2,
+                                         math.sin(a) * 2.2, (255, 230, 200), 22, size=2))
 
     def _step(self, dx, dy, room):
         if self.cfg.get('phase'):           # drifts straight through kelp and rock
@@ -1275,7 +1353,14 @@ class MiniBoss(Enemy):
 
     def ai(self, game):
         room = game.level
-        enraged = self.hp <= self.max_hp // 2
+        if self.lurk:                                # waiting: just drift about its lair
+            self.y += math.sin(self.t * 0.05) * 0.2
+            return
+        stage = 1 if self.hp > self.max_hp * 2 / 3 else 2 if self.hp > self.max_hp / 3 else 3
+        if stage > self.stage:
+            self._break(game, stage)
+            return
+        enraged = self.stage >= 2
         tx, ty = game.player.seen_pos()
         cx, cy = self.rect.center
         d = math.hypot(tx - cx, ty - cy) or 1
@@ -1285,12 +1370,12 @@ class MiniBoss(Enemy):
         self.state_t -= 1
         st = self.state
         if st == 'roam':
-            sp = self.cfg['speed'] * (1.35 if enraged else 1.0)
+            sp = self.cfg['speed'] * self.STAGE_SPEED[self.stage]
             wob = math.sin(self.t * 0.05) * 0.6
             if not self._step((ux - uy * wob) * sp, (uy + ux * wob) * sp, room):
                 self._step(-uy * sp, ux * sp, room)
             if self.state_t <= 0:
-                moves = self.cfg['moves']
+                moves = self.moveset()
                 self.state = moves[self.move_i % len(moves)]
                 self.move_i += 1
                 self.state_t = {'charge': 36, 'ring': 30, 'spread': 34, 'summon': 30, 'teleport': 40}[self.state]
@@ -1362,7 +1447,16 @@ class MiniBoss(Enemy):
 
     def _end(self, enraged):
         self.state = 'roam'
-        self.state_t = random.randint(50, 80) if enraged else random.randint(80, 120)
+        self.state_t = random.randint(*self.STAGE_REST[self.stage])
+
+    def moveset(self):
+        """Later stages add new moves to the boss's routine."""
+        moves = list(self.cfg['moves'])
+        if self.stage >= 2:
+            moves += ['spread'] if self.cfg['base'] in self.CRABS else ['ring']
+        if self.stage >= 3:
+            moves += ['charge', 'summon'] if self.cfg['base'] in self.CRABS else ['spread', 'summon']
+        return moves
 
     @property
     def active(self):
@@ -1408,6 +1502,31 @@ class MiniBoss(Enemy):
         pygame.draw.polygon(surf, (255, 210, 60), [(cx - 6, top + 4), (cx - 6, top), (cx - 3, top + 2),
                                                    (cx, top - 2), (cx + 3, top + 2), (cx + 6, top),
                                                    (cx + 6, top + 4)])
+
+
+class Debris:
+    """A piece knocked off a boss (a claw, a fin...) tumbling away and sinking."""
+
+    def __init__(self, img, x, y, vx):
+        self.img = img
+        self.x, self.y = x, y
+        self.vx, self.vy = vx, -2.2
+        self.t = 0
+        self.dead = False
+
+    def update(self, game):
+        self.t += 1
+        self.x += self.vx
+        self.vy += 0.12
+        self.y += self.vy
+        if self.t > 70:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        img = pygame.transform.rotate(self.img, self.t * 9 * (1 if self.vx > 0 else -1))
+        if self.t > 40:
+            img.set_alpha(255 - (self.t - 40) * 8)
+        surf.blit(img, (self.x + ox, self.y + oy))
 
 
 class Thief(Enemy):
@@ -1504,7 +1623,7 @@ def world_room(game):
 
 def make_enemy(kind, x, y):
     if kind.startswith('mini:'):
-        return MiniBoss(kind[5:], x, y)
+        return MiniBoss(kind[5:], x, y, lurk=True)      # waits in its region until Octo comes close
     return ENEMY_TYPES[kind](x, y)
 
 
