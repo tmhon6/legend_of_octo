@@ -312,6 +312,20 @@ def _octocity_song():
     return render_song(mel, bass, 0.14, mel_duty=0.25, mel_vol=0.22, bass_vol=0.28, arp=arp)
 
 
+def _home_song():
+    """Octo's house: a cosy little music-box lullaby in G major."""
+    H = 0
+    mel = [79, H, 74, H, 71, H, 74, H, 76, H, 74, H, 72, H, H, H,
+           71, H, 74, H, 79, H, 78, H, 76, H, H, H, 74, H, H, H,
+           76, H, 79, H, 83, H, 81, H, 79, H, 76, H, 74, H, 72, H,
+           71, H, 72, H, 74, H, 66, H, 67, H, H, H, None, None, None, None]
+    bass = _bass((43, 43, 40, 40, 36, 36, 38, 38, 40, 40, 36, 36, 38, 38, 43, 43), (0, None, 7, None))
+    arp = []
+    for r in (67, 67, 64, 64, 60, 60, 62, 62, 64, 64, 60, 60, 62, 62, 67, 67):
+        arp += [r + 12, r + 19, r + 16, r + 19]
+    return render_song(mel, bass, 0.2, mel_wave='tri', mel_duty=0.5, mel_vol=0.28, bass_vol=0.18, arp=arp)
+
+
 def _turtletown_song():
     """Turtle Town: a slow, sunny calypso by the sea in C major."""
     H = 0
@@ -576,7 +590,7 @@ def _synth(S, M):
     for name, song in (('kelp', _kelp_song), ('garden', _garden_song), ('lagoon', _lagoon_song),
                        ('abyss', _abyss_song), ('wreck', _wreck_song), ('palace', _palace_song),
                        ('temple', _temple_song), ('boss', _boss_song), ('octocity', _octocity_song),
-                       ('turtletown', _turtletown_song)):
+                       ('turtletown', _turtletown_song), ('home', _home_song)):
         M[name] = _to_sound(song())
     for theme, spec in REGION_TUNES.items():
         M['r_' + theme] = _to_sound(_compose(*spec))

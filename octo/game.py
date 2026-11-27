@@ -27,6 +27,7 @@ from people import Citizen, LegendStatue
 from town import TownLife
 from scene3d import Scene3D
 from coop import Coop
+from home import Home, HomeThing
 import coop
 from hud3d import Hud3D
 
@@ -126,6 +127,7 @@ THEME_FX = {
     'crystal': ((40, 20, 90), 50, 'snow'), 'fungus': ((60, 0, 60), 46, 'dust'), 'bone': ((10, 6, 20), 60, 'dust'),
     'ruins': ((20, 20, 10), 50, 'dust'), 'magma': ((140, 30, 0), 56, 'embers'),
     'octocity': ((40, 0, 80), 12, None), 'turtletown': ((255, 236, 190), 10, None),
+    'octohome': ((255, 190, 120), 12, None),
 }
 THEME_MINI = {'reef': (196, 178, 128), 'kelp': (160, 170, 110), 'garden': (226, 186, 170),
               'lagoon': (230, 224, 200), 'abyss': (100, 106, 142), 'wreck': (140, 130, 108),
@@ -134,7 +136,8 @@ THEME_MINI = {'reef': (196, 178, 128), 'kelp': (160, 170, 110), 'garden': (226, 
               'thunder': (150, 160, 180), 'rainbow': (190, 230, 160), 'starfall': (80, 80, 140),
               'beach': (240, 222, 160), 'meadow': (120, 190, 80), 'jungle': (70, 140, 60), 'desert': (236, 200, 130),
               'volcano': (80, 60, 56), 'crystal': (84, 90, 130), 'fungus': (96, 74, 96), 'bone': (120, 110, 100),
-              'ruins': (110, 106, 90), 'magma': (70, 44, 36), 'octocity': (186, 166, 196), 'turtletown': (240, 222, 168)}
+              'ruins': (110, 106, 90), 'magma': (70, 44, 36), 'octocity': (186, 166, 196), 'turtletown': (240, 222, 168),
+              'octohome': (200, 150, 100)}
 FORM_INFO = {
     'zap': ["YOU UNLOCKED ZAPPY OCTO!", "PRESS X TO CYCLE YOUR FORMS. ZAPPY'S Z SENDS OUT A SHOCK RING "
             "THAT HITS EVERYTHING AROUND YOU - EVEN URCHINS AND JELLIES - AND FRIES ENEMY SHOTS."],
@@ -219,7 +222,7 @@ def tile_to_px(tx, ty):
     return tx * TILE + TILE / 2 - 8, ty * TILE + TILE / 2 - 8
 
 
-class Game(TownLife, Scene3D, Coop, Hud3D):
+class Game(TownLife, Scene3D, Coop, Hud3D, Home):
     def __init__(self):
         problems = [] if WEB else world.validate()     # a developer check: skipped in the browser to load faster
         if problems:
@@ -344,6 +347,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
             cy = world.SHOP_ROW * TILE + 8
             self.wares.append((ware, pygame.Rect(cx - 7, cy - 7, 14, 14)))
         self.town_setup()
+        self.home_setup()
         self.scene_setup()
         self.snail = None
         self.p2_held = []
@@ -686,6 +690,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
                 self.seen[y][x] = c == '1'
         self.rebuild_minimaps()
         p.x, p.y = tile_to_px(*data['pos'])
+        self.unstick()
         if self.level.blocked(p.rect, 'player'):     # the map changed under an old save
             p.x, p.y = tile_to_px(*world.START)
         p.facing = 'down'
@@ -699,11 +704,34 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
             self.coop_join(quiet=True)
         self.say(["WELCOME BACK, OCTO!"])
 
+    def unstick(self):
+        """A save from an older version may stand where something has since been built (Octo's
+        house, say): step to the nearest open floor."""
+        p, lv = self.player, self.level
+        if not lv.blocked(p.rect, 'player'):
+            return
+        tx, ty = int((p.x + 8) // TILE), int((p.y + 8) // TILE)
+        ox, oy = p.x, p.y
+        for r in range(1, 8):
+            for dy in range(-r, r + 1):
+                for dx in range(-r, r + 1):
+                    if max(abs(dx), abs(dy)) != r:
+                        continue
+                    p.x, p.y = tile_to_px(tx + dx, ty + dy)
+                    if lv.tile(tx + dx, ty + dy) != 'E' and not lv.blocked(p.rect, 'player'):
+                        return
+        p.x, p.y = ox, oy
+        p.x, p.y = tile_to_px(*self.checkpoint)
+
     # ---- warping between completed trial portals ---------------------------
     def warp_spots(self):
         spots = [('OCTO TEMPLE', world.START)]
+        if self.flags.get('home_seen'):
+            spots.append(("OCTO'S HOUSE", world.CITIES['home']['entry']))
         if self.unlocked('express'):
             for cid in self.flags.get('towns_seen', []):
+                if cid == 'home':
+                    continue
                 c = world.CITIES[cid]
                 spots.append((c['title'], c['entry']))
         for name, t in world.TRIALS.items():
@@ -2111,6 +2139,9 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
             if k in CONFIRM_KEYS or k in ACTION_KEYS:
                 self.skip_versus()
             return
+        if st == 'sleep':
+            self.sleep_key(k)
+            return
         if st == 'title':
             menu = self.title_menu()
             if k in (pygame.K_UP, pygame.K_w, pygame.K_DOWN, pygame.K_s) and len(menu) > 1:
@@ -2270,6 +2301,9 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
             if getattr(npc, 'hidden', False):
                 continue
             if probe.colliderect(npc.rect):
+                if isinstance(npc, HomeThing):
+                    self.use_home(npc.what)
+                    return True
                 if isinstance(npc, Citizen):
                     self.talk_citizen(npc)
                     return True
@@ -2338,6 +2372,9 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
             return
         if st == 'portal':
             self.update_portal()
+            return
+        if st == 'sleep':
+            self.update_sleep()
             return
         if self.player is not None:
             self.update_yaw()
@@ -2648,6 +2685,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
         self.effects = [f for f in self.effects if not f.dead]
         self.update_arenas()
         self.town_tick()
+        self.home_tick()
 
         if self.state != 'play':
             return
@@ -2805,6 +2843,8 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
             self.draw_boss_bar(scr)
         if self.trial and st in ('play', 'pause'):
             self.draw_trial_hud(scr)
+        if st == 'sleep':
+            self.draw_sleep(scr, self.hires_layer())
         if self.flash_t:
             self.flash_t -= 1
             scr.blit(self.tint_layer((255, 255, 255), int(255 * self.flash_t / 20)), (0, HUD_H))
@@ -3155,6 +3195,8 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
     def worlds_seen(self):
         out = []
         for wld, (x0, y0, x1, y1) in world.WORLD_RECTS.items():
+            if wld == 'octohome':                    # the house is on Octo City's page
+                continue
             if any(any(self.seen[ty][x0:x1 + 1]) for ty in range(y0, y1 + 1, 2)):
                 out.append(wld)
         return out or ['sea']
@@ -3168,6 +3210,8 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
             return
         p = self.player
         self.map_page = world.world_at(p.rect.centerx // TILE, p.rect.centery // TILE) or 'sea'
+        if self.map_page == 'octohome':
+            self.map_page = 'octocity'
         if self.current_temple():
             self.map_page = 'temple'
         self.map_cache = None
@@ -3336,7 +3380,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
                 sx, sy = spot(gx, gy)
                 pygame.draw.polygon(scr, (20, 20, 30), [(sx - 4, sy + 3), (sx - 4, sy - 1), (sx, sy - 5), (sx + 4, sy - 1),
                                                         (sx + 4, sy + 3)])
-                pygame.draw.polygon(scr, (255, 170, 200) if c['id'] == 'octo' else (150, 220, 120),
+                pygame.draw.polygon(scr, {'octo': (255, 170, 200), 'home': (110, 170, 255)}.get(c['id'], (150, 220, 120)),
                                     [(sx - 3, sy + 2), (sx - 3, sy - 1), (sx, sy - 4), (sx + 3, sy - 1), (sx + 3, sy + 2)])
         in_page = lambda tx, ty: x0 <= tx < x0 + w and y0 <= ty < y0 + h     # noqa: E731
         self.draw_treasure_marks(scr, spot, in_page)
@@ -3393,6 +3437,9 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
             return
         p = self.player
         wld = world.world_at(p.rect.centerx // TILE, p.rect.centery // TILE) or getattr(self, '_mini_world', 'sea')
+        home = wld == 'octohome'
+        if home:                                     # at home: Octo City's map, with Octo at his front door
+            wld = 'octocity'
         self._mini_world = wld
         x0, y0, x1, y1 = world.WORLD_RECTS[wld]
         if self.t % 20 == 0 or getattr(self, '_mini_scaled', None) is None or self._mini_key != wld:
@@ -3410,8 +3457,14 @@ class Game(TownLife, Scene3D, Coop, Hud3D):
             for qx, qy in self.quest_targets():
                 if world.in_rect(qx, qy, (x0, y0, x1, y1)):
                     pygame.draw.rect(scr, (255, 220, 60), (x + int((qx - x0 + 0.5) * kx) - 1, y + int((qy - y0 + 0.5) * ky) - 1, 2, 2))
+        if wld == 'octocity' and self.flags.get('home_seen'):
+            hx, hy = world.CITIES['home']['door']
+            pygame.draw.rect(scr, (110, 170, 255), (x + int((hx - x0 + 0.5) * kx) - 1, y + int((hy - y0) * ky) - 2, 3, 3))
         if (self.t // 12) % 2 and not self.trial and not self.bossfight:
             cx, cy = p.rect.center
+            if home:
+                hx, hy = world.CITIES['home']['door']
+                cx, cy = (hx + 0.5) * TILE, (hy + 0.5) * TILE
             pygame.draw.rect(scr, (255, 255, 255), (x + int((cx / TILE - x0) * kx) - 1, y + int((cy / TILE - y0) * ky) - 1, 3, 3))
         if wld == 'sea':
             for boss in ('throne', 'murk'):

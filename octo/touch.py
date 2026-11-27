@@ -277,7 +277,7 @@ class TouchControls:
             g.on_key(pygame.K_m)
         elif st in ('fuse', 'altar', 'forms', 'catalogue', 'wardrobe', 'megafuse', 'journal', 'trade', 'radio', 'museum'):
             g.on_key(pygame.K_ESCAPE)
-        elif st in ('name', 'medal', 'cityintro'):
+        elif st in ('name', 'medal', 'cityintro', 'sleep'):
             g.on_key(pygame.K_RETURN)
         elif st == 'pause':
             g.on_key(pygame.K_p)

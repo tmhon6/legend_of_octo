@@ -260,8 +260,26 @@ def town_page(cid):
         tx, ty = c['spots']['statue']
         label(surf, 'LIVING LEGEND STATUE (100,000 POINTS)', (tx * TILE - ox) * 2, (ty * TILE - oy) * 2 + 24,
               (255, 215, 90), scale=1)
+        dx, dy = world.CITIES['home']['door']
+        ring(surf, (dx * TILE + 8 - ox) * 2, (dy * TILE + 8 - oy) * 2, 18, (120, 180, 255))
+        label(surf, "OCTO'S HOUSE (DOOR)", (dx * TILE + 8 - ox) * 2, (dy * TILE - oy) * 2 + 44, (150, 200, 255), scale=2)
+        mx, my = c['things']['mail'][:2]
+        label(surf, 'MAILBOX', (mx * TILE + 8 - ox) * 2, (my * TILE - oy) * 2 + 40, (150, 200, 255), scale=1)
+    if cid == 'home':
+        what = {'bed': 'BED: SLEEP (HEARTS + SAVE)', 'desk': 'DIARY (SAVE)', 'shelf': 'TROPHY SHELF',
+                'tank': 'FISH TANK', 'table': 'KELP TEA (+2 HEARTS)', 'hats': 'HAT STAND', 'lamp': 'LAMP',
+                'basket': "PEBBLE'S BASKET (2 PLAYERS)", 'plant': 'ANEMONE'}
+        for k, (ax, ay, bx, by) in c['things'].items():
+            if k in what:
+                cx, cy = ((ax + bx + 1) / 2 * TILE - ox) * 2, ((by + 1) * TILE - oy) * 2 + 10
+                half = gfx.text_width(what[k]) / 2 + 8                  # keep it on the page
+                cx = max(half, min(surf.get_width() - half, cx))
+                label(surf, what[k], cx, cy, (255, 230, 150), scale=1)
+        ex, ey = c['entry']
+        ring(surf, (ex * TILE + 8 - ox) * 2, (ey * TILE + 8 - oy) * 2, 14, (120, 255, 160), 2)
     sub = {'octo': "UNDER THE SEA, THROUGH THE GATE IN THE OCTO TEMPLE COURTYARD. TOWNSFOLK, SHOPS, SIDE QUESTS",
-           'turtle': "ON SUNNY BEACH, THROUGH THE GATE IN THE WALL NORTH OF THE SHORE STEPS"}[cid]
+           'turtle': "ON SUNNY BEACH, THROUGH THE GATE IN THE WALL NORTH OF THE SHORE STEPS",
+           'home': "IN OCTO CITY, BY THE GATE. A WARP POINT ONCE VISITED. GREEN RING: WHERE OCTO WALKS IN"}[cid]
     page(c['title'], surf, sub)
 
 
@@ -285,7 +303,7 @@ def trials_page():
         surf.blit(crop, (gx, gy + 30))
         kind = t['kind'] + (' / DARK' if t.get('dark') else '') + (' / CURRENT' if t.get('current') else '')
         label(surf, f"{t['title'][9:]} - {kind}", gx + cw // 2, gy + 6, t.get('color', INK), scale=2, box=False)
-    page(f"THE {len(world.TRIALS)} TRIAL ROOMS", surf, "EACH WIN GIVES A SPIRIT PEARL. 3 PEARLS AT THE ALTAR TEACH A NEW FORM. GREEN RING = WHERE OCTO LANDS")
+    page(f"THE {len(world.TRIALS)} TRIAL ROOMS", surf, "EACH WIN GIVES A SPIRIT PEARL. 3 PEARLS AT THE ALTAR TEACH A NEW FORM. GREEN RING: WHERE OCTO LANDS")
 
 
 # ---------------------------------------------------------------- pages: temples
@@ -528,11 +546,15 @@ def main():
     world_page('under')
     town_page('octo')
     town_page('turtle')
+    town_page('home')
     trials_page()
     forms_page()
     creatures_page()
     pics = os.path.join(OUT, 'layout')
     os.makedirs(pics, exist_ok=True)
+    for name in os.listdir(pics):                   # pages are renumbered: clear out the old ones
+        if name.endswith('.png') and name[:2].isdigit():
+            os.remove(os.path.join(pics, name))
     images = []
     for i, (title, surf) in enumerate(PAGES, 1):
         slug = ''.join(c if c.isalnum() else '_' for c in title.lower()).strip('_')

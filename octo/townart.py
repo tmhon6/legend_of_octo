@@ -147,6 +147,31 @@ def _bush(rnd, base):
     return s
 
 
+def _planks(rnd, wood, shift):
+    """Warm wooden floorboards (Octo's house)."""
+    s = pygame.Surface((TILE, TILE))
+    for i, y in enumerate(range(0, 16, 4)):
+        c = wood if (i + shift) % 2 else _lt(wood, 0.08)
+        pygame.draw.rect(s, c, (0, y, 16, 4))
+        pygame.draw.line(s, _dk(wood, 0.78), (0, y + 3), (15, y + 3))
+        x = (rnd.randrange(16) + i * 5) % 16
+        pygame.draw.line(s, _dk(wood, 0.82), (x, y), (x, y + 2))
+        s.set_at((rnd.randrange(16), y + 1), _dk(wood, 0.9))
+    return s
+
+
+def _house_wall(rnd):
+    """The top of a thick wooden wall, seen from above."""
+    s = pygame.Surface((TILE, TILE))
+    s.fill((150, 100, 62))
+    pygame.draw.rect(s, (216, 172, 118), (2, 0, 12, 16))
+    pygame.draw.line(s, (236, 200, 150), (3, 0), (3, 15))
+    pygame.draw.line(s, (176, 122, 80), (13, 0), (13, 15))
+    for y in (5, 11):
+        pygame.draw.line(s, (196, 150, 100), (4, y), (12, y))
+    return s
+
+
 def make_town_themes(rnd):
     """Themed tiles for the two towns (merged into gfx.TILES['themes'])."""
     oc = {}
@@ -169,7 +194,10 @@ def make_town_themes(rnd):
     tt['C'] = [_palm(rnd, tt['.'][i]) for i in range(2)]
     tt['K'] = [_bush(rnd, tt['.'][i]) for i in range(2)]
     tt['v'] = [_water(rnd, (60, 150, 210), (130, 200, 240)) for _ in range(3)]
-    return {'octocity': oc, 'turtletown': tt}
+    oh = {}
+    oh['.'] = [_planks(rnd, (200, 150, 100), k % 2) for k in range(4)]
+    oh['#'] = [_house_wall(rnd)]
+    return {'octocity': oc, 'turtletown': tt, 'octohome': oh}
 
 
 # ======================================================================

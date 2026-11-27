@@ -222,11 +222,11 @@ class Model:
         self.face([(x0, y0, z0), (x0, y1, z0), ap], col, _norm((-h, 0, cx - x0)))
         self.face([(x0, y0, z0), (x1, y0, z0), ap], col, _norm((0, -h, cy - y0)))
 
-    def disc_v(self, cx, y, cz, r, col, n=12, lit=False, rz=None):
+    def disc_v(self, cx, y, cz, r, col, n=12, lit=False, rz=None, bias=0.4):
         """A round thing on a south-facing wall (a porthole, a sign)."""
         rz = rz or r
         pts = [(cx + r * math.cos(i / n * math.tau), y, cz + rz * math.sin(i / n * math.tau)) for i in range(n)]
-        self.face(pts, col, (0, 1, 0), lit=lit, bias=0.4)
+        self.face(pts, col, (0, 1, 0), lit=lit, bias=bias)
 
     def quad_s(self, x0, x1, y, z0, z1, col, lit=True, bias=0.4, arch=False):
         """A flat rectangle on a south-facing wall (a door, a window); arch rounds its top."""
@@ -664,12 +664,17 @@ class Prop:
 TIER = (10, 20, 30)          # pyramid tier heights: lower, middle, the top platform
 PROPS = []
 FLAT = set()           # tiles a 3D model stands on (the tile map draws plain ground there)
+NOSHADE = set()        # ... and of those, the ones that don't get a dark footprint (models with their own shadow)
+KINDS = {'t_fire': 'fire', 'o_fountain': 'fountain', 'o_home': 'home', 'o_mail': 'mail', 'h_wall_back': 'wall',
+         'h_bed': 'bed', 'h_shelf': 'shelf', 'h_tank': 'tank', 'h_table': 'tea', 'h_basket': 'basket',
+         'h_hats': 'hats', 'h_lamp': 'lamp', 'h_rug': 'floor'}
 PYRAMID = (43, 46, 50, 53)
 
 
 def build_props(world):
     PROPS.clear()
     FLAT.clear()
+    NOSHADE.clear()
     groups = {}
     for (tx, ty), (key, i, j) in world.CITY_ART.items():
         if key == 't_nest':
@@ -680,9 +685,17 @@ def build_props(world):
     for key, tiles in groups.items():
         xs, ys = [t[0] for t in tiles], [t[1] for t in tiles]
         x0, y0 = min(xs), min(ys)
-        PROPS.append(Prop(key, x0 * TILE, y0 * TILE, (max(xs) - x0 + 1) * TILE, (max(ys) - y0 + 1) * TILE,
-                          kind='fire' if key == 't_fire' else 'fountain' if key == 'o_fountain' else 'static'))
+        prop = Prop(key, x0 * TILE, y0 * TILE, (max(xs) - x0 + 1) * TILE, (max(ys) - y0 + 1) * TILE,
+                    kind=KINDS.get(key, 'static'))
+        if prop.kind == 'floor':                    # a rug: under everything, and you walk on it
+            prop.base = -10 ** 6
+            NOSHADE.update(tiles)
+            PROPS.append(prop)
+            continue
+        PROPS.append(prop)
         FLAT.update(tiles)
+        if key.startswith('h_') or key == 'o_mail':
+            NOSHADE.update(tiles)
     x0, y0, x1, y1 = PYRAMID
     PROPS.append(Prop('pyramid', x0 * TILE, y0 * TILE, (x1 - x0 + 1) * TILE, (y1 - y0 + 1) * TILE, builder=pyramid))
     FLAT.update((x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1))
@@ -715,6 +728,10 @@ def height_at(wx, wy):
 
 # ---- trial portals: a stone ring with a swirling vortex ------------------------------------------
 _swirls = {}
+
+
+import home3d as _home3d  # noqa: E402  (Octo's house and everything in it)
+BUILDERS.update(_home3d.BUILDERS)
 
 
 def swirl(col, r):

@@ -59,13 +59,13 @@ In the browser, saves go to the browser's local storage instead of `savegame.jso
 | C                  | Happy ink style: long line <-> short wide burst     |
 | V                  | Ink jet: a quick dash that leaves a stinging ink cloud (you can't be hurt mid-jet) |
 | B                  | Drop a bubble bomb (buy them in the Pearl Shop)     |
-| T                  | Warp to a completed trial portal (and, after the Octo Express milestone, to the towns) |
+| T                  | Warp to a completed trial portal or Octo's house (and, after the Octo Express milestone, to the towns) |
 | Left Shift         | Save the game                                       |
 | P / Enter / Esc    | Pause. In the pause menu: **S** saves, **Q** quits  |
 | M                  | World map (game pauses; ←/→ flips between sea and sky) |
 | N                  | Mute / unmute all sound (music and effects)         |
 | H                  | Wardrobe: pick a hat and the ink jet's colour       |
-| Q                  | Journal: side quests, score and milestones, the leaderboard, extras (←/→ switch tabs) |
+| Q                  | Journal: side quests, score and milestones, the leaderboard, the bestiary, extras (←/→ switch tabs) |
 | R (in the pause menu) | Pebble the snail joins or leaves (two players)   |
 | F11                | Fullscreen                                          |
 | F3                 | Show the frame rate                                 |
@@ -146,8 +146,8 @@ resolution (twice in the browser), all in code:
   lettering.
 * **3D buildings:** the Octo Temple pyramid (walk up its stairs onto the top), the stone Octo
   statues in front of it, Hermie's Pearl Shop, both town gates, and every house, hall, stall,
-  fountain, tower, lighthouse and hut in Octo City and Turtle Town. Things behind a building
-  disappear behind it.
+  fountain, tower, lighthouse and hut in Octo City and Turtle Town, and Octo's own house and
+  everything in it. Things behind a building disappear behind it.
 * **Trial portals** are stone rings with a swirling vortex. Step into one and Octo is pulled in:
   the view rushes towards the portal as he spirals into the vortex, then he pops out in the trial.
 * **The opening:** skim a sunset ocean, dive under, and 3D Octo swims up out of the deep as the
@@ -264,7 +264,7 @@ The world map is 160×80 tiles, plus seven one-screen trial rooms and the Sky Is
 Every region has its own tiles, colour tint and particles, and the new areas have their own music.
 Glowing **trial portals** warp you into a hard one-screen challenge: waves of enemies, an orb grab
 against the clock, or surviving a barrage. If you fall, you're thrown back out and can try again.
-Completed portals become warp points (press **T**).
+Completed portals become warp points (press **T**), and so does Octo's house once you've been there.
 
 **Hermie's Pearl Shop**, just west of the temple, sells shrimp platters, bubble bombs, swift fins,
 a shell shield, deep ink and a heart shell. Bubble bombs blast open cracked rock and hidden caches.
@@ -293,6 +293,28 @@ you're working on it, a yellow **?** means you've done it, and a gold coin means
 * **The bestiary** lists all 85 creatures, guardians and bosses. Each one fills in when you first
   see it: a 3D model turning on a stand, where it lives, its hit points and damage, what it does,
   and how many you've beaten.
+
+### Octo's house
+
+The townsfolk built Octo a house of his own, right by Octo City's gate: a round blue dome shaped
+like his head, with big eye windows that blink, pink cheeks, a door for a mouth, stubby
+tentacles round its base and a chimney puffing bubbles. Inside is one cosy room, all in 3D.
+Press **Z** next to things to use them:
+
+| Thing | What it does |
+|-------|--------------|
+| Bed | Sleep till morning: every heart back (Pebble's too) and the game is saved |
+| Diary (on the desk) | The story so far and what to do next, and the game is saved |
+| Trophy shelf | A cup for each trial won, a bell for each tide bell, a crown for each guardian, and the great bosses' trophies |
+| Hat stand | Your hats hang here; use it to try them on |
+| Kelp tea | Two hearts back (the pot needs a minute to brew again) |
+| Pebble's basket | Pebble naps here. Wake him up to play as player two, or put him back to bed |
+| Fish tank | Bloop and Blip, who love fish flakes |
+| Jellyfish lamp | Switch it on and off |
+
+The **mailbox** outside gets a thank-you letter (with a few pearls) from everyone whose side quest
+you finish; its red flag is up when there's new mail. Once you've been home, the house is a warp
+point (press **T**), and it has its own little music-box tune.
 
 ## Score, milestones and the leaderboard
 
@@ -338,7 +360,8 @@ Saves from before scores existed are scored for the progress they've already mad
 * `scene3d.py`: the 3D layer of the world (drawn in depth order with Octo) and the portal animation
 * `hifi.py`: the smooth 3D toolkit for the cinematics: shaded sphere impostors, glows and 3D text
 * `cinema.py`: the 3D scenes: the opening, the versus entrance, town fly-overs and the milestone medal
-* `cities.py`, `townart.py`: the two towns' maps and their pixel art
+* `cities.py`, `townart.py`: the two towns' maps (and the room inside Octo's house) and their pixel art
+* `home.py`, `home3d.py`: Octo's house: using the bed, diary, trophies, basket and mailbox, and its 3D models
 * `folk.py`: who lives in the towns, their shops and side quests, and the leaderboard rivals
 * `town.py`: talking, trading, side quests, the journal, the score, milestones, the leaderboard, the museum and the radio
 * `people.py`: the townsfolk and the Living Legend statue

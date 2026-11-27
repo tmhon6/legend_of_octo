@@ -816,8 +816,8 @@ class Level:
             floor = themed.get('.') or tiles['overworld']['.']
             pos = (tx * TILE - off[0], ty * TILE - off[1])
             surf.blit(floor[(tx * 7 + ty * 13) % len(floor)], pos)
-            shade = _flat_shade()
-            surf.blit(shade, pos)
+            if (tx, ty) not in _props3d.NOSHADE:
+                surf.blit(_flat_shade(), pos)
             return
         top = ch == '=' and region_at(tx, ty) == 'OCTO TEMPLE'
         if ch in 'PQH' or top:

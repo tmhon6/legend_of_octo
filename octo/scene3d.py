@@ -68,7 +68,7 @@ class Scene3D:
         if self.portal_anim is not None:
             a = self.portal_anim
             items.append((a['ring'][1] + 1, 2, 'portal_octo'))
-        elif self.state != 'dying' and self.player_in_3d():
+        elif self.state not in ('dying', 'sleep') and self.player_in_3d():
             h = self.ground_height(p)
             key = (pyr_base + 1) if h > 0 and pyr_base is not None else p.rect.bottom
             items.append((key, 2, 'player'))
@@ -96,9 +96,13 @@ class Scene3D:
                 self._draw_raised(hr, what, shake)
         hr.set_clip(None)
 
+    HOME_KINDS = ('home', 'mail', 'wall', 'bed', 'shelf', 'tank', 'tea', 'basket', 'hats', 'lamp', 'floor')
+
     def _draw_prop(self, hr, prop, shake):
         if prop.kind == 'portal':
             return self._draw_portal(hr, prop, shake)
+        if prop.kind in self.HOME_KINDS:
+            return self.draw_home_prop(hr, prop, shake)
         img, (ax, ay) = props3d.image(prop.key, prop.builder)
         x, y = self._hr(prop.x, prop.y, shake)
         hr.blit(img, (x - ax, y - ay))

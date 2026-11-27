@@ -35,7 +35,8 @@ GREETING = {
              "TALK TO EVERYONE HERE (PRESS Z NEXT TO THEM). A YELLOW ! MEANS SOMEONE NEEDS YOUR HELP, AND A GOLD "
              "COIN MEANS A SHOP.",
              "EVERYTHING YOU DO EARNS POINTS, AND MILESTONES UNLOCK NEW THINGS. TALLY BY THE SCOREBOARD KNOWS ALL "
-             "ABOUT IT. PRESS Q ANY TIME FOR YOUR JOURNAL."],
+             "ABOUT IT. PRESS Q ANY TIME FOR YOUR JOURNAL.",
+             "AND THE ROUND BLUE HOUSE BY THE GATE? THAT'S YOURS, OCTO! WE BUILT IT FOR YOU."],
     'turtle': ["WELCOME TO TURTLE TOWN!",
                "THE TURTLES HAVE SIDE QUESTS AND SHOPS OF THEIR OWN. TAKE YOUR TIME - NOBODY HERE IS IN A HURRY.",
                "PRESS Q FOR YOUR JOURNAL: YOUR QUESTS, YOUR SCORE AND THE LEADERBOARD."],
@@ -354,6 +355,9 @@ class TownLife:
         sound.play('door')
         self._move_player(*c['entry'], 'up')
         self.checkpoint = c['entry']
+        if cid == 'home':
+            self.came_home()
+            return
         seen = self.flags.setdefault('towns_seen', [])
         if cid not in seen:
             seen.append(cid)
@@ -361,6 +365,11 @@ class TownLife:
             self.ci_t = 0
             self.ci_town = cid
             self.state = 'cityintro'
+        elif cid == 'octo' and not self.flags.get('home_told'):
+            self.flags['home_told'] = True
+            self.say(["WELCOME BACK TO OCTO CITY!",
+                      "WHILE YOU WERE AWAY, THE TOWNSFOLK BUILT YOU A HOUSE OF YOUR OWN: THE ROUND BLUE ONE RIGHT "
+                      "BY THE GATE. GO AND HAVE A LOOK!"])
         else:
             self.toast = ("WELCOME BACK TO " + c['title'] + "!", 110)
 
@@ -379,6 +388,8 @@ class TownLife:
             self.end_cityintro()
 
     def end_cityintro(self):
+        if self.ci_town == 'octo':
+            self.flags['home_told'] = True
         self.cityintro = None
         self.state = 'play'
         sound.music(self.area_music())
