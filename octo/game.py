@@ -30,6 +30,7 @@ from coop import Coop
 from home import Home, HomeThing
 import coop
 from hud3d import Hud3D
+import attacks3d
 
 DIR_KEYS = {
     pygame.K_UP: 'up', pygame.K_w: 'up',
@@ -2957,21 +2958,16 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         for e in sorted(self.enemies, key=lambda e: e.y):
             if vis.colliderect(e.rect):
                 e.draw(ps, ox, oy)
-        # anything up on the pyramid's top is drawn over the 3D layer instead (draw_lifted)
+        # Octo (with his slap, shields and fog) and every shot and spark are drawn in 3D
+        # (scene3d, attacks3d); whatever is left that's up on the pyramid goes in draw_lifted
         up = self.pyramid_in_view()
-        self.lifted_extras = up and p3d and self.state not in ('dying', 'portal') and \
-            self.ground_height(self.player) > 0
-        if self.state not in ('dying', 'portal'):
-            if p3d:
-                if not self.lifted_extras:
-                    self.player.draw_extras(ps, ox, oy)       # Octo himself is drawn in 3D
-            else:
-                self.player.draw(ps, ox, oy)
+        if self.state not in ('dying', 'portal') and not p3d:
+            self.player.draw(ps, ox, oy)
         for s in self.shots:
-            if not (up and self.lift(s)):
+            if not attacks3d.handles(s) and not (up and self.lift(s)):
                 s.draw(ps, ox, oy)
         for eff in self.effects:
-            if not (up and self.lift(eff)):
+            if not attacks3d.handles(eff) and not (up and self.lift(eff)):
                 eff.draw(ps, ox, oy)
         for b in self.bubbles:
             b.draw(ps)
@@ -2996,7 +2992,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         ox, oy = -self.cam[0], -self.cam[1]
         if self.pyramid_in_view():
             sx, sy = getattr(self, 'shake_xy', (0, 0))
-            self.draw_lifted(ps, ox + sx, oy + sy, getattr(self, 'lifted_extras', False))
+            self.draw_lifted(ps, ox + sx, oy + sy)
         theme = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
         tfx = THEME_FX.get(theme)
         if tfx:

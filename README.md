@@ -144,6 +144,13 @@ resolution (twice in the browser), all in code:
   lit cube, and his head is a smoothly shaded ball, with his back drawn from his back sprite. He
   turns smoothly in 3D, sways when he's idle, spins round when he changes form, and wears his hat
   in 3D too, in every form. Pebble the snail is a little 3D snail in the same style.
+* **Attacks are 3D too.** Ink drops, Pebble's slime, spines, ice shards, wisps, stars, shells,
+  orbs, lanterns, mines, bombs, hail, rocks, the spike roll, Octo's slap and every enemy shot are
+  their pixel art turned into lit cubes, like Octo. They fly at body height with a shadow on the
+  sea floor, and pass in front of and behind Octo, Pebble and the buildings. Zap rings and novas
+  are glowing bands round Octo (the far side passes behind him), beams are lit tubes, lightning
+  and the whip arc through the water above their reflections, whirlpools are spinning funnels,
+  bombs burst into fireballs, and the bubble shield and fog wrap round him in 3D.
 * **The top of the screen is 3D:** a raised panel with shiny pearls, a 3D key and bombs, voxel
   hearts that bob (and beat when you're low), a 3D Octo turning in the form box, and smooth
   lettering.
@@ -361,6 +368,7 @@ Saves from before scores existed are scored for the progress they've already mad
 * `voxel.py`: Octo (and any sprite) as a pixel-style 3D figure made of little cubes, with cached renders
 * `props3d.py`: the 3D buildings, pyramid, statues, gates and portals, and what stands where
 * `scene3d.py`: the 3D layer of the world (drawn in depth order with Octo) and the portal animation
+* `attacks3d.py`: every attack in 3D: shots, slaps, rings, beams, bolts, whirlpools, bombs and sparks
 * `hifi.py`: the smooth 3D toolkit for the cinematics: shaded sphere impostors, glows and 3D text
 * `cinema.py`: the 3D scenes: the opening, the versus entrance, town fly-overs and the milestone medal
 * `cities.py`, `townart.py`: the two towns' maps (and the room inside Octo's house) and their pixel art

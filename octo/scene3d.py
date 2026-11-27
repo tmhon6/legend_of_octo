@@ -12,6 +12,7 @@ import random
 
 import pygame
 
+import attacks3d
 import props3d
 import sound
 import voxel
@@ -43,7 +44,7 @@ class Scene3D:
     # ---- where things are ------------------------------------------------
     def player_in_3d(self):
         p = self.player
-        return p is not None and not (p.tumble or p.roll_t or (p.in_sky and p.sphere > 0))
+        return p is not None and not (p.tumble or (p.in_sky and p.sphere > 0))
 
     def ground_height(self, ent):
         return props3d.height_at(ent.rect.centerx, ent.rect.bottom - 1)
@@ -60,17 +61,16 @@ class Scene3D:
         x, y = getattr(thing, 'x', None), getattr(thing, 'y', None)
         return props3d.height_at(x, y) if x is not None and y is not None else 0.0
 
-    def draw_lifted(self, ps, ox, oy, extras):
-        """Shots, sparks and Octo's slap up on the pyramid. The 3D pyramid would cover them in the flat
-        layer, so they're drawn over it instead, raised to the height they're at."""
-        def at(h):
-            return round(ox - props3d.KX * h), round(oy - props3d.KZ * h)
-        if extras:
-            self.player.draw_extras(ps, *at(self.ground_height(self.player)))
+    def draw_lifted(self, ps, ox, oy):
+        """Flat things (score pop-ups, motes) up on the pyramid. The 3D pyramid would cover them in
+        the flat layer, so they're drawn over it instead, raised to the height they're at. (Shots and
+        sparks are 3D themselves: attacks3d.)"""
         for thing in self.shots + self.effects:
+            if attacks3d.handles(thing):
+                continue
             h = self.lift(thing)
             if h > 0:
-                thing.draw(ps, *at(h))
+                thing.draw(ps, round(ox - props3d.KX * h), round(oy - props3d.KZ * h))
 
     def _hr(self, wx, wy, shake):
         cx, cy = self.cam
@@ -96,6 +96,8 @@ class Scene3D:
             h = self.ground_height(p)
             key = (pyr_base + 1) if h > 0 and pyr_base is not None else p.rect.bottom
             items.append((key, 2, 'player'))
+            for k, piece in attacks3d.octo_pieces(p):         # his slap, shields and fog
+                items.append(((pyr_base + 1.1) if h > 0 and pyr_base is not None else k, 3, piece))
         sn = getattr(self, 'snail', None)
         if sn is not None and self.state not in ('dying',) and self.portal_anim is None:
             h = self.ground_height(sn)
@@ -106,6 +108,17 @@ class Scene3D:
                 continue
             if self.ground_height(n) > 0 and pyr_base is not None:
                 items.append((pyr_base + 0.5, 1, n))
+        for o in self.shots + self.effects:                  # every shot, ring and spark, in 3D
+            if attacks3d.handles(o):
+                gx, gy = attacks3d.ground(o)
+                if view.collidepoint(gx, gy):
+                    up = pyr_base is not None and props3d.height_at(gx, gy) > 0
+                    key = pyr_base + 1.3 if up else attacks3d.sort_y(o, gy)
+                    if attacks3d.halves(o):                   # a ring: its far side passes behind Octo
+                        items.append((pyr_base + 0.95 if up else key - 2, 3, attacks3d.Half(o, True)))
+                        items.append((key + 2, 3, attacks3d.Half(o, False)))
+                    else:
+                        items.append((key, 3, o))
         items.sort(key=lambda it: (it[0], it[1]))
         for _, kind, what in items:
             if kind == 0:
@@ -116,6 +129,8 @@ class Scene3D:
                 self._draw_portal_octo(hr, shake)
             elif what == 'snail':
                 self._draw_snail(hr, shake)
+            elif kind == 3:
+                attacks3d.draw(self, hr, what, shake)
             else:
                 self._draw_raised(hr, what, shake)
         hr.set_clip(None)
@@ -204,6 +219,11 @@ class Scene3D:
     def _draw_player(self, hr, shake):
         p = self.player
         if p.invuln and (p.invuln // 3) % 2 and not p.knock_t:
+            return
+        if p.roll_t:                                          # Prickly's spike roll: a 3D spiky ball
+            c = attacks3d.Ctx(self, hr, shake)
+            c.h = self.ground_height(p)
+            attacks3d.draw_roll(c, p)
             return
         yaw = self.p_yaw
         if p.flip_t:                                          # changing form: a full spin

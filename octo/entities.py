@@ -840,13 +840,6 @@ class Player(Entity):
             style.draw_hat(surf, getattr(self, 'hat', 'none'), x, y, self.facing, self.idle_t)
         self._draw_aura(surf, x, y)
 
-    def draw_extras(self, surf, ox=0, oy=0):
-        """Everything but Octo himself (the slap, fog, bubble shield): used when he's drawn in 3D."""
-        if self.invuln and (self.invuln // 3) % 2 and not self.knock_t:
-            return
-        self._draw_slap(surf, ox, oy)
-        self._draw_aura(surf, round(self.x) + ox, round(self.y) + oy)
-
     def _draw_slap(self, surf, ox, oy):
         if self.attack_t and self.mood == 'mad':
             r = self.slap_rect()
