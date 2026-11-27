@@ -30,7 +30,10 @@ jobs:
           python-version: "3.12"
       - name: Install tools
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg
+          # some extra package source on the runner can fail to update (one did: a 403); ffmpeg comes
+          # from Ubuntu's own sources, so carry on, and let the install itself fail loudly if it must
+          sudo apt-get update || true
+          sudo apt-get install -y ffmpeg
           pip install pygame pygbag==0.9.3
       - name: Build
         run: python build_site.py
