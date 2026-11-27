@@ -1424,16 +1424,40 @@ MINIBOSS_STYLES.update({
 
 
 class MiniBoss(Enemy):
-    """A big, tough cousin of a regular enemy that guards one region."""
+    """A big, tough cousin of a regular enemy that guards one region (or a temple, or a trial).
+
+    It fights in three stages (it breaks apart and gets fiercer as it's hurt). Besides the moves
+    every boss knows (charge, ring, spread, summon, teleport) each kind has signature moves of its
+    own - crabs and golems leap and slam down, jellies and crystals spin spirals, birds fire
+    barrages, puffers burst, fish dash, storm and fire bosses call strikes down from above - and
+    every attack is warned on the floor first, in red. When it's beaten it doesn't just vanish: it
+    shudders, cracks with little blasts and bursts apart."""
     knockback = False
     spawn_time = 50
     boss = True
     hb = (4, 6, 24, 22)
     _frames = {}
+    _accents = {}
 
     STAGE_SPEED = {1: 1.0, 2: 1.3, 3: 1.6}
     STAGE_REST = {1: (80, 120), 2: (55, 85), 3: (35, 60)}
     CRABS = ('crab', 'icecrab', 'lavacrab')
+    # each kind's two signature moves (the second joins in once the boss breaks)
+    SIGNATURE = {
+        'crab': ('slam', 'slam'), 'icecrab': ('slam', 'rain'), 'lavacrab': ('slam', 'rain'), 'golem': ('slam', 'nova'),
+        'beetle': ('slam', 'dash'), 'sandhopper': ('slam', 'dash'), 'monkey': ('slam', 'barrage'),
+        'magmite': ('rain', 'nova'), 'jelly': ('spiral', 'nova'), 'urchin': ('spiral', 'nova'),
+        'prism': ('spiral', 'barrage'), 'crystalbug': ('spiral', 'rain'), 'sporeling': ('nova', 'spiral'),
+        'starling': ('rain', 'spiral'), 'gull': ('barrage', 'rain'), 'sparkbird': ('rain', 'barrage'),
+        'scorpion': ('barrage', 'dash'), 'salamander': ('barrage', 'rain'), 'skullfish': ('dash', 'spiral'),
+        'puffer': ('nova', 'barrage'), 'glassfish': ('dash', 'barrage'), 'seahorse': ('dash', 'spiral'),
+        'hagfish': ('dash', 'nova'),
+    }
+    RAIN = {'icecrab': 'ice', 'lavacrab': 'fire', 'magmite': 'fire', 'salamander': 'fire', 'gull': 'bolt',
+            'sparkbird': 'bolt', 'starling': 'rock', 'crystalbug': 'ice'}
+    WINDUP = {'charge': 36, 'ring': 30, 'spread': 34, 'summon': 30, 'teleport': 40, 'slam': 34, 'spiral': 22,
+              'barrage': 30, 'nova': 44, 'dash': 1, 'rain': 36}
+    FURY = (255, 70, 50)
 
     def __init__(self, bid, x, y, lurk=False, hp_mult=1.0):
         super().__init__(x - 8, y - 8)
@@ -1452,6 +1476,34 @@ class MiniBoss(Enemy):
         self.face = 1
         self.minions = []
         self.fade = 255
+        self.lift = 0.0           # how high it is in the air (leaping)
+        self.swell = 0.0          # 0..1 as it gathers itself for a burst (its aura grows)
+        self.dying_t = 0          # beaten: counting down its last moments
+        self.warn = None          # the warning on the floor for the attack it's winding up
+        self.aura = None
+        self.spin_a = random.uniform(0, math.tau)
+        self.spin_dir = random.choice((-1, 1))
+        self.trail = 1.0          # the health bar's "just lost" part, draining after a hit
+        self.sub, self.sub_t = 0, 0   # (a step within a move: the dashes)
+
+    # ---- looks -------------------------------------------------------------------------------
+    @property
+    def accent(self):
+        """The boss's own colour (from its sprite's brightest pixels): its orbs and aura."""
+        c = MiniBoss._accents.get(self.bid)
+        if c is None:
+            src = gfx.SPR[self.cfg['base']][0]
+            src = gfx.tint(src, self.cfg['tint']) if self.cfg.get('tint') else src
+            px = [src.get_at((x, y)) for y in range(src.get_height()) for x in range(src.get_width())]
+            px = [p for p in px if p.a > 128 and p.r + p.g + p.b > 200] or [pygame.Color(255, 120, 120)]
+            avg = [sum(p[i] for p in px) / len(px) for i in range(3)]
+            hi = max(avg) or 1
+            c = MiniBoss._accents[self.bid] = tuple(min(255, int(v / hi * 255 * 0.9 + 25)) for v in avg)
+        return c
+
+    @property
+    def orb_col(self):
+        return self.FURY if self.stage >= 3 else self.accent
 
     def _cuts(self, stage):
         """Which pixels of the 16x16 sprite are gone at this stage (a lost claw, torn fins...)."""
@@ -1483,7 +1535,7 @@ class MiniBoss(Enemy):
                                 f.set_at((x, y), (0, 0, 0, 0))
                 if self.stage == 3:                  # bruised and furious
                     f.fill((255, 170, 160, 255), special_flags=pygame.BLEND_RGBA_MULT)
-                out.append(pygame.transform.scale(f, (f.get_width() * 2, f.get_height() * 2)))
+                out.append(pygame.transform.scale2x(f))    # (doubled with smoothed edges, not blocks)
             MiniBoss._frames[key] = out
         return MiniBoss._frames[key]
 
@@ -1499,8 +1551,9 @@ class MiniBoss(Enemy):
             for x in range(w):
                 if new_cut(x, y) and not old_cut(x, y):
                     piece.set_at((x, y), src.get_at((x, y)))
-        game.effects.append(Debris(pygame.transform.scale(piece, (w * 2, h * 2)), self.x, self.y,
+        game.effects.append(Debris(pygame.transform.scale2x(piece), self.x, self.y,
                                    -1.5 if self.stage == 2 else 1.5))
+        self._calm()
         self.hurt_t = 40
         self.frozen = 0
         self.state, self.state_t = 'roam', 50
@@ -1508,11 +1561,14 @@ class MiniBoss(Enemy):
         game.hitstop = 10
         sound.play('roar')
         game.toast = (f"{self.name} {'BREAKS' if self.stage == 2 else 'IS FURIOUS'}!", 90)
-        for i in range(14):
-            a = i / 14 * math.tau
-            game.effects.append(Particle(self.rect.centerx, self.rect.centery, math.cos(a) * 2.2,
-                                         math.sin(a) * 2.2, (255, 230, 200), 22, size=2))
+        cx, cy = self.rect.center
+        game.effects.append(Shock(cx, cy, self.orb_col, 1.3))
+        for i in range(18):
+            a = i / 18 * math.tau
+            game.effects.append(Particle(cx, cy, math.cos(a) * 2.4, math.sin(a) * 2.4,
+                                         self.orb_col if i % 2 else (255, 240, 210), 24, size=2))
 
+    # ---- moving ------------------------------------------------------------------------------
     def _step(self, dx, dy, room):
         if self.cfg.get('phase'):           # drifts straight through kelp and rock
             nx, ny = self.x + dx, self.y + dy
@@ -1524,8 +1580,49 @@ class MiniBoss(Enemy):
             return False
         return self.move(dx, dy, room)
 
+    def _fits(self, x, y, room):
+        r = pygame.Rect(x + self.hb[0], y + self.hb[1], self.hb[2], self.hb[3])
+        if not room.bounds.contains(r):
+            return False
+        return self.who == 'flyer' or self.cfg.get('phase') or not room.blocked(r, self.who)
+
+    def _landing(self, tx, ty, room):
+        """Where a leap ends: on Octo if there's room, else as near him as it can get."""
+        sx, sy = self.x, self.y
+        gx, gy = tx - 16, ty - 18
+        for k in (1.0, 0.8, 0.6, 0.4, 0.2):
+            x, y = sx + (gx - sx) * k, sy + (gy - sy) * k
+            if self._fits(x, y, room):
+                return x, y
+        return sx, sy
+
+    def _orb(self, game, x, y, a, speed, r=4, spin=0.0, accel=0.0):
+        game.shots.append(BossOrb(x, y, math.cos(a) * speed, math.sin(a) * speed, self.orb_col, r, spin, accel))
+
+    def _calm(self):
+        """Stop whatever it was winding up (its warning goes too)."""
+        if self.warn is not None:
+            self.warn.dead = True
+            self.warn = None
+        self.lift = 0.0
+        self.swell = 0.0
+
+    def _aim_line(self, game, cx, cy, ux, uy, length, life):
+        if self.warn is None or self.warn.dead:
+            self.warn = Warn(cx, cy, 0, life, cx, cy)
+            game.effects.append(self.warn)
+        self.warn.x, self.warn.y = cx, cy
+        self.warn.x1, self.warn.y1 = cx + ux * length, cy + uy * length
+
+    # ---- fighting ----------------------------------------------------------------------------
     def ai(self, game):
         room = game.level
+        if self.aura is None or self.aura.dead:
+            self.aura = BossAura(self)
+            game.effects.append(self.aura)
+        if self.dying_t:
+            self._dying(game)
+            return
         if self.lurk:                                # waiting: just drift about its lair
             self.y += math.sin(self.t * 0.05) * 0.2
             return
@@ -1533,6 +1630,10 @@ class MiniBoss(Enemy):
         if stage > self.stage:
             self._break(game, stage)
             return
+        if self.stage >= 3 and self.t % 7 == 0:       # furious: steam rising off it
+            r = self.rect
+            game.effects.append(Particle(random.uniform(r.left + 4, r.right - 4), r.top + 4, random.uniform(-0.2, 0.2),
+                                         -0.7, (255, 120, 90), 22, -0.01))
         enraged = self.stage >= 2
         tx, ty = game.player.seen_pos()
         cx, cy = self.rect.center
@@ -1551,36 +1652,43 @@ class MiniBoss(Enemy):
                 moves = self.moveset()
                 self.state = moves[self.move_i % len(moves)]
                 self.move_i += 1
-                self.state_t = {'charge': 36, 'ring': 30, 'spread': 34, 'summon': 30, 'teleport': 40}[self.state]
+                self.state_t = self.WINDUP[self.state]
+                self.sub = 0
         elif st == 'charge':
-            if self.state_t > 0:                    # wind-up: shudder in place
+            if self.state_t > 0:                    # wind-up: shudder in place, the path shown in red
+                self._aim_line(game, cx, cy, ux, uy, 90, self.state_t + 2)
                 return
             if self.state_t == 0:
+                self._calm()
                 s = 3.6 if enraged else 3.0
                 self.v = (ux * s, uy * s)
                 sound.play('jet')
+            if self.t % 3 == 0:
+                game.effects.append(Particle(cx, cy, -self.v[0] * 0.3, -self.v[1] * 0.3, self.orb_col, 14, size=2))
             if not self._step(self.v[0], self.v[1], room) or self.state_t < -40:
                 if self.state_t >= -40:
                     game.shake = 6
                     sound.play('shut')
+                    if enraged:                     # furious: it bursts on hitting the wall
+                        for i in range(6):
+                            self._orb(game, cx, cy, i / 6 * math.tau + self.spin_a, 1.4)
                 self._end(enraged)
         elif st == 'ring':
             if self.state_t == 0:
                 n = 12 if enraged else 8
                 off = random.random()
                 for i in range(n):
-                    a = (i + off) / n * math.tau
-                    game.shots.append(EnemyShot(cx - 4 + math.cos(a) * 12, cy - 4 + math.sin(a) * 12,
-                                                math.cos(a) * 1.6, math.sin(a) * 1.6, self.cfg['shot']))
+                    self._orb(game, cx, cy, (i + off) / n * math.tau, 1.6)
+                game.effects.append(Shock(cx, cy, self.orb_col, 0.8))
                 sound.play('shoot')
                 self._end(enraged)
+            else:
+                self.swell = 1 - self.state_t / 30
         elif st == 'spread':
             if self.state_t in (20, 10, 0):
                 base = math.atan2(uy, ux)
                 for da in ((-0.5, -0.25, 0, 0.25, 0.5) if enraged else (-0.35, 0, 0.35)):
-                    a = base + da
-                    game.shots.append(EnemyShot(cx - 4, cy - 4, math.cos(a) * 2.0, math.sin(a) * 2.0,
-                                                self.cfg['shot']))
+                    self._orb(game, cx, cy, base + da, 2.0, r=3)
                 sound.play('shoot')
             if self.state_t <= 0:
                 self._end(enraged)
@@ -1617,32 +1725,246 @@ class MiniBoss(Enemy):
             if self.state_t <= 0:
                 self.fade = 255
                 self._end(enraged)
+        elif st == 'slam':
+            self._slam(game, room, tx, ty, enraged)
+        elif st == 'spiral':
+            self._spiral(game, cx, cy, enraged)
+        elif st == 'barrage':
+            self._barrage(game, cx, cy, ux, uy, enraged)
+        elif st == 'nova':
+            self._nova(game, cx, cy, ux, uy, enraged)
+        elif st == 'dash':
+            self._dash(game, room, cx, cy, ux, uy, enraged)
+        elif st == 'rain':
+            self._rain(game, room, tx, ty, enraged)
+
+    def _slam(self, game, room, tx, ty, enraged):
+        """Crouch (the landing spot glows red under Octo), leap high and crash down, throwing out a
+        ring of orbs."""
+        if self.state_t == self.WINDUP['slam'] - 1:
+            self.target = self._landing(tx, ty, room)
+            x, y = self.target
+            self.warn = Warn(x + 16, y + 18, 20, self.WINDUP['slam'] + 30)
+            game.effects.append(self.warn)
+        if self.state_t > 0:
+            return
+        if self.state_t == 0:
+            self.jump_from = (self.x, self.y)
+            sound.play('jet')
+        k = min(1.0, -self.state_t / 28)
+        (sx, sy), (gx, gy) = self.jump_from, self.target
+        self.x, self.y = sx + (gx - sx) * k, sy + (gy - sy) * k
+        self.lift = math.sin(math.pi * k) * 38
+        if k >= 1.0:
+            self._calm()
+            cx, cy = self.rect.center
+            n = 16 if self.stage >= 3 else 12 if enraged else 10
+            off = random.random()
+            for i in range(n):
+                self._orb(game, cx, cy + 4, (i + off) / n * math.tau, 1.5)
+            game.effects.append(Shock(cx, cy + 6, (255, 235, 200), 1.6))
+            for i in range(12):
+                a = i / 12 * math.tau
+                game.effects.append(Particle(cx + math.cos(a) * 10, cy + 8 + math.sin(a) * 5, math.cos(a) * 1.6,
+                                             math.sin(a) * 0.8 - 0.4, (220, 210, 190), 20, 0.06, size=2))
+            game.shake = 10
+            sound.play('boom')
+            self._end(enraged)
+
+    def _spiral(self, game, cx, cy, enraged):
+        """Spin in place, glowing, then pour out a spiral of orbs."""
+        if self.state_t > 0:
+            self.swell = 1 - self.state_t / self.WINDUP['spiral']
+            return
+        i = -self.state_t
+        self.swell = 1.0
+        if i % (4 if self.stage >= 3 else 5) == 0:
+            arms = 1 + self.stage
+            for j in range(arms):
+                self._orb(game, cx, cy, self.spin_a + j * math.tau / arms, 1.25, r=3)
+            self.spin_a += 0.3 * self.spin_dir
+            if i % 15 == 0:
+                sound.play('shoot')
+        if i >= 70 + 20 * self.stage:
+            self.spin_dir = -self.spin_dir
+            self._end(enraged)
+
+    def _barrage(self, game, cx, cy, ux, uy, enraged):
+        """Take aim (a red line to Octo), then fire a rapid stream at him."""
+        if self.state_t > 0:
+            self._aim_line(game, cx, cy, ux, uy, 120, self.state_t + 2)
+            return
+        if self.state_t == 0:
+            self._calm()
+        i = -self.state_t
+        if i % 4 == 0:
+            a = math.atan2(uy, ux) + random.uniform(-0.1, 0.1)
+            for da in ((-0.28, 0.0, 0.28) if self.stage >= 3 else (0.0,)):
+                self._orb(game, cx, cy, a + da, 2.3, r=3)
+            if i % 8 == 0:
+                sound.play('shoot')
+        if i >= 40:
+            self._end(enraged)
+
+    def _nova(self, game, cx, cy, ux, uy, enraged):
+        """Swell up, flashing, then burst into a ring of orbs with one gap to slip through (and,
+        once broken, a second slower ring)."""
+        if self.state_t > 0:
+            self.swell = 1 - self.state_t / self.WINDUP['nova']
+            if self.state_t % 12 == 0:
+                sound.play('tick')
+            return
+        if self.state_t == 0:
+            self.swell = 0.0
+            n = 26
+            gap = math.atan2(uy, ux) + random.uniform(-1.2, 1.2)
+            for i in range(n):
+                a = i / n * math.tau
+                if abs((a - gap + math.pi) % math.tau - math.pi) > 0.42:
+                    self._orb(game, cx, cy, a, 1.7)
+            game.effects.append(Shock(cx, cy, self.orb_col, 1.4))
+            game.shake = 6
+            sound.play('boom')
+        if self.state_t == -20 and enraged:
+            n = 16
+            for i in range(n):
+                self._orb(game, cx, cy, (i + 0.5) / n * math.tau, 1.05, r=3)
+            sound.play('shoot')
+        if self.state_t <= -22:
+            self._end(enraged)
+
+    def _dash(self, game, room, cx, cy, ux, uy, enraged):
+        """Three quick dashes at Octo, each shown first with a red line."""
+        if self.sub == 0:                             # (just started)
+            self.dash_n, self.sub, self.sub_t = 2 + (self.stage >= 2), 1, 16
+        self.sub_t -= 1
+        if self.sub == 1:                             # aim
+            self._aim_line(game, cx, cy, ux, uy, 100, self.sub_t + 2)
+            if self.sub_t <= 0:
+                self._calm()
+                s = 4.2 if enraged else 3.6
+                self.v = (ux * s, uy * s)
+                self.sub, self.sub_t = 2, 24
+                sound.play('jet')
+        elif self.sub == 2:                           # dash
+            if self.t % 2 == 0:
+                game.effects.append(Particle(cx, cy, -self.v[0] * 0.25, -self.v[1] * 0.25, self.orb_col, 12, size=2))
+            if not self._step(self.v[0], self.v[1], room) or self.sub_t <= 0:
+                self.dash_n -= 1
+                self.sub, self.sub_t = 3, 10
+        elif self.sub_t <= 0:                         # a breath, then the next one
+            if self.dash_n <= 0:
+                self.sub = 0
+                self._end(enraged)
+            else:
+                self.sub, self.sub_t = 1, 14
+
+    def _rain(self, game, room, tx, ty, enraged):
+        """Rear up, glowing, and call things crashing down: on Octo, and all round him (each spot
+        is ringed in red first)."""
+        self.swell = 1 - max(0, self.state_t) / self.WINDUP['rain']
+        if self.state_t == 18:
+            kind = self.RAIN.get(self.cfg['base'], 'rock')
+            n = (5, 8, 11)[self.stage - 1]
+            b = room.bounds
+            for j in range(n):
+                if j == 0:
+                    x, y = tx, ty
+                else:
+                    a = random.uniform(0, math.tau)
+                    rr = random.uniform(22, 80)
+                    x, y = tx + math.cos(a) * rr, ty + math.sin(a) * rr
+                x = max(b.left + 10, min(b.right - 10, x))
+                y = max(b.top + 10, min(b.bottom - 10, y))
+                game.effects.append(Strike(x, y, 44 + j * 7, kind, dmg=2 if self.stage >= 3 else 1, loud=j % 2 == 0))
+            sound.play('wisp')
+        if self.state_t <= 0:
+            self.swell = 0.0
+            self._end(enraged)
 
     def _end(self, enraged):
+        self._calm()
         self.state = 'roam'
         self.state_t = random.randint(*self.STAGE_REST[self.stage])
 
     def moveset(self):
-        """Later stages add new moves to the boss's routine."""
+        """Its routine: its own moves and its signature move; later stages add more."""
         moves = list(self.cfg['moves'])
+        sig = self.SIGNATURE.get(self.cfg['base'], ('slam', 'slam'))
+        moves.insert(1, sig[0])
         if self.stage >= 2:
+            moves += [sig[1]]
             moves += ['spread'] if self.cfg['base'] in self.CRABS else ['ring']
         if self.stage >= 3:
+            moves += [sig[0]]
             moves += ['charge', 'summon'] if self.cfg['base'] in self.CRABS else ['spread', 'summon']
         return moves
 
     @property
     def active(self):
-        return self.spawn_t == 0 and not self.dead and self.fade > 120
+        return self.spawn_t == 0 and not self.dead and self.fade > 120 and not self.dying_t and self.lift < 8
 
+    # ---- the end -----------------------------------------------------------------------------
     def die(self, game):
-        self.dead = True
+        """Beaten: it doesn't vanish straight away - it shudders, cracks with little blasts and
+        bursts apart (see _dying), and only then is it gone."""
+        if self.dying_t or self.dead:
+            return
+        self._calm()
+        self.dying_t = 64
+        self.hp = 0
+        self.damage = 0
+        self.frozen = self.kb_t = self.trapped = 0
+        self.state = 'dying'
+        for m in self.minions:
+            if not m.dead:
+                m.dead = True
+                game.effects.append(Puff(m.x, m.y))
+        game.shots = [s for s in game.shots if not isinstance(s, EnemyShot)]
+        game.hitstop = max(getattr(game, 'hitstop', 0), 16)
+        game.shake = 14
         sound.play('roar')
+
+    def _dying(self, game):
+        self.dying_t -= 1
+        r = self.rect
+        if self.dying_t % 7 == 0 and self.dying_t > 10:          # little blasts all over it
+            x, y = random.uniform(r.left, r.right), random.uniform(r.top, r.bottom)
+            game.effects.append(fx.ImpactRing(x, y, big=True))
+            for i in range(5):
+                a = random.uniform(0, math.tau)
+                game.effects.append(Particle(x, y, math.cos(a) * 1.5, math.sin(a) * 1.5,
+                                             random.choice((self.accent, (255, 240, 200), (255, 180, 80))), 16, size=2))
+            game.shake = max(game.shake, 4)
+            sound.play('hit')
+        if self.dying_t <= 0:
+            self._burst(game)
+
+    def _burst(self, game):
+        """The final blast: it flies apart in pieces, and the fight is won."""
+        cx, cy = self.rect.center
+        img = self.frames()[0]
+        w, h = img.get_size()
+        for i, (px, py) in enumerate(((0, 0), (w // 2, 0), (0, h // 2), (w // 2, h // 2))):
+            piece = img.subsurface((px, py, w // 2, h // 2)).copy()
+            game.effects.append(Debris(piece, self.x + px, self.y + py, (-1.8, 1.8, -1.2, 1.2)[i]))
+        game.effects.append(Shock(cx, cy, (255, 240, 200), 2.2))
+        game.effects.append(Shock(cx, cy, self.accent, 1.5))
+        for i in range(36):
+            a = i / 36 * math.tau
+            sp = random.uniform(1.5, 3.4)
+            game.effects.append(Particle(cx, cy, math.cos(a) * sp, math.sin(a) * sp,
+                                         random.choice((self.accent, (255, 245, 220), (255, 200, 90))), 30, size=2))
+        game.flash_t = max(getattr(game, 'flash_t', 0), 14)
+        sound.play('boom')
+        self.dying_t = 0
+        self.dead = True
         game.shake = 16
         for i in range(6):
             game.effects.append(Puff(self.x + random.randint(0, 20), self.y + random.randint(0, 20), delay=i * 5))
         game.miniboss_defeated(self)
 
+    # ---- drawing -----------------------------------------------------------------------------
     def draw(self, surf, ox=0, oy=0):
         if self.spawn_t:
             frames = gfx.SPR['puff']
@@ -1652,7 +1974,7 @@ class MiniBoss(Enemy):
             return
         fr = self.frames()
         if self.cfg['base'] == 'puffer':
-            img = fr[2] if self.state in ('ring', 'spread') else fr[(self.t // 12) % 2]
+            img = fr[2] if self.state in ('ring', 'spread', 'nova') else fr[(self.t // 12) % 2]
         else:
             img = fr[(self.t // 10) % 2]
         if self.face < 0 and self.cfg['base'] in ('puffer', 'gull'):
@@ -1662,16 +1984,19 @@ class MiniBoss(Enemy):
         if self.hurt_t and (self.hurt_t // 2) % 2:
             img = gfx.flash(img)
         jx = jy = 0
-        if self.state == 'charge' and self.state_t > 0:
+        winding = self.state in ('charge', 'slam', 'nova') and self.state_t > 0
+        if winding or self.dying_t:
             jx = random.choice((-1, 0, 1))
-            if self.state_t % 8 < 4:
+            jy = random.choice((0, 1)) if self.state == 'slam' else 0
+            if (self.state_t if winding else self.dying_t) % 8 < 4:
                 img = gfx.flash(img)
         if self.fade < 255:
             img = img.copy()
             img.set_alpha(self.fade)
-        surf.blit(img, (round(self.x) + ox + jx, round(self.y) + oy + jy))
+        lift = round(self.lift)
+        surf.blit(img, (round(self.x) + ox + jx, round(self.y) + oy + jy - lift))
         # a little crown so it reads as a boss
-        cx, top = round(self.x) + ox + 16, round(self.y) + oy - 3
+        cx, top = round(self.x) + ox + 16 + jx, round(self.y) + oy - 3 - lift
         pygame.draw.polygon(surf, (255, 210, 60), [(cx - 6, top + 4), (cx - 6, top), (cx - 3, top + 2),
                                                    (cx, top - 2), (cx + 3, top + 2), (cx + 6, top),
                                                    (cx + 6, top + 4)])
@@ -2948,6 +3273,123 @@ class EnemyShot(Entity):
             return
         wob = int(math.sin(self.t * 0.3) * 1) if self.kind == 'bubble' else 0
         surf.blit(img, (round(self.x) + ox + wob, round(self.y) + oy))
+
+
+# the mini-bosses' own attacks (see MiniBoss)
+class BossOrb(EnemyShot):
+    """A glowing orb a mini-boss fires: bigger and brighter than a creature's shot, in the boss's
+    own colour. It can curve as it flies (spin) or speed up (accel)."""
+
+    def __init__(self, x, y, vx, vy, col, r=4, spin=0.0, accel=0.0):
+        super().__init__(x - r, y - r, vx, vy, 'orb')
+        self.col, self.r, self.spin, self.accel = col, r, spin, accel
+        self.hb = (2, 2, 2 * r - 4, 2 * r - 4)
+
+    def update(self, game):
+        if self.spin:
+            c, s = math.cos(self.spin), math.sin(self.spin)
+            self.vx, self.vy = self.vx * c - self.vy * s, self.vx * s + self.vy * c
+        if self.accel:
+            sp = math.hypot(self.vx, self.vy) or 1.0
+            k = min(3.0, sp + self.accel) / sp
+            self.vx, self.vy = self.vx * k, self.vy * k
+        super().update(game)
+
+    def draw(self, surf, ox=0, oy=0):                # (flat: the 3D layer normally draws it)
+        c = (round(self.x) + self.r + ox, round(self.y) + self.r + oy)
+        pygame.draw.circle(surf, self.col, c, self.r)
+        pygame.draw.circle(surf, (255, 255, 255), c, max(1, self.r // 2))
+
+
+class Warn:
+    """A warning on the floor before a boss's attack arrives: a red ring that fills in where something
+    will land, or a line along the way a boss is about to dash or fire. Its boss can move it."""
+
+    def __init__(self, x, y, r=12, life=40, x1=None, y1=None, col=(255, 70, 60)):
+        self.x, self.y, self.r, self.life = x, y, r, life
+        self.x1, self.y1, self.col = x1, y1, col
+        self.t = 0
+        self.dead = False
+
+    def update(self, game):
+        self.t += 1
+        if self.t >= self.life:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        if (self.t // 4) % 2:
+            return
+        if self.x1 is None:
+            pygame.draw.circle(surf, self.col, (round(self.x) + ox, round(self.y) + oy), round(self.r), 1)
+        else:
+            pygame.draw.line(surf, self.col, (round(self.x) + ox, round(self.y) + oy),
+                             (round(self.x1) + ox, round(self.y1) + oy))
+
+
+class Strike:
+    """Something crashing down from above onto a warned spot: a meteor ('rock'), lightning ('bolt'),
+    a gob of lava ('fire') or an icicle ('ice'). It hurts Octo if he's still in the ring when it lands."""
+    FALL = 18                                   # frames after landing that the blast is shown
+
+    def __init__(self, x, y, delay, kind, r=13, dmg=1, loud=True):
+        self.x, self.y, self.delay, self.kind, self.r, self.dmg, self.loud = x, y, delay, kind, r, dmg, loud
+        self.t = 0
+        self.dead = False
+
+    def update(self, game):
+        self.t += 1
+        if self.t == self.delay:
+            p = game.player
+            if math.hypot(p.rect.centerx - self.x, p.rect.centery - self.y) < self.r + 3:
+                p.hurt(game, self.dmg, (self.x, self.y - 4))
+            game.shake = max(game.shake, 3)
+            if self.loud:
+                sound.play({'bolt': 'zap', 'ice': 'ice', 'fire': 'boom'}.get(self.kind, 'shut'))
+            col = {'bolt': (200, 220, 255), 'ice': (200, 240, 255), 'fire': (255, 150, 60)}.get(self.kind, (230, 200, 160))
+            for i in range(8):
+                a = i / 8 * math.tau + random.uniform(0, 0.4)
+                game.effects.append(Particle(self.x, self.y, math.cos(a) * 1.8, math.sin(a) * 1.8 - 0.6, col, 16, 0.08))
+        if self.t > self.delay + self.FALL:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        if self.t < self.delay:
+            pygame.draw.circle(surf, (255, 70, 60), (round(self.x) + ox, round(self.y) + oy), self.r, 1)
+
+
+class Shock:
+    """The ring that races out along the floor when a boss lands or bursts (it's the orbs that hurt)."""
+
+    def __init__(self, x, y, col, size=1.0):
+        self.x, self.y, self.col, self.size = x, y, col, size
+        self.t = 0
+        self.dead = False
+
+    def update(self, game):
+        self.t += 1
+        if self.t >= 22:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        pygame.draw.circle(surf, self.col, (round(self.x) + ox, round(self.y) + oy), round(4 + self.t * 3 * self.size), 1)
+
+
+class BossAura:
+    """The glow on the floor under a mini-boss: its own colour while it's calm, red once it's furious,
+    swelling while it gathers itself for a big attack."""
+
+    def __init__(self, boss):
+        self.boss = boss
+        self.t = 0
+        self.dead = False
+
+    def update(self, game):
+        self.t += 1
+        if self.boss.dead or self.boss not in game.enemies:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        pass
 
 
 # ===========================================================================

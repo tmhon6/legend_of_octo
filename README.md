@@ -22,6 +22,15 @@ maps are original.
     .venv/bin/pip install pygame   # first time only
     .venv/bin/python main.py
 
+It first asks **which version** to play, like the website does: the latest release (1), the
+development build - this folder as it is (2) - or any older release from a list (3). Just Enter
+plays the latest. To skip the question:
+
+    .venv/bin/python main.py latest    # or: dev, v2.5.0, ... (list shows them all)
+
+An older release is set up once in `.versions/<tag>/` the first time you choose it. Each version
+keeps its own saved game.
+
 On the title screen, **Enter** starts a new game and **L** loads your saved game.
 
 ## Play in a browser
@@ -138,10 +147,28 @@ attack fold into the one that's kept.)
 
 ### Mini-bosses
 
-Each region has a mini-boss waiting in it. Swim close and you're pulled into its lair for a
-1-on-1 fight in three stages: crabs lose a claw, then the other, jellies lose their tentacles,
-and so on - and each stage makes them faster and adds new moves. Fall and you're swept back out
-to try again.
+Each region has a mini-boss waiting in it, glowing in its own colour. Swim close and you're
+pulled into its lair (which takes on the mood of its home: icy, fiery, gloomy...) for a 1-on-1
+fight in three stages: crabs lose a claw, then the other, jellies lose their tentacles, and so on -
+and each stage makes them faster and adds new moves. Fall and you're swept back out to try again.
+
+Every kind of boss has **signature moves** of its own, besides charging, shooting, calling
+minions and teleporting:
+
+| Move | Who | What happens |
+|------|-----|--------------|
+| Slam | crabs, golems, beetles, hoppers, apes | crouches, leaps high and crashes down where you were, throwing out a ring of orbs |
+| Spiral | jellies, urchins, prisms, crystal bugs, spores, fish | spins and pours out a spiral of orbs (more arms when it's angry) |
+| Barrage | birds, scorpions, salamanders, puffers, glass fish | takes aim, then fires a rapid stream at you |
+| Burst | puffers, spores, jellies, golems, magma | swells up, flashing, and bursts into a ring with one gap to slip through |
+| Dash | fish, beetles, scorpions, seahorses | three quick dashes at you |
+| Strikes | storm, fire, ice and star bosses | rears up and calls lightning, meteors, lava or icicles down on you and all around you |
+
+**Every attack is warned first, in red on the floor:** a ring where something will land (it fills
+in as the moment comes) or a dashed line where a boss is about to charge, dash or fire. Boss shots
+are big glowing orbs in the boss's colour (red once it's furious, when steam rises off it too). The
+health bar shows the bit you just knocked off before it drains away, and a beaten boss doesn't just
+vanish: it shudders, cracks with little blasts and bursts apart in pieces.
 
 Every 1-on-1 starts with a **versus entrance**: the screen cracks and shatters, Octo (hat and all)
 and the guardian face off across a slash of light, **VS** slams down, and the panels split apart
@@ -198,7 +225,8 @@ resolution (twice in the browser), all in code:
   the view rushes towards the portal as he spirals into the vortex, then he pops out in the trial.
 * **The opening:** a short loading bar first gets everything ready, so the opening plays smoothly
   from start to end (in a browser too). "Minu Hong presents" fades in over the sunset in clean,
-  spaced-out capitals; then skim a sunset ocean, dive under, and 3D Octo swims up out of the deep
+  spaced-out capitals; then glide over a smooth dawn sea (long swells rolling in, streaks of light
+  and shade drifting by, the sun's path glittering), dive under, and 3D Octo swims up out of the deep
   as the logo flies together letter by letter. Any key (or a tap) skips it. Then you swim on through the
   logo into the title screen, with bubbles streaming past, and starting a game dives down from the
   title onto the sea floor, which swings up flat from a 3D tilt.
@@ -420,7 +448,7 @@ Saves from before scores existed are scored for the progress they've already mad
 * `attacks3d.py`: every attack in 3D: shots, slaps, rings, beams, bolts, whirlpools, bombs and sparks
 * `transition3d.py`: diving from one scene into the next (the opening into the title, the title into the game)
 * `hifi.py`: the smooth 3D toolkit for the cinematics: shaded sphere impostors, glows and 3D text
-* `cinema.py`: the 3D scenes: the opening, the versus entrance, town fly-overs and the milestone medal
+* `cinema.py`: the 3D scenes: the opening (and its smooth dawn sea), the versus entrance, town fly-overs and the milestone medal
 * `cities.py`, `townart.py`: the two towns' maps (and the room inside Octo's house) and their pixel art
 * `home.py`, `home3d.py`: Octo's house: using the bed, diary, trophies, basket and mailbox, and its 3D models
 * `folk.py`: who lives in the towns, their shops and side quests, and the leaderboard rivals

@@ -106,6 +106,167 @@ class Ocean:
         surf.blit(self.fog, (0, hz - 2))
 
 
+def _streak(w, h, col):
+    """A soft horizontal streak of light (for additive or subtractive blending): drawn big, then
+    shrunk, so its edges are smooth."""
+    big = pygame.Surface((w * 4, max(4, h * 4)))
+    bw, bh = big.get_size()
+    for i in range(12, 0, -1):
+        k = (1 - i / 12) ** 1.6
+        rx, ry = bw / 2 * i / 12, bh / 2 * i / 12
+        pygame.draw.ellipse(big, mix((0, 0, 0), col, k), (bw / 2 - rx, bh / 2 - ry, rx * 2, ry * 2))
+    return pygame.transform.smoothscale(big, (w, max(1, h)))
+
+
+class Sea:
+    """The dawn sea the opening glides over, drawn smooth: every pixel row gets its own colour (the
+    sky's glow near the horizon, deep blue close by) with long swells rolling in, soft streaks of
+    light and shade glide towards the camera in true perspective, and the sun's path glitters with
+    sparkles that twinkle on and off. Nothing is a stretched texture, so nothing jumps or turns to
+    blocks as the camera glides and dives."""
+    STREAKS, NEAR, SPARKS = 340, 210, 190
+    BANDS = ((18, 330), (330, 2400))        # where the near and far streaks glide (camera units, times HI)
+
+    def __init__(self, rnd):
+        self.rnd = rnd
+        # the water's colour by how far down the sea a row is (0 at the horizon, 1 at the bottom)
+        stops = [(0.0, (255, 216, 182)), (0.05, (240, 172, 152)), (0.16, (150, 118, 160)),
+                 (0.38, (66, 96, 162)), (0.7, (34, 72, 138)), (1.0, (18, 52, 112))]
+        self.ramp = []
+        for i in range(257):
+            f = i / 256
+            for (f0, c0), (f1, c1) in zip(stops, stops[1:]):
+                if f <= f1:
+                    self.ramp.append(mix(c0, c1, (f - f0) / (f1 - f0)))
+                    break
+        sizes = (3, 4, 6, 8, 11, 15, 20, 27, 36, 48, 64)
+        self.light = {w * HI // 2: [_streak(w * HI // 2, max(1, w * HI // 14), mix((0, 0, 0), (120, 110, 90), b))
+                                    for b in (0.35, 0.6, 1.0)] for w in sizes}
+        self.dark = {w * HI // 2: [_streak(w * HI // 2, max(1, w * HI // 12), mix((0, 0, 0), (34, 26, 14), b))
+                                   for b in (0.5, 1.0)] for w in sizes}
+        self.widths = sorted(self.light)
+        self.dots = [_streak(n * HI // 2 + 1, n * HI // 4 + 1, (255, 236, 190)) for n in (2, 3, 4, 6)]
+        self.glow = {}                      # the sun's path, one soft row at a time: (half-width, level) -> row
+        self.streaks = [self._new_streak(i < self.NEAR, True) for i in range(self.STREAKS)]
+        self.sparks = [[rnd.uniform(0, 1), rnd.gauss(0, 0.45), rnd.uniform(0, math.tau), rnd.uniform(0.06, 0.16),
+                        rnd.randrange(4)] for _ in range(self.SPARKS)]
+        fog_h = 90 * HI
+        self.fog = pygame.Surface((W, fog_h), pygame.SRCALPHA)
+        for y in range(fog_h):
+            a = int(200 * (1 - y / fog_h) ** 2.4)
+            pygame.draw.line(self.fog, (255, 214, 184, a), (0, y), (W, y))
+
+    def _new_streak(self, near, anywhere):
+        """A streak of light or shade, somewhere in its band (or at the band's far edge, where it
+        fades in), across the width that's in view there."""
+        rnd = self.rnd
+        z0, z1 = (v * HI for v in self.BANDS[0 if near else 1])
+        z = rnd.uniform(z0, z1) if anywhere else z1
+        x = rnd.uniform(-1.15, 1.15) * z * W / (2 * F)
+        return [x, z, rnd.uniform(9, 26) * HI, rnd.random() < 0.62, rnd.uniform(0, math.tau), near]
+
+    def _glow_row(self, half, lvl):
+        """One row of the sun's path: a soft bell of light, half wide, at brightness lvl of 24. Made
+        by stretching one small bell and dimming it (quick, so no frame waits for it)."""
+        key = (half, lvl)
+        row = self.glow.get(key)
+        if row is None:
+            bell = self.glow.get('bell')
+            if bell is None:
+                bell = self.glow['bell'] = pygame.Surface((64, 1))
+                for x in range(64):
+                    g = math.exp(-((x + 0.5 - 32) / (32 * 0.45)) ** 2)
+                    bell.set_at((x, 0), (int(170 * g), int(128 * g), int(80 * g)))
+            row = pygame.transform.smoothscale(bell, (half * 2, 1))
+            m = int(255 * lvl / 24)
+            row.fill((m, m, m), special_flags=pygame.BLEND_RGB_MULT)
+            self.glow[key] = row
+        return row
+
+    def draw(self, surf, horizon, cam_h, travel, sway, sun_x, t):
+        hz = max(-1, int(horizon))
+        top = hz + 1
+        span = max(1.0, H - horizon)
+        cam = travel * HI / 3                         # how far the camera has come
+        ramp, fill, blit, add = self.ramp, surf.fill, surf.blit, pygame.BLEND_RGB_ADD
+        k1, k2, k3 = math.tau / (70 * HI), math.tau / (29 * HI), math.tau / (12 * HI)
+        for y in range(max(0, top), H):                # 1. the water, one smooth row at a time
+            dy = y - horizon
+            z = cam_h * F / dy
+            f = min(1.0, dy / span)
+            c = ramp[int(f * 256)]
+            zz = z + cam
+            per = cam_h * F / (z * z) * HI             # (how many pixels one unit of swell covers here)
+            w = 0.0
+            if per * 29 > 2.5:                         # long swells and shorter ripples, each only where
+                w = 0.55 * math.sin(zz * k1) * min(1.0, (per * 70 - 2.5) / 6) \
+                    + 0.3 * math.sin(zz * k2 + 1.3) * min(1.0, (per * 29 - 2.5) / 6)    # it's big enough
+                if per * 12 > 2.5:                     # to see (any smaller would just flicker)
+                    w += 0.15 * math.sin(zz * k3 + 4.0) * min(1.0, (per * 12 - 2.5) / 6)
+                m = 1 + 0.2 * w
+                c = (min(255, int(c[0] * m)), min(255, int(c[1] * m)), min(255, int(c[2] * m)))
+            fill(c, (0, y, W, 1))
+            # the sun's path: wider close by, brightest where a swell catches the light
+            half = int((3 + f * 52) * HI) // 2 * 2 + 2
+            lvl = int((0.62 * (1 - f) ** 1.3 + 0.1) * (0.6 + 0.7 * max(-0.2, w)) * 24 + 0.5)
+            if lvl > 0:
+                blit(self._glow_row(half, min(24, lvl)), (sun_x - half, y), special_flags=add)
+        # 2. streaks of light and shade, gliding in
+        step = getattr(self, '_cam', cam)
+        moved = max(0.0, cam - step)
+        self._cam = cam
+        zfar = cam_h * F / 1.5
+        for s in self.streaks:
+            s[1] -= moved
+            z0, z1 = (v * HI for v in self.BANDS[0 if s[5] else 1])
+            if s[1] < z0:
+                s[:] = self._new_streak(s[5], False)
+            x, z, ln, lit, ph, near_band = s
+            fade_in = min(1.0, (z1 - z) / ((z1 - z0) * 0.3))
+            if fade_in < 0.34:
+                continue
+            if z > zfar:
+                continue
+            k = F / z
+            px = W / 2 + (x - sway * HI / 6) * k
+            py = horizon + cam_h * k
+            wpx = ln * k
+            if wpx < 2 or py >= H + 4 or py < 0:
+                continue
+            i = min(len(self.widths) - 1, max(0, sum(1 for v in self.widths if v <= wpx) - 1))
+            wid = self.widths[i]
+            near = min(1.0, (py - horizon) / (span * 0.5))
+            if lit:
+                lvl = 2 if near > 0.55 else 1 if near > 0.2 else 0
+                if math.sin(t * 0.05 + ph) < -0.6:
+                    lvl = max(0, lvl - 1)
+                if fade_in < 0.67:
+                    lvl = 0
+                img = self.light[wid][lvl]
+                blit(img, (px - wid / 2, py - img.get_height() / 2), special_flags=pygame.BLEND_RGB_ADD)
+            else:
+                img = self.dark[wid][1 if near > 0.3 else 0]
+                surf.blit(img, (px - wid / 2, py - img.get_height() / 2), special_flags=pygame.BLEND_RGB_SUB)
+        # 3. the sun's glitter: sparkles twinkling along its path
+        for sp in self.sparks:
+            f = (sp[0] + cam / (900 * HI)) % 1.0       # (how far down the path: glides in like the rest)
+            dy = span * f * f
+            if dy < 1:
+                continue
+            y = horizon + dy
+            if y >= H:
+                continue
+            tw = math.sin(t * sp[3] * 2.2 + sp[2])
+            if tw < 0.55:
+                continue
+            x = sun_x + sp[1] * (5 + dy * 0.42)
+            img = self.dots[min(3, int(sp[4] * (0.4 + f)))]
+            surf.blit(img, (x - img.get_width() / 2, y - img.get_height() / 2), special_flags=pygame.BLEND_RGB_ADD)
+            if tw > 0.92:                              # (now and then one flashes brighter)
+                surf.blit(img, (x - img.get_width() / 2, y - img.get_height() / 2), special_flags=pygame.BLEND_RGB_ADD)
+        surf.blit(self.fog, (0, hz - 2))
+
+
 class Sparkles:
     def __init__(self):
         self.p = []
@@ -169,7 +330,7 @@ class Intro3D:
         self.t = 0
         self.sky = hifi.gradient(W, H, [(0, (30, 26, 90)), (0.4, (170, 80, 130)), (0.66, (255, 150, 96)),
                                         (0.84, (255, 206, 150)), (1, (255, 232, 190))])
-        self.ocean = Ocean(rnd, (24, 70, 130), (80, 150, 210), (255, 230, 180), (255, 196, 160))
+        self.sea = Sea(rnd)
         self.deep = hifi.gradient(W, H, [(0, (44, 150, 205)), (0.3, (16, 78, 150)), (1, (3, 12, 42))])
         self.rays = [(_row_profile(rnd.randint(40, 90) * HI, H, (130, 210, 255)), rnd.uniform(0, W),
                       rnd.uniform(0.4, 1.0)) for _ in range(6)]
@@ -185,18 +346,6 @@ class Intro3D:
         self.landed = set()
         self.card = None
         self.press = hifi.text("PRESS ANY KEY", 9 * HI, (150, 175, 220), shadow=False)
-        self.sun_cols = []                      # the sun's glittering path on the water (two flickers)
-        for v in range(2):
-            col = pygame.Surface((90 * HI, H))
-            for y in range(0, H, 2):
-                k = (1 - y / H) ** 0.7
-                w = (6 + y / H * 80) * HI
-                for _ in range(2 + y // (24 * HI)):
-                    x = 45 * HI + rnd.gauss(0, w / 3)
-                    ln = rnd.uniform(2, 10) * HI * (0.4 + y / H)
-                    pygame.draw.line(col, mix((0, 0, 0), (150, 110, 60), k * rnd.uniform(0.4, 1.0)),
-                                     (x - ln / 2, y), (x + ln / 2, y), max(1, HI // 2 + (y > H / 3)))
-            self.sun_cols.append(col)
 
     # ---- pieces --------------------------------------------------------
     def prepare(self):
@@ -317,8 +466,7 @@ class Intro3D:
         for img, x, y, sp in self.clouds:
             cx = (x - t * sp) % (W + img.get_width()) - img.get_width()
             hr.blit(img, (cx, horizon - 120 * HI + y))
-        self.ocean.draw(hr, horizon, cam_h, t * (2.2 + t * 0.012), math.sin(t * 0.01) * 30)
-        hr.blit(self.sun_cols[(t // 5) % 2], (sx - 45 * HI, horizon + 2), special_flags=pygame.BLEND_RGB_ADD)
+        self.sea.draw(hr, horizon, cam_h, t * (2.2 + t * 0.012), math.sin(t * 0.01) * 30, sx, t)
         for f_, r, c in ((0.5, 10, (60, 40, 20)), (0.9, 18, (30, 50, 60)), (1.3, 7, (60, 40, 50))):   # lens flare
             hifi.add_glow(hr, c, sx + (W / 2 - sx) * f_ * 2, sy + (H / 2 - sy) * f_ * 2, r * HI)
         if t < 150:                              # the credit fades in, rises a touch, fades out
@@ -334,12 +482,14 @@ class Intro3D:
             veil(hr, (0, 0, 0), 255 * (1 - t / 30))
         if t > self.SPLASH - 16:
             k = (t - (self.SPLASH - 16)) / 16
-            for i in range(30):                         # the splash
+            for i in range(30):                         # the splash: soft spray thrown up and out
                 a = i / 30 * math.pi + 0.1
                 r = k * (60 + (i * 37) % 90) * HI
                 x = W / 2 + math.cos(a + math.pi) * r * 1.6
                 y = H * 0.9 - math.sin(a) * r * 1.4 + k * k * 120 * HI
-                hifi.blit_ball(hr, (190, 230, 255), x, y, (5 + i % 4) * HI * (1 - k * 0.5))
+                rr = (5 + i % 4) * HI * (1 - k * 0.5)
+                hifi.add_glow(hr, (150, 190, 215), x, y, rr * 2.2)
+                hifi.add_glow(hr, (110, 110, 105), x, y, rr)
             veil(hr, (235, 248, 255), k * 255)
 
     def _below(self, hr, t):

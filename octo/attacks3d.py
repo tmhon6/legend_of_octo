@@ -12,6 +12,7 @@ Positions: a flying thing is drawn where its flat pixel art was (so hits still l
 like they do); its shadow falls KZ * FLY further down the screen, where its spot on the floor is.
 """
 import math
+import random
 
 import pygame
 
@@ -664,6 +665,134 @@ def _inkcloud(c, o):
         c.ball(style.dash_rgb(o.color, o.t + int(bx * 3)), px, py, rr, alpha=200 * fade)
 
 
+# ======================================================================
+# the mini-bosses' attacks: glowing orbs, warnings on the floor, strikes from above, shock rings
+# ======================================================================
+def _ring(r, width, col, alpha, fill=0):
+    """A see-through circle (outline, and a faint fill) for things drawn on the floor."""
+    key = ('ring', r, width, col, alpha, fill)
+    img = _cache.get(key)
+    if img is None:
+        img = _canvas(r * 2 + 4, r * 2 + 4)
+        if fill:
+            pygame.draw.circle(img, col + (fill,), (r + 2, r + 2), r)
+        pygame.draw.circle(img, col + (alpha,), (r + 2, r + 2), r, width)
+        img = _keep(key, img)
+    return img
+
+
+def _put_ring(c, x, y, r, width, col, alpha, fill=0):
+    img = _ring(max(2, int(r) // 2 * 2), max(1, int(width)), _q(col), int(alpha) // 24 * 24, int(fill) // 16 * 16)
+    c.hr.blit(img, (round(x - img.get_width() / 2), round(y - img.get_height() / 2)))
+
+
+def _boss_orb(c, o):
+    x, y = o.x + o.r, o.y + o.r
+    c.shadow(x, y, o.r * 1.8, a=50)
+    px, py = c.at(x, y)
+    pulse = 1.0 + 0.16 * math.sin(o.t * 0.45)
+    c.glow(o.col, px, py, o.r * 2.8 * pulse)              # a halo in the boss's colour,
+    c.glow(_light(o.col, 0.6), px, py, o.r * 1.4)          # bright round the orb,
+    c.ball(o.col, px, py, o.r * 0.85)                      # and the shining orb itself
+
+
+def _warn(c, o):
+    pulse = 0.5 + 0.5 * math.sin(o.t * 0.45)
+    if o.x1 is None:                                  # a ring where something will land
+        k = min(1.0, o.t / max(1.0, o.life - 6))
+        px, py = c.at(o.x, o.y)
+        _put_ring(c, px, py, o.r * HI, max(1, HI), o.col, 140 + 110 * pulse, 30 + 90 * k)
+        _put_ring(c, px, py, o.r * HI * (0.15 + 0.85 * k), 1, o.col, 120)
+        return
+    ax, ay = c.at(o.x, o.y)                           # a dashed line along the coming dash or shots
+    bx, by = c.at(o.x1, o.y1)
+    d = math.hypot(bx - ax, by - ay) or 1.0
+    ux, uy = (bx - ax) / d, (by - ay) / d
+    col = (255, int(60 + 120 * pulse), 50)
+    step, run = 9 * HI, 5 * HI
+    s0 = (o.t * 1.5 * HI) % step                      # (the dashes run towards where it's going)
+    w = max(1, HI)
+    while s0 < d:
+        e = min(d, s0 + run)
+        pygame.draw.line(c.hr, col, (ax + ux * s0, ay + uy * s0), (ax + ux * e, ay + uy * e), w)
+        s0 += step
+    pygame.draw.circle(c.hr, col, (round(bx), round(by)), 2 * HI, w)
+
+
+def _strike(c, o):
+    px, py = c.at(o.x, o.y)
+    if o.t < o.delay:
+        k = o.t / o.delay
+        _put_ring(c, px, py, o.r * HI, max(1, HI), (255, 70, 60), 150 + 100 * (o.t // 4 % 2), 30 + 110 * k)
+        if o.kind != 'bolt' and k > 0.55:             # it's coming down
+            h = (1 - k) / 0.45 * 120
+            qx, qy = c.at(o.x, o.y, h)
+            c.shadow(o.x, o.y, 4 + 8 * k, fly=0, a=70)
+            if o.kind == 'fire':
+                c.glow((255, 120, 40), qx, qy, 8)
+                c.fire(qx, qy, 4)
+            elif o.kind == 'ice':
+                c.glow((170, 220, 255), qx, qy, 7)
+                c.ball((215, 240, 255), qx, qy, 3.2)
+            else:
+                c.glow((255, 150, 70), qx, qy, 9)
+                c.ball((150, 120, 105), qx, qy, 4.2)
+        elif o.kind == 'bolt' and k > 0.78 and (o.t // 2) % 2:
+            qx, qy = c.at(o.x, o.y, 150)
+            pygame.draw.line(c.hr, (140, 160, 255), (qx, qy), (px, py), 1)
+        return
+    u = (o.t - o.delay) / o.FALL
+    if o.kind == 'bolt':
+        if u < 0.4:                                   # a jagged bolt from high above
+            rnd = random.Random(o.t // 2 + int(o.x * 7))
+            pts = []
+            for i in range(9):
+                h = 160 * (1 - i / 8)
+                qx, qy = c.at(o.x + (rnd.uniform(-5, 5) if 0 < i < 8 else 0), o.y, h)
+                pts.append((qx, qy))
+            pygame.draw.lines(c.hr, (120, 140, 255), False, pts, 3 * HI)
+            pygame.draw.lines(c.hr, (240, 245, 255), False, pts, max(1, HI))
+        c.glow((170, 190, 255), px, py, 10 * (1 - u) + 4)
+    elif o.kind == 'fire':
+        c.glow((255, 120, 40), px, py, o.r * (1.2 + u))
+        c.fire(px, py - 2 * HI, o.r * (0.45 + 0.5 * u), alpha=255 * (1 - u))
+    elif o.kind == 'ice':
+        c.glow((180, 230, 255), px, py, o.r * (1.1 + u * 0.6))
+        for i in range(6):
+            a = i / 6 * TAU + o.x
+            d = u * 14
+            c.cube((220, 245, 255), px + math.cos(a) * d * HI, py + math.sin(a) * d * HI * 0.6 - (1 - u) * 6 * HI, 1.5)
+    else:
+        c.glow((255, 160, 80), px, py, o.r * (1.0 + u * 0.8))
+        for i in range(6):
+            a = i / 6 * TAU + o.y
+            d = u * 16
+            c.cube((170, 140, 120), px + math.cos(a) * d * HI, py + math.sin(a) * d * HI * 0.6, 1.5)
+    _put_ring(c, px, py, (5 + u * o.r * 1.3) * HI, max(1, HI), (255, 235, 200), 230 * (1 - u))
+
+
+def _shock(c, o):
+    f = 1 - o.t / 22
+    px, py = c.at(o.x, o.y)
+    r = (4 + o.t * 3 * o.size) * HI
+    _put_ring(c, px, py, r, max(1, int(3 * f * HI)), o.col, 255 * f)
+    _put_ring(c, px, py, r * 0.82, 1, _light(o.col, 0.5), 160 * f)
+
+
+def _boss_aura(c, o):
+    b = o.boss
+    if b.spawn_t or b.dead or b.fade < 60:
+        return
+    px, py = c.at(b.rect.centerx, b.rect.bottom - 4)
+    col = b.FURY if b.stage >= 3 else b.accent
+    if b.dying_t and (b.dying_t // 3) % 2:
+        col = (255, 255, 255)
+    sw = b.swell
+    c.glow(col, px, py, 16 + 2.5 * math.sin(o.t * 0.09) + sw * 10)
+    if sw > 0.05:
+        c.glow(_light(col, 0.55), px, py, 6 + sw * 9)
+
+
 DRAW = {
     'Ink': _ink, 'Slime': _slime, 'IceShard': _shard, 'Spine': _spine, 'Wisp': _wisp, 'TrapBubble': _trap,
     'EnemyShot': _enemy_shot, 'Bomb': _bomb, 'Seeker': _seeker, 'Boomerang': _boomerang, 'Orb': _orb,
@@ -671,7 +800,9 @@ DRAW = {
     'Quake': _quake, 'Particle': _particle, 'Puff': _puff, 'Daze': _daze, 'ZapRing': _zap, 'Nova': _nova,
     'Whirlpool': _whirl, 'Beam': _beam, 'Bolt': _bolt, 'InkWhip': _whip, 'ImpactRing': _impact,
     'InkCloud': _inkcloud, 'JetInk': _jetink,
+    'BossOrb': _boss_orb, 'Warn': _warn, 'Strike': _strike, 'Shock': _shock, 'BossAura': _boss_aura,
 }
+FLOOR = ('Warn', 'Shock', 'BossAura')           # drawn on the floor, under everything standing there
 
 
 HALVES = ('ZapRing', 'Nova')
@@ -710,6 +841,10 @@ def ground(o):
         return o.x + 8, o.y + 14
     if n in ('Bomb', 'Mine', 'Boulder', 'Quake', 'Whirlpool'):
         return o.rect.centerx, o.rect.bottom
+    if n in ('Warn', 'Strike', 'Shock'):
+        return o.x, o.y
+    if n == 'BossAura':
+        return o.boss.rect.centerx, o.boss.rect.bottom
     if n == 'Daze':
         x, y = o.e.rect.midtop
         return x, y + KZ * 3
@@ -725,6 +860,10 @@ def sort_y(o, gy):
     """How far down the floor it sorts: beams and bolts by the far end, so they cross over
     whatever they reach."""
     n = type(o).__name__
+    if n in FLOOR:
+        return gy - 4000
+    if n == 'Strike':
+        return gy + 10
     if n == 'Beam':
         return max(o.y0, o.y0 + o.dy * o.length) + KZ * FLY
     if n == 'Bolt':

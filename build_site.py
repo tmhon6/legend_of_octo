@@ -38,6 +38,9 @@ def tags():
         note = git('tag', '-l', '--format=%(contents:subject)', t)
         if not note or note == git('log', '-1', '--format=%s', t):
             note = ''               # lightweight tag: no release note of its own
+        if note.startswith(t + ':'):        # ("v2.4.0: friendly characters..." -> "Friendly characters...")
+            note = note[len(t) + 1:].strip()
+            note = note[:1].upper() + note[1:]
         found.append({'tag': t, 'date': date, 'note': note})
     found.sort(key=lambda v: [int(x) for x in v['tag'][1:].split('.')], reverse=True)
     return found

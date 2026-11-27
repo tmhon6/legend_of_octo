@@ -50,7 +50,9 @@ PAUSE_KEYS = {pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_p, pygame.K_ESCAPE}
 WARP_KEYS = {pygame.K_t}
 FORM_KEYS = {pygame.K_1: 0, pygame.K_2: 1, pygame.K_3: 2, pygame.K_4: 3, pygame.K_5: 4,
              pygame.K_6: 5, pygame.K_7: 6, pygame.K_8: 7, pygame.K_9: 8, pygame.K_0: 9}
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# saves live next to the game (or where the version list in versions.py says: there, every version
+# it starts keeps its save in the main folder)
+_ROOT = os.environ.get('OCTO_HOME') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAVE_PATH = os.path.join(_ROOT, f'savegame_{SAVE_SLOT}.json')     # one save per version
 LEGACY_SAVE_PATH = os.path.join(_ROOT, 'savegame.json')            # saves from before versions existed
 WEB = sys.platform == 'emscripten'      # running in a browser (pygbag build)
@@ -439,7 +441,8 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         boss.in_lair = True
         boss.home = (boss.x, boss.y)
         self.enemies.append(boss)
-        self.bossfight = {'bid': lurker.bid, 'back': back, 't': 0}
+        self.bossfight = {'bid': lurker.bid, 'back': back, 't': 0,
+                          'theme': world.THEMES.get(lair_of, 'reef')}    # (the lair takes on its home's mood)
         self.flash_t = 20
         self.shake = 12
         sound.play('roar')
@@ -3130,6 +3133,8 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         for b in self.bubbles:
             b.draw(ps)
         theme = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
+        if self.bossfight:
+            theme = self.bossfight.get('theme')
         tfx = THEME_FX.get(theme)
         if tfx and tfx[2] and self.state == 'play':
             self.ambient(tfx[2])
@@ -3153,6 +3158,10 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             self.draw_lifted(ps, ox + sx, oy + sy)
         theme = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
         tfx = THEME_FX.get(theme)
+        if self.bossfight:                          # a boss's lair takes on its home's mood, strongly
+            theme = self.bossfight.get('theme')
+            tfx = THEME_FX.get(theme, ((255, 190, 120), 14, None))
+            tfx = (tfx[0], min(110, tfx[1] * 2 + 16), tfx[2])
         if tfx:
             col, alpha, parts = tfx
             ps.blit(self.tint_layer(col, alpha), (0, 0))
@@ -3212,10 +3221,20 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                     self.view_rect.colliderect(e.rect):
                 w = 120
                 x, y = SCREEN_W // 2 - w // 2, SCREEN_H - 14
+                frac = max(0.0, e.hp / e.max_hp)
+                if e.trail < frac:
+                    e.trail = frac
+                elif e.hurt_t < 8:                  # what was just lost drains away after a moment
+                    e.trail = max(frac, e.trail - 0.006)
+                shake = 1 if e.hurt_t > 12 and (e.hurt_t // 2) % 2 else 0
                 gfx.text(scr, e.name, SCREEN_W // 2, y - 9, (255, 220, 120), center=True)
-                pygame.draw.rect(scr, (0, 0, 0), (x - 1, y - 1, w + 2, 6))
-                pygame.draw.rect(scr, (90, 20, 30), (x, y, w, 4))
-                pygame.draw.rect(scr, (230, 60, 80), (x, y, int(w * max(0, e.hp) / e.max_hp), 4))
+                pygame.draw.rect(scr, (0, 0, 0), (x - 2, y - 2 + shake, w + 4, 8))
+                pygame.draw.rect(scr, (200, 160, 70), (x - 2, y - 2 + shake, w + 4, 8), 1)
+                pygame.draw.rect(scr, (70, 16, 26), (x, y + shake, w, 4))
+                pygame.draw.rect(scr, (255, 236, 200), (x, y + shake, int(w * e.trail), 4))
+                fury = e.stage >= 3 and (self.t // 8) % 2
+                pygame.draw.rect(scr, (255, 90, 70) if fury else (230, 60, 80), (x, y + shake, int(w * frac), 4))
+                pygame.draw.line(scr, (255, 150, 160), (x, y + shake), (x + max(0, int(w * frac) - 1), y + shake))
                 for k in (1, 2):                    # stage marks: where it breaks
                     sx = x + w * k // 3
                     pygame.draw.line(scr, (255, 240, 200), (sx, y - 1), (sx, y + 4))

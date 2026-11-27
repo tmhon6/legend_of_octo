@@ -9,7 +9,7 @@ import random
 import sys
 
 WEB = sys.platform == 'emscripten'
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ROOT = os.environ.get('OCTO_HOME') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BOARD_PATH = os.path.join(_ROOT, 'leaderboard.json')
 WEB_KEY = 'legend_of_octo_leaderboard'
 
