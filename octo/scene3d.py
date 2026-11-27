@@ -9,6 +9,7 @@ Scene3D is mixed into Game.
 """
 import math
 import random
+import time
 
 import pygame
 
@@ -46,6 +47,53 @@ def _turtle(img, facing):
     """A turtle (seen from above, head up in its sprite) turned to face the way it's going."""
     ang = TURTLE_TURN.get(facing, 0)
     return _figure(('turtle', id(img), ang), _turned(img, ang))
+
+
+class _Recorder(pygame.Surface):
+    """Stands in for the screen while an enemy draws itself: the sprites it stamps are noted, to be
+    drawn as 3D figures; anything else (its health bar, a boss's crown, a trap bubble's ring) lands
+    on this surface, to go over the 3D layer."""
+
+    def __init__(self, size):
+        super().__init__(size, pygame.SRCALPHA)
+        self.blits = []
+
+    def blit(self, src, dest, area=None, special_flags=0):
+        if area is None and not special_flags:
+            self.blits.append((src, (int(dest[0]), int(dest[1]))))
+            return pygame.Rect(dest[0], dest[1], *src.get_size())
+        return super().blit(src, dest, area, special_flags)
+
+
+_ENEMY_PAD = 48                  # where an enemy's (x, y) lands on the recorder
+_rec = []
+_shapes = {}                     # enemy sprite (by content) -> its cube model, or None if see-through
+_built = [0.0, -1]               # time spent making new enemy figures this frame, and which frame
+
+
+def _enemy_figure(src, frame):
+    """The 3D cube figure for an enemy's sprite, as long as it isn't see-through glow."""
+    key = (src.get_size(), hash(pygame.image.tobytes(src, 'RGBA')))
+    if key not in _shapes or ('enemy', key) not in voxel._renders:
+        if _built[1] != frame:
+            _built[:] = [0.0, frame]
+        if _built[0] > 0.005:                 # about 5 ms of new figures a frame: the rest wait (shown flat)
+            return None, False
+        t0 = time.perf_counter()
+        if key not in _shapes:
+            w, h = src.get_size()
+            cells = voxel._profile_cells(src, None, depth=max(2.5, min(6.0, min(w, h) * 0.26)))
+            if len(_shapes) > 500:
+                _shapes.clear()
+            _shapes[key] = voxel.VoxelModel(cells) if cells else None
+        m = _shapes[key]
+        out = voxel.cached(('enemy', key), m, HI, 0.25, 0.6) if m is not None else None
+        _built[0] += time.perf_counter() - t0
+        return out, True
+    m = _shapes[key]
+    if m is None:
+        return None, True
+    return voxel.cached(('enemy', key), m, HI, 0.25, 0.6), True
 
 
 def _plinth():
@@ -125,6 +173,8 @@ class Scene3D:
                 items.append((prop.base, 0, prop))
                 if prop.key == 'pyramid':
                     pyr_base = prop.base
+                elif prop.key == 'pearl_shop':                 # the wares on its counter, with prices
+                    items.append((prop.base + 0.01, 0.5, 'wares'))
         p = self.player
         if self.portal_anim is not None:
             a = self.portal_anim
@@ -148,6 +198,10 @@ class Scene3D:
                 items.append((pyr_base + 0.5 if up else n.rect.bottom, 4, n))
             elif up:                                          # anything else standing up on the pyramid
                 items.append((pyr_base + 0.5, 1, n))
+        for e in self.enemies:                                # enemies: 3D figures too
+            if view.colliderect(e.rect):
+                up = pyr_base is not None and self.ground_height(e) > 0
+                items.append((pyr_base + 1.25 if up else e.rect.bottom, 5, e))
         for o in self.shots + self.effects:                  # every shot, ring and spark, in 3D
             if attacks3d.handles(o):
                 gx, gy = attacks3d.ground(o)
@@ -169,10 +223,14 @@ class Scene3D:
                 self._draw_portal_octo(hr, shake)
             elif what == 'snail':
                 self._draw_snail(hr, shake)
+            elif what == 'wares':
+                self._draw_wares(hr, shake)
             elif kind == 3:
                 attacks3d.draw(self, hr, what, shake)
             elif kind == 4:
                 self._draw_folk(hr, what, shake)
+            elif kind == 5:
+                self._draw_enemy(hr, what, shake)
             else:
                 self._draw_raised(hr, what, shake)
         hr.set_clip(None)
@@ -234,6 +292,24 @@ class Scene3D:
             sy = cy + math.sin(ang) * 11 * HI * props3d.KZ
             pygame.draw.circle(hr, (255, 255, 255), (int(sx), int(sy)), max(1, HI // 2 + 1))
 
+    def _draw_wares(self, hr, shake):
+        """Hermie's counter: each ware, bobbing when Octo is at it, and its price underneath, drawn
+        over the 3D stall so the prices can always be read."""
+        for ware, r in self.wares:
+            if ware[0] in self.bought:
+                continue                                      # sold out: an empty spot on the counter
+            img = self.ware_icon(ware[0])
+            bob = math.sin(self.t * 0.08 + r.x) if ware is self.shop_focus else 0
+            big = pygame.transform.scale(img, (img.get_width() * HI, img.get_height() * HI))
+            x, y = self._hr(r.centerx - img.get_width() / 2, r.centery - img.get_height() / 2 + bob, shake)
+            hr.blit(big, (x, y))
+            price = self.shop_price(ware[2])
+            label = str(price)
+            tmp = pygame.Surface((gfx.text_width(label) + 2, 9), pygame.SRCALPHA)
+            gfx.text(tmp, label, 0, 0, (255, 220, 120) if self.player.pearls >= price else (230, 130, 130))
+            x, y = self._hr(r.centerx - tmp.get_width() / 2, r.bottom + 2, shake)
+            hr.blit(pygame.transform.scale(tmp, (tmp.get_width() * HI, 9 * HI)), (x, y))
+
     @staticmethod
     def is_folk3d(n):
         return type(n).__name__ in FOLK
@@ -280,6 +356,41 @@ class Scene3D:
             n._icon(tmp, 8, 9)
             ix, iy = self._hr(icon[0] - props3d.KX * h, icon[1] - props3d.KZ * h, shake)
             hr.blit(pygame.transform.scale(tmp, (16 * HI, 18 * HI)), (ix - 8 * HI, iy - 9 * HI))
+
+    def _draw_enemy(self, hr, e, shake):
+        """An enemy as 3D figures, whatever it is: it draws itself onto a recorder; each sprite it
+        stamps becomes a cube figure in the same spot (see-through glows stay flat), and the rest
+        of what it drew (health bar, crown, rings) goes over the top."""
+        if not _rec:
+            _rec.append(_Recorder((160, 140)))
+        rec = _rec[0]
+        rec.fill((0, 0, 0, 0))
+        rec.blits.clear()
+        ex, ey = round(e.x), round(e.y)
+        e.draw(rec, _ENEMY_PAD - ex, _ENEMY_PAD - ey)
+        h = self.ground_height(e)
+        lx, ly = -props3d.KX * h, -props3d.KZ * h
+        for src, (dx, dy) in rec.blits:
+            wx, wy = dx - _ENEMY_PAD + ex + lx, dy - _ENEMY_PAD + ey + ly     # the sprite's top-left, in the world
+            fig, ok = _enemy_figure(src, self.t)
+            a = src.get_alpha()
+            if fig is not None:
+                img, (ax, ay) = fig
+                if a is not None and a < 255:                 # fading (ghosts, a boss coming in)
+                    img = img.copy()
+                    img.set_alpha(a)
+                x, y = self._hr(wx + src.get_width() / 2, wy + src.get_height(), shake)
+                hr.blit(img, (x - ax, y - ay))
+            else:                                             # glow, or not built yet: drawn flat
+                big = pygame.transform.scale(src, (src.get_width() * HI, src.get_height() * HI))
+                if a is not None and a < 255:
+                    big.set_alpha(a)
+                hr.blit(big, self._hr(wx, wy, shake))
+        drawn = rec.get_bounding_rect()
+        if drawn.w and drawn.h:                               # health bar, crown, rings
+            part = rec.subsurface(drawn)
+            big = pygame.transform.scale(part, (drawn.w * HI, drawn.h * HI))
+            hr.blit(big, self._hr(drawn.x - _ENEMY_PAD + ex + lx, drawn.y - _ENEMY_PAD + ey + ly, shake))
 
     def _draw_statue(self, hr, n, h, shake):
         """The Living Legend's stone plinth, and once it's earned a golden 3D Octo standing on it."""

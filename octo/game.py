@@ -186,7 +186,7 @@ _NEW_ATTACK_TEXT = {
 for _f, _t in _NEW_ATTACK_TEXT.items():
     FORM_INFO[_f] = [f"YOU LEARNED {forms.NAMES[_f]} OCTO!", _t,
                      f"STRENGTH - {forms.STRENGTHS[_f][0]}: {forms.STRENGTHS[_f][1]}"]
-# every fused form (the Fusion Machine can make one from any two base forms)
+# every fused form (one for each attack shape: the Fusion Machine makes one from any two base forms)
 for _f, _d in forms.FUSIONS.items():
     _a, _b = _d['parents']
     _ca, _cb = FORM_COLORS.get(_a, (200, 200, 200)), FORM_COLORS.get(_b, (200, 200, 200))
@@ -661,9 +661,14 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         for k, v in data['player'].items():
             setattr(p, k, v)
         p.items = set(data['items'])
-        p.forms = list(data['forms'])
+        p.forms = []
+        for f in data['forms']:                 # (older saves: copies of one attack fold into the one kept)
+            f = forms.merge_form(f)
+            if f not in p.forms:
+                p.forms.append(f)
         for f in p.forms:
             self.form_tables(f)
+        p.mood = forms.merge_form(p.mood)
         if p.mood not in p.forms:
             p.mood = 'blue'
         self.bought = set(data['bought'])
@@ -744,8 +749,9 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         return spots
 
     # ---- Hermie's catalogue -------------------------------------------------
-    def open_catalogue(self):
-        self.cat_i = 0
+    def open_catalogue(self, ware=None):
+        """Hermie's catalogue: everything he sells, with its price. The world waits while you shop."""
+        self.cat_i = CATALOGUE.index(ware) if ware in CATALOGUE else 0
         self.state = 'catalogue'
         sound.play('pause')
 
@@ -1089,8 +1095,10 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         elif self.mega_a is None or cur == self.mega_a:
             lines, colr = ["PICK TWO FUSED FORMS WITH Z. LEFT/RIGHT JUMPS A PAGE."], (200, 210, 240)
         else:
-            m = forms.register_mega(forms.mega_id(self.mega_a, cur))
-            lines = [f"> MEGA {m['name']}: {m['attack']}"] + gfx.wrap(m['desc'], 38)
+            mid = forms.mega_of(self.mega_a, cur)
+            m = forms.register_mega(mid)
+            owned = " (MADE)" if mid in p.forms else ""
+            lines = [f"> MEGA {m['name']}{owned}: {m['attack']}"] + gfx.wrap(m['desc'], 38)
             colr = (200, 210, 240)
         for j, line in enumerate(lines[:3]):
             gfx.text(scr, line, box.x + 6, y + j * 10, colr)
@@ -2001,10 +2009,12 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
 
     def present(self):
         """Scale the pixel-art picture up into the real window, then lay the hi-res 3D on top."""
+        direct = self.__dict__.pop('drawn_direct', False)        # already drawn into the window (the title)
         if getattr(self, 'show_fps', False):
-            gfx.text(self.display, f"{self.clock.get_fps():.0f} FPS", 2, 2, (120, 255, 120))
+            gfx.text(self.ui_layer() if direct else self.display, f"{self.clock.get_fps():.0f} FPS", 2, 2, (120, 255, 120))
         win = self.window
-        pygame.transform.scale(self.display, win.get_size(), win)
+        if not direct:
+            pygame.transform.scale(self.display, win.get_size(), win)
         gx = self.touch.gx if self.touch.active else 0
         if self.hrw_on:
             win.blit(self.hr_world, (gx * HI, 0))
@@ -2137,6 +2147,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
     def _warm_jobs(self):
         import hifi
         import props3d
+        yield from self.title_scene.warm()          # the title screen's full-resolution layers
         while not hifi.warm(16):
             yield
         while not fx.warm_caustics():
@@ -2217,7 +2228,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                 if self.try_talk():
                     pass
                 elif self.shop_focus:
-                    self.buy(self.shop_focus)
+                    self.open_catalogue(self.shop_focus)
                 else:
                     self.player.action(self)
             elif k in SAVE_KEYS:
@@ -2406,6 +2417,10 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
     def update(self):
         self.t += 1
         self.touch.check_orientation()
+        cursor = self.state == 'title' and not self.touch.active    # the pointer only shows on the title
+        if cursor != getattr(self, '_cursor', None):
+            self._cursor = cursor
+            pygame.mouse.set_visible(cursor)
         if self.shake:
             self.shake -= 1
         if self.banner_t:
@@ -2974,16 +2989,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         for it in self.pickups:
             if vis.colliderect(it.rect):
                 it.draw(ps, ox, oy)
-        if vis.colliderect(self.wares[0][1].union(self.wares[-1][1])):
-            for ware, r in self.wares:
-                if ware[0] in self.bought:
-                    continue            # sold out: an empty spot on the counter
-                img = self.ware_icon(ware[0])
-                bob = round(math.sin(self.t * 0.08 + r.x) * 1) if ware is self.shop_focus else 0
-                ps.blit(img, (r.centerx - img.get_width() // 2 + ox, r.centery - img.get_height() // 2 + oy + bob))
-                price = self.shop_price(ware[2])
-                gfx.text(ps, str(price), r.centerx + ox, r.bottom + 3 + oy,
-                         (255, 220, 120) if self.player.pearls >= price else (200, 120, 120), center=True)
+        # (the counter's wares and their prices are drawn over the 3D shop: scene3d._draw_wares)
         self.draw_portals(ps, ox, oy)
         if self.trial and world.TRIALS[self.trial['name']].get('eyes'):
             t = world.TRIALS[self.trial['name']]
@@ -3012,9 +3018,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         for n in self.npcs:                                   # (friendly folk are 3D figures: scene3d)
             if vis.colliderect(n.rect) and n not in raised and not self.is_folk3d(n):
                 n.draw(ps, ox, oy)
-        for e in sorted(self.enemies, key=lambda e: e.y):
-            if vis.colliderect(e.rect):
-                e.draw(ps, ox, oy)
+        # (enemies are 3D figures: scene3d._draw_enemy)
         # Octo (with his slap, shields and fog) and every shot and spark are drawn in 3D
         # (scene3d, attacks3d); whatever is left that's up on the pyramid goes in draw_lifted
         up = self.pyramid_in_view()
@@ -3172,7 +3176,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         gfx.text(scr, f"{name} - {price} PEARLS", box.x + 8, box.y + 7, (255, 220, 120))
         for i, l in enumerate(lines):
             gfx.text(scr, l, box.x + 8, box.y + 17 + i * 10)
-        gfx.text(scr, "Z:BUY", box.right - 36, box.y + 7, (160, 230, 160))
+        gfx.text(scr, "Z:SHOP", box.right - 42, box.y + 7, (160, 230, 160))
 
     def ambient(self, kind):
         if kind == 'snow' and random.random() < 0.5:
@@ -3672,8 +3676,14 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         elif phase < 15 and self.t > 15:
             w = abs(math.sin(phase / 15 * math.pi / 2))
         self.title_scene.touch = self.touch.active
-        self.title_scene.draw(scr, self.t, menu, self.title_sel, mood, w, hires=True)
-        self.title_scene.draw_hifi(self.hires_layer(), self.t, mood, w)
+        # the title is drawn at full resolution straight into the window (present() leaves it be)
+        size = (SCREEN_W * HI, SCREEN_H * HI)
+        if self.window.get_size() != size:
+            self.window.fill((0, 0, 0))         # (touch panels: nothing beside the title)
+        gx = self.touch.gx if self.touch.active else 0
+        self.title_scene.draw_full(self.window.subsurface((gx * HI, 0) + size), self.t, menu, self.title_sel,
+                                   mood, w)
+        self.drawn_direct = True
 
     def draw_title_old(self, scr):
         scr.blit(self.title_bg, (0, 0))

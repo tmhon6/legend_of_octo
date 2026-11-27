@@ -70,6 +70,9 @@ In the browser, saves go to the browser's local storage instead of `savegame.jso
 | F11                | Fullscreen                                          |
 | F3                 | Show the frame rate                                 |
 
+The mouse pointer only shows on the title screen, where you can click the menu; while you play
+it's hidden.
+
 ### Player two: Pebble the snail
 
 Octo's pet snail **Pebble** can join on the same screen. Pick **2 PLAYERS** on the title screen,
@@ -118,11 +121,15 @@ thief chases, defending a giant clam, and sentry races. Some are in the dark or 
 
 ### The Fusion Machine
 
-Next to Hermie's Pearl Shop. For 25 pearls it fuses **any two** base forms. All 91 pairs make their
-own fused form with a brand-new attack (one of 13 shapes - hail, whip, roll, quake, lantern,
-whirlpool, trap, chain bolt, nova, boomerang, seeker stars, mines, boulder - powered by one of
-7 elements: frost, ember, dazzle, crush, leech, gold, volt) and boosted versions of both parents'
-strengths. Press **F** (or the FORMS button) to pick any form from a list.
+Next to Hermie's Pearl Shop. For 25 pearls it fuses **any two** base forms. There are **16 fused
+forms**, one for each attack shape - hail, whip, roll, quake, lantern, whirlpool, trap, chain bolt,
+nova, boomerang, seeker stars, mines, boulder, beam, orbs and rain - so no two of them share an
+attack, and between them they use all 12 elements. Every pair of forms leads to one of them, with
+boosted versions of its parents' strengths. If a pair leads to one you've already made, the machine
+tells you before you pay. Press **F** (or the FORMS button) to pick any form from a list.
+
+(Saves from before v2.5.0, when every pair made its own fused form, still load: copies of the same
+attack fold into the one that's kept.)
 
 ### Mini-bosses
 
@@ -157,6 +164,9 @@ resolution (twice in the browser), all in code:
   are glowing bands round Octo (the far side passes behind him), beams are lit tubes, lightning
   and the whip arc through the water above their reflections, whirlpools are spinning funnels,
   bombs burst into fireballs, and the bubble shield and fog wrap round him in 3D.
+* **Enemies are 3D too.** Every creature, guardian, mini-boss and boss is its own pixel art turned
+  into lit cubes, so crabs, jellies, eels, urchins and the rest stand up off the sea floor, flash
+  when they're hit, and pass in front of and behind Octo, Pebble and the buildings.
 * **The ink jet dash is 3D:** Octo leans into the jet, leaves see-through copies of himself in
   your jet colour, squirts lit ink blobs behind him and streaks through the water. The jet's
   recharge bar at the top of the screen is a lit 3D tube.
@@ -173,15 +183,19 @@ resolution (twice in the browser), all in code:
   logo flies together letter by letter. Any key (or a tap) skips it. Then you swim on through the
   logo into the title screen, with bubbles streaming past, and starting a game dives down from the
   title onto the sea floor, which swings up flat from a 3D tilt.
-* **The title screen**, **boss entrances** (the versus screen faces 3D Octo, in your form and hat,
+* **The title screen** is drawn at full resolution: kelp sways smoothly, fish, sunbeams and marine
+  snow drift without stepping from pixel to pixel, and the menu sits in a box that fits it.
+* **The title screen's 3D logo**, **boss entrances** (the versus screen faces 3D Octo, in your form and hat,
   off against a 3D figure of the boss, with **FIGHT!** and **VICTORY!** in 3D letters),
   **town fly-overs**, **milestone medals**, the **leaderboard podium** and the **3D Museum**.
 
 ### Hermie's shop
 
-Walk onto an item on the counter to buy it, or talk to Hermie for his whole catalogue: sea
-potions, a big bomb bag, the trial compass, a lucky charm, deep goggles, jet ink, coral armor,
-a pearl magnet and even spirit pearls.
+Every item on the counter has its price under it. Walk up to one to see what it does, and press
+**Z** to shop: Hermie's catalogue opens at that item (the sea waits while you shop), with every
+price, and you buy with Z. Or talk to Hermie for the same catalogue: sea potions, a big bomb bag,
+the trial compass, a lucky charm, deep goggles, jet ink, coral armor, a pearl magnet and even
+spirit pearls.
 
 Jellies ignore ink, and slapping an urchin hurts *you*.
 
@@ -237,21 +251,20 @@ Every new region has its own creature (16 new kinds), its own guardian (who drop
 and its own music. There are **74 trial portals** in all. Press **M**, then left/right, to flip
 between the maps of the worlds you've visited.
 
-### Six new forms and 190 fusions
+### Six new forms
 
 **Sandy** (sand quake; dodges one hit in four), **Leafy** (poison vine lash; heals and has
 thorns), **Crysty** (piercing prism beam; critical hits), **Cloudy** (rain cloud; *floats over
 pits, ponds and sky gaps*), **Shroomy** (dizzying spores; finds more treasure) and **Magmy**
-(magma orbs; *walks on lava*). With 20 base forms, the Fusion Machine can make **190** fusions,
-each with a different attack. There are 16 attack shapes (new: beam, orbs, rain) and 12 elements
-(new: venom, sludge, gust, dizzy, crack). The original 91 fusions are unchanged.
+(magma orbs; *walks on lava*). They bring three new attack shapes to the Fusion Machine (beam,
+orbs, rain) and five new elements (venom, sludge, gust, dizzy, crack).
 
 ### The secret Mega Machine
 
-Make **all 190 fusions** and an old machine wakes deep in the **Ancient Ruins** of the Underdeep.
-It fuses two *fused* forms into a **mega form**, for 100 pearls. Each mega form gets one of six huge
-attacks (Supernova, Tsunami, Meteor Storm, Black Hole, Prism Storm, Titan Slam) carrying *both*
-parents' elements, plus the strengths of both, pushed further.
+Make **all 16 fused forms** and an old machine wakes deep in the **Ancient Ruins** of the Underdeep.
+It fuses two *fused* forms into a **mega form**, for 100 pearls. There are six mega forms, one for
+each huge attack (Supernova, Tsunami, Meteor Storm, Black Hole, Prism Storm, Titan Slam), each
+carrying two elements, plus the strengths of both parents, pushed further.
 
 ### Fused creatures
 

@@ -1,7 +1,8 @@
 """The title screen: a layered undersea scene drawn in code.
 
-Static layers (water gradient, distant rocks, sea floor, vignette, logo) are built once;
-light rays, kelp, fish, drifting specks and Octo are animated every frame.
+Static layers (water gradient, distant rocks, sea floor, vignette) are built once, at full resolution;
+light rays, kelp, the anemone, fish, drifting specks and Octo are animated every frame, all drawn at
+full resolution so everything moves smoothly. The logo and Octo are 3D (draw_hifi).
 """
 import math
 import random
@@ -9,7 +10,7 @@ import random
 import pygame
 
 import gfx
-from settings import AUTHOR, SCREEN_H, SCREEN_W, VERSION
+from settings import AUTHOR, HI, SCREEN_H, SCREEN_W, VERSION
 
 W, H = SCREEN_W, SCREEN_H
 FLOOR_Y = 192              # where the sand starts
@@ -37,11 +38,9 @@ class TitleScene:
         rnd = random.Random(7)
         self.rnd = rnd
         self.bg = self._backdrop(rnd)
-        self.floor = self._sea_floor(rnd)
         self.rays = [self._ray(rnd.randint(10, 26), rnd.uniform(0.18, 0.32)) for _ in range(5)]
         self.ray_x = [rnd.randint(-20, W) for _ in self.rays]
         self.vignette = self._vignette()
-        self.logo = self._logo()
         self.snow = [[rnd.uniform(0, W), rnd.uniform(0, FLOOR_Y), rnd.uniform(0.05, 0.25), rnd.random()]
                      for _ in range(55)]
         self.fish = self._schools(rnd)
@@ -50,6 +49,7 @@ class TitleScene:
                       (236, 112, False), (249, 90, False), (60, 50, True), (196, 58, True))]
         self.shark = self._shark_silhouette()
         self._octo_cache = {}
+        self._hi_cache = {}
 
     # ---- static layers -----------------------------------------------------
     def _backdrop(self, rnd):
@@ -72,62 +72,209 @@ class TitleScene:
         pygame.draw.rect(s, (20, 56, 104), (162, 122, 38, 2))
         return s
 
-    def _sea_floor(self, rnd):
-        s = pygame.Surface((W, H - FLOOR_Y + 12), pygame.SRCALPHA)
-        h = s.get_height()
-        sand = _gradient([(0, (196, 172, 120)), (0.3, (150, 128, 88)), (1, (78, 62, 46))], h=h)
-        # wavy dune edge
-        mask = pygame.Surface((W, h), pygame.SRCALPHA)
-        pts = [(0, h)]
-        for x in range(0, W + 4, 4):
-            pts.append((x, 10 + 4 * math.sin(x * 0.05) + 3 * math.sin(x * 0.13 + 1)))
-        pts.append((W, h))
-        pygame.draw.polygon(mask, (255, 255, 255, 255), pts)
-        sand = sand.convert_alpha() if pygame.display.get_surface() else sand.copy()
-        sand.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
-        s.blit(sand, (0, 0))
-        # grain and ripples
-        for _ in range(260):
-            x, y = rnd.randrange(W), rnd.randrange(14, h)
-            c = s.get_at((x, y))
-            if c.a:
-                d = rnd.choice((-18, 14))
-                s.set_at((x, y), (max(0, min(255, c.r + d)), max(0, min(255, c.g + d)), max(0, min(255, c.b + d))))
+    def _build_floor(self):
+        """The sand with its ripples, rocks, corals, shells and a starfish, drawn at twice full
+        resolution and smoothed down, so every edge is soft. A generator: it pauses between parts
+        (Game.warm_up builds it during the opening). Coordinates are title pixels from the top of
+        the sand."""
+        rnd = random.Random(5)
+        S = HI * 2
+        top = FLOOR_Y - 12
+        h = H - top
+        s = pygame.Surface((W * S, h * S), pygame.SRCALPHA)
+
+        def R(x, y, w, hh):
+            return pygame.Rect(round(x * S), round(y * S), max(1, round(w * S)), max(1, round(hh * S)))
+
+        def soft(rect, rgba):                     # a see-through ellipse, blended onto the sand
+            tmp = pygame.Surface(rect.size, pygame.SRCALPHA)
+            pygame.draw.ellipse(tmp, rgba, tmp.get_rect())
+            s.blit(tmp, rect.topleft)
+
+        # the sand, under a wavy dune edge with a sunlit crest
+        edge = [(x, 10 + 4 * math.sin(x * 0.05) + 3 * math.sin(x * 0.13 + 1)) for x in range(0, W + 3, 2)]
+        pygame.draw.polygon(s, (255, 255, 255, 255), [(0, h * S)] + [(x * S, y * S) for x, y in edge] + [(W * S, h * S)])
+        s.blit(_gradient([(0, (206, 184, 130)), (0.3, (156, 134, 94)), (1, (72, 56, 42))], h=h * S, w=W * S),
+               (0, 0), special_flags=pygame.BLEND_RGB_MULT)
+        pygame.draw.lines(s, (236, 220, 172, 255), False, [(x * S, (y + 0.55) * S) for x, y in edge], max(1, S // 2))
+        yield
+
+        def sand(x, y):
+            c = s.get_at((min(W * S - 1, int(x * S)), min(h * S - 1, int(y * S))))
+            return c if c.a == 255 else None
+
+        def shift(c, d):
+            return (max(0, min(255, c.r + d)), max(0, min(255, c.g + int(d * 0.9))), max(0, min(255, c.b + int(d * 0.7))), 255)
+
+        # ripples: a lit crest with its shadow just below
         for i in range(7):
-            y = 20 + i * 5
-            for x in range(rnd.randint(0, 20), W, rnd.randint(26, 40)):
-                pygame.draw.arc(s, (120, 100, 70), (x, y, 14, 4), 0.3, 2.8)
-        # rocks
+            y = 18.5 + i * 4.6
+            x = rnd.uniform(-4, 16)
+            while x < W:
+                w = rnd.uniform(11, 16)
+                c = sand(x + w / 2, y + 1)
+                if c:
+                    pygame.draw.arc(s, shift(c, -26), R(x, y + 0.7, w, 4), 0.4, 2.75, max(1, S // 2))
+                    pygame.draw.arc(s, shift(c, 22), R(x, y, w, 4), 0.55, 2.6, max(1, S // 3))
+                x += rnd.uniform(24, 38)
+        yield
+        # grains of sand
+        for k in range(1500):
+            x, y = rnd.uniform(0, W), rnd.uniform(6, h)
+            c = sand(x, y)
+            if c:
+                pygame.draw.circle(s, shift(c, rnd.choice((-24, -14, 12, 20))), (x * S, y * S), S * rnd.uniform(0.22, 0.42))
+            if k % 500 == 499:
+                yield
+        # rocks, each with a shadow, a lit top, a glint and a few tufts of weed
         for x, y, rw, rh in ((40, 18, 26, 14), (196, 14, 34, 18), (120, 30, 14, 7), (226, 30, 16, 8)):
-            pygame.draw.ellipse(s, (40, 52, 78), (x, y, rw, rh))
-            pygame.draw.ellipse(s, (66, 82, 112), (x + 2, y + 1, rw - 8, rh // 2))
-            pygame.draw.ellipse(s, (26, 32, 50), (x + 2, y + rh - 3, rw - 4, 4))
-        # coral
-        def branch(x, y, a, length, col, depth):
-            if depth == 0 or length < 2:
+            soft(R(x - 2, y + rh - 4.5, rw + 6, 7), (24, 16, 10, 95))
+            pygame.draw.ellipse(s, (34, 44, 68), R(x, y, rw, rh))
+            pygame.draw.ellipse(s, (56, 70, 100), R(x + 1, y + 0.5, rw - 3.5, rh * 0.74))
+            pygame.draw.ellipse(s, (80, 96, 128), R(x + 2.5, y + 1.1, rw * 0.5, rh * 0.4))
+            pygame.draw.ellipse(s, (124, 140, 170), R(x + 4, y + 1.8, rw * 0.2, rh * 0.15))
+            for _ in range(rw // 7):
+                gx = x + rnd.uniform(3, rw - 3)
+                for d in (-0.7, 0, 0.7):
+                    pygame.draw.line(s, (70, 130, 76, 255), (gx * S, (y + 1.6) * S), ((gx + d * 1.6) * S, (y - 0.8 + abs(d)) * S), max(1, S // 3))
+            yield
+        self._coral_branchy(s, S, 33, 24, (240, 98, 116), rnd)
+        yield
+        self._coral_fan(s, S, 72, 22, (250, 140, 64), rnd)
+        yield
+        self._coral_brain(s, S, 211, 32, (218, 176, 98), rnd)
+        self._coral_branchy(s, S, 228, 24, (196, 104, 228), rnd, 0.8)
+        yield
+        # the anemone's stalk (its waving arms are drawn every frame)
+        ax, ay = 182, 26
+        soft(R(ax - 5.5, ay - 0.5, 11, 3.5), (24, 16, 10, 80))
+        pygame.draw.ellipse(s, (150, 52, 92), R(ax - 3.2, ay - 3.5, 6.4, 5))
+        pygame.draw.ellipse(s, (190, 82, 124), R(ax - 2.2, ay - 3.2, 3, 3.6))
+        # a starfish and some shells
+        self._starfish(s, S, 104, 37)
+        for x, y, col in ((58, 35, (244, 228, 204)), (150, 38, (236, 196, 200)), (192, 41, (240, 222, 190))):
+            soft(R(x - 0.5, y + 2.2, 7, 2.2), (24, 16, 10, 70))
+            base = (x + 3, y + 3.4)
+            fan = [(base[0] * S, base[1] * S)]
+            for k in range(9):
+                a = math.pi + k / 8 * math.pi
+                fan.append(((base[0] + math.cos(a) * 3.4) * S, (base[1] + math.sin(a) * 3.0) * S))
+            pygame.draw.polygon(s, col, fan)
+            for k in range(1, 8):                 # the ridges
+                a = math.pi + k / 8 * math.pi
+                pygame.draw.line(s, _lerp(col, (150, 110, 90), 0.5), (base[0] * S, base[1] * S),
+                                 ((base[0] + math.cos(a) * 3.2) * S, (base[1] + math.sin(a) * 2.8) * S), max(1, S // 4))
+            pygame.draw.rect(s, _lerp(col, (150, 110, 90), 0.35), R(base[0] - 1.2, base[1] - 0.4, 2.4, 1.2))
+        yield
+        self._hi_cache['floor'] = pygame.transform.smoothscale(s, (W * HI, h * HI))
+
+    @staticmethod
+    def _coral_branchy(s, S, x, y, col, rnd, size=1.0):
+        """Branching coral: rounded limbs, shaded on the side away from the light, with pale polyps
+        at the tips."""
+        segs, tips = [], []
+
+        def grow(x0, y0, a, ln, w, depth):
+            x1, y1 = x0 + math.cos(a) * ln, y0 + math.sin(a) * ln
+            segs.append((x0, y0, x1, y1, w))
+            if depth <= 1:
+                tips.append((x1, y1, w))
                 return
-            x2, y2 = x + math.cos(a) * length, y + math.sin(a) * length
-            pygame.draw.line(s, col, (x, y), (x2, y2), max(1, depth - 1))
-            branch(x2, y2, a - 0.45, length * 0.72, col, depth - 1)
-            branch(x2, y2, a + 0.4, length * 0.7, col, depth - 1)
-        for x, col in ((26, (232, 96, 110)), (78, (250, 150, 70)), (170, (220, 90, 180)), (212, (240, 110, 90))):
-            branch(x, 22, -math.pi / 2, 9, col, 4)
-            hi = _lerp(col, (255, 255, 255), 0.4)
-            branch(x + 1, 22, -math.pi / 2 - 0.1, 7, hi, 2)
-        # sea anemone, starfish and shells
-        for i in range(9):
-            a = -math.pi / 2 + (i - 4) * 0.22
-            pygame.draw.line(s, (255, 170, 200), (140, 26), (140 + math.cos(a) * 9, 26 + math.sin(a) * 9), 2)
-        pygame.draw.ellipse(s, (180, 70, 110), (135, 24, 11, 5))
-        cx, cy = 100, 36
-        for i in range(5):
-            a = i / 5 * math.tau - math.pi / 2
-            pygame.draw.line(s, (240, 120, 60), (cx, cy), (cx + math.cos(a) * 5, cy + math.sin(a) * 5), 2)
-        pygame.draw.circle(s, (250, 170, 90), (cx, cy), 2)
-        for x, y in ((60, 34), (186, 38), (152, 36)):
-            pygame.draw.ellipse(s, (240, 225, 200), (x, y, 6, 4))
-            pygame.draw.line(s, (200, 170, 140), (x + 3, y), (x + 3, y + 3))
-        return s
+            spread = ((-0.5, 0.74), (0.4, 0.7)) if depth % 2 else ((-0.36, 0.72), (0.52, 0.74))
+            for da, k in spread:
+                grow(x1, y1, a + da + rnd.uniform(-0.12, 0.12), ln * k, w * 0.76, depth - 1)
+
+        grow(x, y, -math.pi / 2 + rnd.uniform(-0.12, 0.12), 6.5 * size, 2.5 * size, 4)
+        dark, light = _lerp(col, (40, 12, 40), 0.5), _lerp(col, (255, 244, 236), 0.45)
+
+        def stroke(c, dx, dy, k):
+            for x0, y0, x1, y1, w in segs:
+                r = max(1.0, w * k * S / 2)
+                a, b = ((x0 + dx) * S, (y0 + dy) * S), ((x1 + dx) * S, (y1 + dy) * S)
+                pygame.draw.line(s, c, a, b, max(1, int(r * 2)))
+                pygame.draw.circle(s, c, a, r)
+                pygame.draw.circle(s, c, b, r)
+
+        stroke(dark, 0.45, 0.25, 1.3)
+        stroke(col, 0, 0, 1.0)
+        stroke(light, -0.3 * size, -0.25, 0.4)
+        for x1, y1, w in tips:
+            pygame.draw.circle(s, light, (x1 * S, y1 * S), max(1, w * 0.6 * S))
+            pygame.draw.circle(s, (255, 252, 246), ((x1 - 0.2) * S, (y1 - 0.25) * S), max(1, w * 0.25 * S))
+
+    @staticmethod
+    def _coral_fan(s, S, x, y, col, rnd):
+        """A sea fan: a lacy fan of fine branches joined into a net."""
+        lines, ends = [], {}
+
+        def grow(x0, y0, a, ln, depth):
+            x1, y1 = x0 + math.cos(a) * ln, y0 + math.sin(a) * ln
+            lines.append((x0, y0, x1, y1, depth))
+            ends.setdefault(depth, []).append((a, x1, y1))
+            if depth:
+                grow(x1, y1, a - 0.26 + rnd.uniform(-0.06, 0.06), ln * 0.82, depth - 1)
+                grow(x1, y1, a + 0.26 + rnd.uniform(-0.06, 0.06), ln * 0.82, depth - 1)
+
+        pygame.draw.ellipse(s, (60, 40, 30), (int((x - 2) * S), int((y - 0.6) * S), 4 * S, int(1.6 * S)))
+        for a in (-2.25, -1.85, -1.45, -1.05):
+            grow(x, y, a, 4.2, 4)
+        dark, light = _lerp(col, (60, 16, 20), 0.45), _lerp(col, (255, 236, 210), 0.4)
+        for depth in (1, 2):                      # the net between neighbouring twigs
+            row = sorted(ends.get(depth, []))
+            for (a0, x0, y0), (a1, x1, y1) in zip(row, row[1:]):
+                pygame.draw.line(s, _lerp(col, dark, 0.3), (x0 * S, y0 * S), (x1 * S, y1 * S), max(1, S // 4))
+        for x0, y0, x1, y1, depth in lines:
+            w = max(1, int(S * (0.35 + depth * 0.18)))
+            pygame.draw.line(s, dark, ((x0 + 0.25) * S, (y0 + 0.2) * S), ((x1 + 0.25) * S, (y1 + 0.2) * S), w)
+        for x0, y0, x1, y1, depth in lines:
+            w = max(1, int(S * (0.25 + depth * 0.14)))
+            pygame.draw.line(s, col if depth else light, (x0 * S, y0 * S), (x1 * S, y1 * S), w)
+
+    @staticmethod
+    def _coral_brain(s, S, x, y, col, rnd):
+        """A brain coral: a squat dome with winding grooves, lit from above."""
+        rw, rh = 17, 10
+        rect = pygame.Rect(int((x - rw / 2) * S), int((y - rh) * S), rw * S, int(rh * 1.25 * S))
+        tmp = pygame.Surface(rect.size, pygame.SRCALPHA)
+        pygame.draw.ellipse(tmp, (24, 16, 10, 90), (0, int(rh * 0.55 * S), rw * S, int(rh * 0.7 * S)))
+        body = pygame.Surface(rect.size, pygame.SRCALPHA)
+        dome = (int(0.5 * S), 0, int((rw - 1) * S), int(rh * 1.15 * S))
+        pygame.draw.ellipse(body, _lerp(col, (60, 36, 20), 0.45) + (255,), dome)
+        pygame.draw.ellipse(body, col + (255,), (int(1.2 * S), int(0.3 * S), int((rw - 3) * S), int(rh * 0.95 * S)))
+        pygame.draw.ellipse(body, _lerp(col, (255, 246, 220), 0.35) + (255,), (int(3 * S), int(0.8 * S), int(rw * 0.5 * S), int(rh * 0.45 * S)))
+        groove = _lerp(col, (70, 40, 20), 0.55) + (255,)
+        ridge = _lerp(col, (255, 246, 220), 0.4) + (255,)
+        for k in range(9):                        # winding grooves that follow the dome, with lit ridges
+            yy = 0.9 + k * 1.2
+            pts = []
+            for i in range(rw * 3 + 1):
+                u = i / 3
+                bend = ((u - rw / 2) / (rw / 2)) ** 2 * 1.3
+                pts.append((u, yy + bend + 0.42 * math.sin(u * 1.15 + k * 0.55) + 0.14 * math.sin(u * 2.7 + k * 0.8)))
+            pygame.draw.lines(body, ridge, False, [(u * S, (v - 0.35) * S) for u, v in pts], max(1, S // 4))
+            pygame.draw.lines(body, groove, False, [(u * S, v * S) for u, v in pts], max(1, S // 3))
+        mask = pygame.Surface(rect.size, pygame.SRCALPHA)
+        pygame.draw.ellipse(mask, (255, 255, 255, 255), dome)
+        body.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        tmp.blit(body, (0, 0))
+        s.blit(tmp, rect.topleft)
+
+    @staticmethod
+    def _starfish(s, S, x, y):
+        def star(r_out, r_in, dx=0.0, dy=0.0):
+            pts = []
+            for i in range(10):
+                a = i / 10 * math.tau - math.pi / 2 + 0.25
+                r = r_out if i % 2 == 0 else r_in
+                pts.append(((x + dx + math.cos(a) * r) * S, (y + dy + math.sin(a) * r * 0.78) * S))
+            return pts
+        pygame.draw.polygon(s, (120, 50, 26), star(6.2, 2.6, 0.4, 0.4))
+        pygame.draw.polygon(s, (236, 116, 58), star(6.0, 2.5))
+        pygame.draw.polygon(s, (250, 162, 96), star(3.8, 1.6, -0.25, -0.3))
+        for i in range(5):                        # bumps along each arm
+            a = i / 5 * math.tau - math.pi / 2 + 0.25
+            for r in (1.8, 3.2, 4.5):
+                pygame.draw.circle(s, (255, 214, 160), ((x + math.cos(a) * r) * S, (y + math.sin(a) * r * 0.78) * S), max(1, S * 0.3))
 
     def _ray(self, width, slant):
         """A soft sunbeam: brightest near the surface, fading out with depth."""
@@ -150,32 +297,6 @@ class TitleScene:
             pygame.draw.rect(v, (0, 0, 10, a), (i, i, W - 2 * i, H - 2 * i), 1)
         return v
 
-    def _logo(self):
-        def outlined(text, scale, top, bottom, outline=(14, 26, 66)):
-            w = gfx.text_width(text) + 4
-            small = pygame.Surface((w, 11), pygame.SRCALPHA)
-            for dx in (-1, 0, 1):
-                for dy in (-1, 0, 1):
-                    gfx.text(small, text, 2 + dx, 1 + dy, outline)
-            fill = pygame.Surface((w, 11), pygame.SRCALPHA)
-            gfx.text(fill, text, 2, 1, (255, 255, 255))
-            grad = _gradient([(0, top), (1, bottom)], h=11, w=w).convert_alpha() \
-                if pygame.display.get_surface() else _gradient([(0, top), (1, bottom)], h=11, w=w)
-            fill.blit(grad, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-            small.blit(fill, (0, 0))
-            return pygame.transform.scale(small, (w * scale, 11 * scale))
-        top = outlined("LEGEND OF", 2, (255, 240, 170), (230, 150, 40))
-        big = outlined("OCTO", 4, (190, 225, 255), (40, 100, 230))
-        shadow = big.copy()
-        shadow.fill((0, 0, 20, 90), special_flags=pygame.BLEND_RGBA_MULT)
-        w = max(top.get_width(), big.get_width()) + 8
-        logo = pygame.Surface((w, top.get_height() + big.get_height() + 4), pygame.SRCALPHA)
-        logo.blit(top, ((w - top.get_width()) // 2, 0))
-        y = top.get_height() - 2
-        logo.blit(shadow, ((w - big.get_width()) // 2 + 4, y + 4))
-        logo.blit(big, ((w - big.get_width()) // 2, y))
-        return logo
-
     def _schools(self, rnd):
         schools = []
         for far, col, y, n, speed in ((True, (20, 60, 110), 70, 9, 0.25), (True, (24, 70, 120), 112, 7, -0.3),
@@ -192,6 +313,296 @@ class TitleScene:
         sil.fill((14, 40, 82, 255), special_flags=pygame.BLEND_RGBA_MIN)
         sil.fill((0, 0, 0, 150), special_flags=pygame.BLEND_RGBA_MULT)
         return sil
+
+    # ---- per frame, at full resolution ---------------------------------------
+    def _hi(self, key, surf):
+        """A static layer, smoothly scaled up to the full-resolution canvas once."""
+        img = self._hi_cache.get(key)
+        if img is None:
+            w, h = surf.get_size()
+            img = self._hi_cache[key] = pygame.transform.smoothscale(surf, (w * HI, h * HI))
+        return img
+
+    def _ray_hi(self, i):
+        """A sunbeam at full resolution, trimmed to where it shines (most of its picture is black,
+        which adds nothing): (image, its left edge in title pixels)."""
+        img = self._hi_cache.get(('ray', i))
+        if img is None:
+            ray = self.rays[i]
+            ray.set_colorkey((0, 0, 0))
+            box = ray.get_bounding_rect()
+            ray.set_colorkey(None)
+            part = ray.subsurface(box)
+            img = self._hi_cache[('ray', i)] = (pygame.transform.smoothscale(part, (box.w * HI, box.h * HI)), box.x)
+        return img
+
+    def _floor_img(self):
+        if 'floor' not in self._hi_cache:
+            for _ in self._build_floor():
+                pass
+        return self._hi_cache['floor']
+
+    def warm(self):
+        """Build the full-resolution layers a piece at a time (Game.warm_up runs this during the opening)."""
+        for key, surf in (('bg', self.bg), ('vignette', self.vignette), ('shark', self.shark)):
+            self._hi(key, surf)
+            yield
+        for i in range(len(self.rays)):
+            self._ray_hi(i)
+            yield
+        if 'floor' not in self._hi_cache:
+            yield from self._build_floor()
+
+    def draw_full(self, c, t, menu, sel, mood, flip_w):
+        """The whole title, straight onto the full-resolution canvas c: the undersea scene, the
+        lettering and menu, then the 3D logo and Octo. Nothing is drawn at pixel-art size and
+        scaled up, so everything moves smoothly, and there are no layers to merge afterwards."""
+        c.blit(self._hi('bg', self.bg), (0, 0))
+        st = t % 1500                                    # a shark patrols far away now and then
+        if st < 700:
+            c.blit(self._hi('shark', self.shark), ((-60 + st * 0.5) * HI, (104 + math.sin(st * 0.02) * 3) * HI))
+        for x, h, ph, far in self.kelp:
+            if far:
+                self._kelp_hi(c, x, h, ph, t, True)
+        for i in range(len(self.rays)):                  # sunbeams
+            img, rx = self._ray_hi(i)
+            x = (self.ray_x[i] + math.sin(t * 0.004 + i * 1.7) * 14) - 40 + rx
+            c.blit(img, (x * HI, 0), special_flags=pygame.BLEND_RGB_ADD)
+        pts = [(x * HI, (5 + math.sin(x * 0.09 + t * 0.05) * 1.5 + math.sin(x * 0.031 - t * 0.03)) * HI)
+               for x in range(0, W + 3, 3)]              # the rippling surface far above
+        pygame.draw.lines(c, (200, 240, 255), False, pts, max(1, HI // 2 + 1))
+        for x in range(0, W, 23):
+            gx = (x + t * 0.35) % W
+            gy = 5 + math.sin(gx * 0.09 + t * 0.05) * 1.5 + math.sin(gx * 0.031 - t * 0.03)
+            pygame.draw.circle(c, (255, 255, 255), (gx * HI, gy * HI + HI * 0.6), max(1, HI * 0.6))
+        for sc in self.fish:                             # fish schools
+            sc['x'] += sc['speed']
+            if sc['x'] > W + 30:
+                sc['x'] = -30
+            elif sc['x'] < -30:
+                sc['x'] = W + 30
+            d = 1 if sc['speed'] > 0 else -1
+            for ox, oy, ph in sc['members']:
+                fx = sc['x'] + ox + math.sin(t * 0.05 + ph) * 2
+                fy = sc['y'] + oy + math.sin(t * 0.07 + ph) * 1.5
+                self._fish_hi(c, fx, fy, d, sc['col'], sc['far'], t + ph * 10)
+        for p in self.snow:                              # marine snow
+            p[1] += p[2]
+            p[0] += math.sin(t * 0.01 + p[3] * 6) * 0.08
+            if p[1] > FLOOR_Y:
+                p[1], p[0] = 8, self.rnd.uniform(0, W)
+            k = 90 + int(p[3] * 80)
+            pygame.draw.circle(c, (k - 30, k, k + 30), ((p[0] % W) * HI, p[1] * HI), max(1, HI * 0.45))
+        c.blit(self._floor_img(), (0, (FLOOR_Y - 12) * HI))
+        if getattr(self, '_caustic_hi', None) is None:
+            self._caustic_hi = pygame.Surface((W * HI, 30 * HI), pygame.SRCALPHA)
+        cs = self._caustic_hi
+        cs.fill((0, 0, 0, 0))
+        for i in range(10):                              # light rippling over the sand
+            cx = (i * 29 + math.sin(t * 0.02 + i) * 10) % W
+            cy = 10 + math.sin(t * 0.03 + i * 2) * 5
+            pygame.draw.ellipse(cs, (255, 240, 200, 22), (cx * HI, cy * HI, 16 * HI, 5 * HI))
+        c.blit(cs, (0, (FLOOR_Y - 2) * HI))
+        self._anemone_hi(c, t)
+        for x, h, ph, far in self.kelp:
+            if not far:
+                self._kelp_hi(c, x, h, ph, t, False)
+        bob = math.sin(t * 0.05) * 4                     # Octo's shadow on the sand
+        sw = int((46 - bob * 2) * HI)
+        sh = pygame.Surface((sw, 8 * HI), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 0, 70), sh.get_rect())
+        c.blit(sh, (W * HI // 2 - sw // 2, (FLOOR_Y + 6) * HI))
+        v = self._hi('vignette', self.vignette)          # darker towards the edges (only the edges are drawn)
+        b, (vw, vh) = 26 * HI, v.get_size()
+        for r in ((0, 0, vw, b), (0, vh - b, vw, b), (0, b, b, vh - 2 * b), (vw - b, b, b, vh - 2 * b)):
+            c.blit(v, r[:2], r)
+        self._ui_hi(c, t, menu, sel)
+        self.draw_hifi(c, t, mood, flip_w)
+
+    def _label(self, text, col, under=None):
+        """A line of pixel lettering, scaled up once (crisp, not blurred) and kept."""
+        key = ('label', text, col, under)
+        img = self._hi_cache.get(key)
+        if img is None:
+            small = pygame.Surface((gfx.text_width(text) + 3, 10), pygame.SRCALPHA)
+            if under:
+                gfx.text(small, text, 1, 1, under)
+            gfx.text(small, text, 0, 0, col)
+            img = self._hi_cache[key] = pygame.transform.scale(small, (small.get_width() * HI, 10 * HI))
+        return img
+
+    def _put(self, c, text, x, y, col, under=None, center=False):
+        img = self._label(text, col, under)
+        if center:
+            x -= (img.get_width() // HI - 3) // 2
+        c.blit(img, (x * HI, y * HI))
+
+    def _ui_hi(self, c, t, menu, sel):
+        """The subtitles and the menu, in crisp pixel lettering."""
+        self._put(c, "A REVERSIBLE UNDERSEA ADVENTURE", W // 2, 88, (200, 230, 255), (0, 10, 30), True)
+        self._put(c, "A FAN TRIBUTE TO 8-BIT ADVENTURES", W // 2, 99, (140, 160, 200), (0, 10, 30), True)
+        # the menu box, sized to fit its words, sitting clear of the credit line
+        inner = max(gfx.text_width(m) for m in menu)
+        pw = inner + 34
+        ph = 11 * len(menu) + 8
+        px, py = W // 2 - pw // 2, H - 13 - ph
+        box = self._hi_cache.get(('box', pw, ph))
+        if box is None:
+            box = self._hi_cache[('box', pw, ph)] = pygame.Surface((pw * HI, ph * HI), pygame.SRCALPHA)
+            pygame.draw.rect(box, (4, 10, 30, 175), box.get_rect(), border_radius=3 * HI)
+            pygame.draw.rect(box, (120, 160, 230, 220), box.get_rect(), max(1, HI - 1), border_radius=3 * HI)
+        c.blit(box, (px * HI, py * HI))
+        self.menu_rects = []
+        for i, item in enumerate(menu):
+            y = py + 6 + i * 11
+            self.menu_rects.append(pygame.Rect(px, y - 2, pw, 11))
+            tx = W // 2 - gfx.text_width(item) // 2
+            on = i == sel
+            if on:
+                self._put(c, ">", tx - 9 + (1 if (t // 20) % 2 else 0), y, (255, 220, 120))
+            self._put(c, item, tx, y, (255, 255, 255) if on else (140, 160, 200))
+        if (t // 25) % 2:
+            self._put(c, "TAP TO PLAY" if getattr(self, 'touch', False) else "PRESS ENTER OR CLICK TO PLAY",
+                      W // 2, py - 10, (255, 255, 255), center=True)
+        self._put(c, "BY " + AUTHOR, W // 2, H - 9, (150, 165, 200), center=True)
+        self._put(c, VERSION.upper(), 4, H - 9, (100, 115, 150))
+
+    # stem, stem highlight, blade at the root, blade at the top, blade highlight, gas floats
+    KELP_NEAR = ((30, 84, 44), (96, 160, 76), (38, 112, 54), (128, 186, 76), (176, 220, 116), (178, 168, 66))
+    KELP_FAR = ((14, 52, 62), None, (16, 64, 70), (28, 88, 86), None, None)
+
+    @staticmethod
+    def _curve_table(samples):
+        """For points along a blade's curve: the weights of its root, bend and tip, and of the two
+        halves of its direction, worked out once."""
+        return [((1 - u) ** 2, 2 * (1 - u) * u, u * u, 2 * (1 - u), 2 * u) for u, _ in samples]
+
+    _NEAR_SAMPLES = ((0.0, 0.2), (0.16, 0.8), (0.33, 1.0), (0.5, 0.95), (0.67, 0.8), (0.84, 0.5), (1.0, 0.0))
+    _FAR_SAMPLES = ((0.0, 0.2), (0.33, 1.0), (0.67, 0.75), (1.0, 0.0))
+
+    def _kelp_plan(self, h, ph, far):
+        """What stays the same in a frond from frame to frame: its blades' sizes, colours and ruffles."""
+        plan = self._hi_cache.get(('kelp', h, ph, far))
+        if plan is None:
+            stem, stem_hi, blade0, blade1, blade_hi, floatc = self.KELP_FAR if far else self.KELP_NEAR
+            samples = self._FAR_SAMPLES if far else self._NEAR_SAMPLES
+            n = max(8, h // 4)
+            blades = []
+            for i in range(2, n + 1, 2):
+                f = i / n
+                side = 1 if (i // 2) % 2 else -1
+                if i == n:                       # the curled tip
+                    side, length, half = 0, 5.0, 1.1
+                else:
+                    length, half = 12.0 - 5.0 * f, 1.45 - 0.35 * f
+                if far:
+                    length, half = length * 0.8, half * 0.85
+                widths = [half * w * HI * (1 + 0.16 * math.sin(u * 17 + (i + ph) * 2.3)) for u, w in samples]
+                col = _lerp(blade0, blade1, f)
+                lit = _lerp(col, blade_hi, 0.45) if not far else None
+                edge = _lerp(col, (10, 40, 20), 0.35) if not far else None
+                blades.append((i, f, side, length, widths, col, lit, edge))
+            plan = self._hi_cache[('kelp', h, ph, far)] = (n, blades, self._curve_table(samples))
+        return plan
+
+    def _kelp_hi(self, s, x, h, ph, t, far):
+        """A kelp frond in the swell: a tapering stem with a wave running up it (so it bends like the
+        real thing), long ruffled blades on alternate sides that float up and trail as it sways,
+        each held up by a little gas float, and a curled tip. Soft edges, at full resolution. Far
+        fronds are plainer and fade into the blue."""
+        stem, stem_hi, blade0, blade1, blade_hi, floatc = self.KELP_FAR if far else self.KELP_NEAR
+        n, blades, table = self._kelp_plan(h, ph, far)
+        base = FLOOR_Y + 8
+        pts = []
+        for i in range(n + 1):
+            f = i / n
+            sway = (math.sin(t * 0.03 + ph - f * 2.2) * f ** 1.3 * h * 0.075
+                    + math.sin(t * 0.017 + ph * 1.7 - f * 1.3) * f * h * 0.025)
+            pts.append((x + sway, base - f * h))
+        for i, f, side, length, widths, col, lit, edge in blades:     # (under the stem, which crosses their roots)
+            px, py = pts[i]
+            drift = (px - pts[i - 1][0]) * 2.0 + math.sin(t * 0.05 + ph * 3 + i * 0.8) * 0.3
+            # buoyant blades float up and out, and their tips trail in the swell
+            a0 = -math.pi / 2 + side * (0.62 - 0.2 * f) + drift * 0.2
+            a1 = a0 + side * 0.32 + drift * 0.45
+            c0, s0 = math.cos(a0) * length * 0.5, math.sin(a0) * length * 0.5
+            cx, cy = px + c0, py + s0
+            tx, ty = cx + math.cos(a1) * length * 0.55, cy + math.sin(a1) * length * 0.55
+            poly, half_a, half_b = self._blade(px * HI, py * HI, cx * HI, cy * HI, tx * HI, ty * HI, widths, table)
+            pygame.draw.polygon(s, col, poly)
+            if not far:
+                pygame.draw.polygon(s, lit, half_b if side > 0 else half_a)
+                pygame.draw.aalines(s, edge, True, poly)
+                if side:
+                    fx, fy = px + c0 * 0.26, py + s0 * 0.26
+                    pygame.draw.circle(s, floatc, (fx * HI, fy * HI), 1.15 * HI)
+                    pygame.draw.circle(s, (236, 226, 150), ((fx - 0.35) * HI, (fy - 0.4) * HI), max(1, 0.4 * HI))
+        left, right = [], []                     # the stem: a ribbon, narrower at the top
+        for i, (px, py) in enumerate(pts):
+            ax, ay = pts[i - 1] if i else pts[0]
+            bx, by = pts[i + 1] if i < n else pts[n]
+            dx, dy = bx - ax, by - ay
+            k = (1.2 if far else 1.55) * (1 - 0.55 * i / n) / (math.hypot(dx, dy) or 1.0)
+            nx, ny = -dy * k, dx * k
+            left.append(((px + nx) * HI, (py + ny) * HI))
+            right.append(((px - nx) * HI, (py - ny) * HI))
+        ribbon = left + right[::-1]
+        pygame.draw.polygon(s, stem, ribbon)
+        if not far:
+            pygame.draw.aalines(s, stem, True, ribbon)
+            pygame.draw.aalines(s, stem_hi, False, [((px - 0.5) * HI, py * HI) for px, py in pts[1:-1]])
+
+    @staticmethod
+    def _blade(x0, y0, cx, cy, x2, y2, widths, table):
+        """A long kelp blade along a curve from its root (x0, y0), bending through (cx, cy) to its tip
+        (x2, y2), with the given (ruffled) widths along it: its outline and its two halves either
+        side of the midrib (one is lit). All in full-resolution pixels."""
+        side_a, side_b, mid = [], [], []
+        ax, ay, bx, by = cx - x0, cy - y0, x2 - cx, y2 - cy
+        for (k0, k1, k2, d0, d1), w in zip(table, widths):
+            px = k0 * x0 + k1 * cx + k2 * x2
+            py = k0 * y0 + k1 * cy + k2 * y2
+            dx, dy = d0 * ax + d1 * bx, d0 * ay + d1 * by
+            k = w / (math.hypot(dx, dy) or 1.0)
+            nx, ny = -dy * k, dx * k
+            side_a.append((px + nx, py + ny))
+            side_b.append((px - nx, py - ny))
+            mid.append((px, py))
+        back = mid[-2::-1]
+        return side_a + side_b[-2::-1], side_a + back, side_b + back
+
+    def _anemone_hi(self, s, t):
+        """The sea anemone on the sand, waving its arms."""
+        bx, by = 182, FLOOR_Y + 11.5
+        for i in range(11):
+            a = -math.pi / 2 + (i - 5) * 0.22
+            x, y = bx + (i - 5) * 0.42, by
+            pts = [(x * HI, y * HI)]
+            for k in range(1, 5):
+                f = k / 4
+                a += math.sin(t * 0.045 + i * 0.8 - f * 1.6) * 0.17 * f + (i - 5) * 0.025
+                x += math.cos(a) * 2.0
+                y += math.sin(a) * 2.0
+                pts.append((x * HI, y * HI))
+            pygame.draw.lines(s, (226, 112, 162), False, pts, max(1, int(HI * 0.95)))
+            pygame.draw.aalines(s, (255, 178, 208), False, pts)
+            pygame.draw.circle(s, (255, 216, 232), pts[-1], 0.7 * HI)
+        pygame.draw.ellipse(s, (176, 66, 112), ((bx - 4) * HI, (by - 1.1) * HI, 8 * HI, 2.8 * HI))
+        pygame.draw.ellipse(s, (214, 104, 146), ((bx - 2.6) * HI, (by - 0.8) * HI, 5.2 * HI, 1.4 * HI))
+
+    def _fish_hi(self, s, x, y, d, col, small, t):
+        x, y = x * HI, y * HI
+        if small:
+            k = HI * 0.6
+            pygame.draw.polygon(s, col, [(x - 2 * d * k, y), (x, y - k), (x + 2 * d * k, y), (x, y + k)])
+            return
+        tail = math.sin(t * 0.3) * HI * 0.6                # a flicking tail
+        body = [(x - 3 * d * HI, y), (x, y - 2 * HI), (x + 3 * d * HI, y), (x, y + 2 * HI)]
+        pygame.draw.polygon(s, col, [(x - 3 * d * HI, y), (x - 6 * d * HI, y - 2 * HI + tail),
+                                     (x - 6 * d * HI, y + 2 * HI + tail)])
+        pygame.draw.polygon(s, col, body)
+        pygame.draw.line(s, _lerp(col, (255, 255, 255), 0.5), (x - d * HI, y - HI), (x + d * HI, y - HI), max(1, HI // 2))
+        pygame.draw.circle(s, (20, 20, 30), (x + 2 * d * HI, y - HI * 0.6), max(1, HI * 0.45))
 
     # ---- per frame ----------------------------------------------------------
     def _hifi_parts(self):
@@ -215,11 +626,6 @@ class TitleScene:
         HI = hifi.HI
         parts = self._hifi_parts()
         dest = hr
-        if t < 60:                                   # fade in with the rest of the title
-            if parts['tmp'] is None:
-                parts['tmp'] = pygame.Surface(hr.get_size(), pygame.SRCALPHA)
-            dest = parts['tmp']
-            dest.fill((0, 0, 0, 0))
         for img, x, y in parts['words']:
             dest.blit(img, (x, y + math.sin(t * 0.03) * 1.5 * HI))
         spin = (1 - flip_w) * math.pi
@@ -230,139 +636,7 @@ class TitleScene:
         items = parts[mood].items((0, (cy - hifi.H / 2) / k, z), yaw=math.sin(t * 0.02) * 0.45 + spin, pitch=0.18,
                                   t=t, size=26 * HI / k)
         hifi.render(dest, items)
-        if dest is not hr:
-            dest.set_alpha(int(255 * t / 60))
-            hr.blit(dest, (0, 0))
-
-    def draw(self, scr, t, menu, sel, mood, flip_w, hires=False):
-        scr.blit(self.bg, (0, 0))
-        # a shark patrols far away now and then
-        st = t % 1500
-        if st < 700:
-            sx = -60 + st * 0.5
-            scr.blit(self.shark, (sx, 104 + math.sin(st * 0.02) * 3))
-        # far kelp
-        for x, h, ph, far in self.kelp:
-            if far:
-                self._kelp(scr, x, h, ph, t, (14, 58, 64), (18, 70, 70))
-        # sunbeams
-        for i, ray in enumerate(self.rays):
-            x = (self.ray_x[i] + math.sin(t * 0.004 + i * 1.7) * 14) - 40
-            scr.blit(ray, (x, 0), special_flags=pygame.BLEND_RGB_ADD)
-        # rippling surface
-        for x in range(0, W, 2):
-            y = 5 + math.sin(x * 0.09 + t * 0.05) * 1.5 + math.sin(x * 0.031 - t * 0.03)
-            scr.set_at((x, int(y)), (200, 240, 255))
-            if (x + t // 3) % 23 == 0:
-                scr.set_at((x, int(y) + 1), (255, 255, 255))
-        # fish schools
-        for sc in self.fish:
-            sc['x'] += sc['speed']
-            if sc['x'] > W + 30:
-                sc['x'] = -30
-            elif sc['x'] < -30:
-                sc['x'] = W + 30
-            d = 1 if sc['speed'] > 0 else -1
-            for ox, oy, ph in sc['members']:
-                fx = sc['x'] + ox + math.sin(t * 0.05 + ph) * 2
-                fy = sc['y'] + oy + math.sin(t * 0.07 + ph) * 1.5
-                self._fish(scr, fx, fy, d, sc['col'], small=sc['far'])
-        # marine snow
-        for p in self.snow:
-            p[1] += p[2]
-            p[0] += math.sin(t * 0.01 + p[3] * 6) * 0.08
-            if p[1] > FLOOR_Y:
-                p[1], p[0] = 8, self.rnd.uniform(0, W)
-            c = 90 + int(p[3] * 80)
-            scr.set_at((int(p[0]) % W, int(p[1])), (c - 30, c, c + 30))
-        # sea floor + shimmering light patches on the sand
-        scr.blit(self.floor, (0, FLOOR_Y - 12))
-        caustic = pygame.Surface((W, 30), pygame.SRCALPHA)
-        for i in range(10):
-            cx = (i * 29 + math.sin(t * 0.02 + i) * 10) % W
-            cy = 10 + math.sin(t * 0.03 + i * 2) * 5
-            pygame.draw.ellipse(caustic, (255, 240, 200, 22), (cx, cy, 16, 5))
-        scr.blit(caustic, (0, FLOOR_Y - 2))
-        # near kelp
-        for x, h, ph, far in self.kelp:
-            if not far:
-                self._kelp(scr, x, h, ph, t, (24, 110, 60), (60, 160, 80))
-        # Octo
-        bob = math.sin(t * 0.05) * 4
-        size = 64
-        oy = 112 + bob
-        shadow_w = int(46 - bob * 2)
-        sh = pygame.Surface((shadow_w, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 70), (0, 0, shadow_w, 8))
-        scr.blit(sh, (W // 2 - shadow_w // 2, FLOOR_Y + 6))
-        if not hires:
-            w = max(4, int(size * flip_w))
-            key = (mood, (t // 16) % 2, w)
-            img = self._octo_cache.get(key)
-            if img is None:
-                img = pygame.transform.scale(gfx.OCTO[mood]['down'][(t // 16) % 2], (w, size))
-                if len(self._octo_cache) > 80:
-                    self._octo_cache.clear()
-                self._octo_cache[key] = img
-            scr.blit(img, (W // 2 - w // 2, oy))
-            # logo
-            lx = W // 2 - self.logo.get_width() // 2
-            scr.blit(self.logo, (lx, 16 + math.sin(t * 0.03) * 1.5))
-        gfx.text(scr, "A REVERSIBLE UNDERSEA ADVENTURE", W // 2 + 1, 89, (0, 10, 30), center=True)
-        gfx.text(scr, "A REVERSIBLE UNDERSEA ADVENTURE", W // 2, 88, (200, 230, 255), center=True)
-        gfx.text(scr, "A FAN TRIBUTE TO 8-BIT ADVENTURES", W // 2 + 1, 100, (0, 10, 30), center=True)
-        gfx.text(scr, "A FAN TRIBUTE TO 8-BIT ADVENTURES", W // 2, 99, (140, 160, 200), center=True)
-        scr.blit(self.vignette, (0, 0))
-        # menu panel
-        ph = 10 + len(menu) * 11
-        panel = pygame.Surface((112, ph), pygame.SRCALPHA)
-        panel.fill((4, 10, 30, 170))
-        pygame.draw.rect(panel, (120, 160, 230, 200), panel.get_rect(), 1)
-        px, py = W // 2 - 56, FLOOR_Y + 2 - ph // 2 + 10
-        scr.blit(panel, (px, py))
-        self.menu_rects = []
-        for i, item in enumerate(menu):
-            y = py + 6 + i * 11
-            self.menu_rects.append(pygame.Rect(px, y - 2, 112, 11))
-            on = i == sel
-            if on:
-                arrow = ">" if (t // 20) % 2 else " >"
-                gfx.text(scr, arrow, px + 10, y, (255, 220, 120))
-            gfx.text(scr, item, W // 2 + 4, y, (255, 255, 255) if on else (140, 160, 200), center=True)
-        if (t // 25) % 2:
-            gfx.text(scr, "TAP TO PLAY" if getattr(self, 'touch', False) else "PRESS ENTER OR CLICK TO PLAY", W // 2, py - 10, (255, 255, 255), center=True)
-        gfx.text(scr, "BY " + AUTHOR, W // 2, H - 8, (150, 165, 200), center=True)
-        gfx.text(scr, VERSION.upper(), 4, H - 8, (100, 115, 150))
-        # fade in from black when the game starts
-        if t < 60:
-            veil = pygame.Surface((W, H))
-            veil.set_alpha(int(255 * (1 - t / 60)))
-            scr.blit(veil, (0, 0))
-
-    def _kelp(self, scr, x, h, ph, t, dark, light):
-        px, py = x, FLOOR_Y + 8
-        segs = h // 6
-        for i in range(segs):
-            sway = math.sin(t * 0.03 + ph + i * 0.35) * (i * 0.35)
-            nx, ny = x + sway, FLOOR_Y + 8 - (i + 1) * 6
-            pygame.draw.line(scr, dark, (px, py), (nx, ny), 3)
-            pygame.draw.line(scr, light, (px - 1, py), (nx - 1, ny), 1)
-            if i % 2 and i < segs - 1:
-                side = 1 if (i // 2) % 2 else -1
-                pygame.draw.ellipse(scr, dark, (nx + (1 if side > 0 else -7), ny - 1, 7, 3))
-            px, py = nx, ny
-        pygame.draw.circle(scr, light, (int(px), int(py)), 2)
-
-    def _fish(self, scr, x, y, d, col, small):
-        x, y = int(x), int(y)
-        if small:
-            scr.set_at((x, y), col)
-            scr.set_at((x + d, y), col)
-            scr.set_at((x - d, y - 1), col)
-            scr.set_at((x - d, y + 1), col)
-            return
-        body = [(x - 3 * d, y), (x, y - 2), (x + 3 * d, y), (x, y + 2)]
-        pygame.draw.polygon(scr, col, body)
-        pygame.draw.polygon(scr, col, [(x - 3 * d, y), (x - 6 * d, y - 2), (x - 6 * d, y + 2)])
-        scr.set_at((x + 2 * d, y - 1), (20, 20, 30))
-        pygame.draw.line(scr, _lerp(col, (255, 255, 255), 0.5), (x - 1 * d, y - 1), (x + 1 * d, y - 1))
+        if t < 60:                                   # fade in from black (over everything)
+            veil = pygame.Surface(hr.get_size(), pygame.SRCALPHA)
+            veil.fill((0, 0, 0, int(255 * (1 - t / 60))))
+            hr.blit(veil, (0, 0))

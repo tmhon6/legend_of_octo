@@ -2,10 +2,10 @@
 
 Every form has a passive STRENGTH that is on while Octo is in that form.
 
-The Fusion Machine (next to the Pearl Shop) can fuse ANY two base forms. Each of the 190 possible pairs
-makes its own fused form with a brand-new attack: one of 16 attack shapes powered by one of 12 elements,
-and no two pairs share the same combination. A fused form also gets boosted versions of both parents'
-strengths.
+The Fusion Machine (next to the Pearl Shop) can fuse ANY two base forms. Every pair leads to one of 16
+attack shapes, and there is exactly one fused form for each shape (no copies of the same attack): fusing
+a pair makes the fused form for its shape. A fused form also gets boosted versions of both parents'
+strengths. The Mega Machine works the same way: one mega form for each of its six giant attacks.
 """
 import itertools
 
@@ -249,8 +249,31 @@ def _build():
     return out
 
 
-FUSIONS = _build()
-PAIR = {f['parents']: fid for fid, f in FUSIONS.items()}
+ALL_PAIRS = _build()            # what every pair of base forms would make on its own (190 of them)
+
+
+def _one_per_shape(table):
+    """Keep one fused form for each attack shape: the hand-named original where there is one, and for
+    the other shapes the one whose element is used least so far, so the sixteen are as varied as can be.
+    Returns (kept forms, shape -> kept id)."""
+    keep, used = {}, {}
+    for (a, b), (fid, name, shape, elem) in NAMED.items():
+        keep[shape] = fid
+        used[elem] = used.get(elem, 0) + 1
+    for shape in SHAPES:
+        if shape in keep:
+            continue
+        options = [fid for fid, f in table.items() if f['shape'] == shape]
+        best = min(options, key=lambda fid: (used.get(table[fid]['element'], 0), options.index(fid)))
+        keep[shape] = best
+        e = table[best]['element']
+        used[e] = used.get(e, 0) + 1
+    return {fid: table[fid] for fid in keep.values()}, keep
+
+
+FUSIONS, FOR_SHAPE = _one_per_shape(ALL_PAIRS)
+PAIR = {f['parents']: FOR_SHAPE[f['shape']] for f in ALL_PAIRS.values()}    # any pair -> its shape's form
+MERGED = {fid: FOR_SHAPE[f['shape']] for fid, f in ALL_PAIRS.items()}       # an old save's form -> the one kept
 
 
 def fusion_of(a, b):
@@ -314,6 +337,43 @@ def mega_id(a, b):
     return f"mega:{a}|{b}"
 
 
+def _mega_shape(mid):
+    import zlib
+    return list(MEGA_SHAPES)[zlib.crc32(mid.encode()) % len(MEGA_SHAPES)]
+
+
+_MEGA_FOR = {}
+
+
+def _mega_for(shape):
+    """The one mega form of a giant attack: of the pairs of fused forms that make it, the one whose two
+    elements have been used least by the others, so the six are as varied as can be."""
+    if not _MEGA_FOR:
+        pairs = list(itertools.combinations(sorted(FUSIONS), 2))
+        used = {}
+        for sh in MEGA_SHAPES:
+            options = [(a, b) for a, b in pairs if _mega_shape(mega_id(a, b)) == sh]
+            if not options:
+                continue
+
+            def score(ab):
+                ea, eb = FUSIONS[ab[0]]['element'], FUSIONS[ab[1]]['element']
+                return (used.get(ea, 0) + used.get(eb, 0) + (2 if ea == eb else 0), options.index(ab))
+            a, b = min(options, key=score)
+            _MEGA_FOR[sh] = mega_id(a, b)
+            for e in (FUSIONS[a]['element'], FUSIONS[b]['element']):
+                used[e] = used.get(e, 0) + 1
+    return _MEGA_FOR.get(shape)
+
+
+def merge_form(f):
+    """What a form in an older save is now: a fused form folded into the one kept for its attack, and
+    a mega form into the one for its giant attack."""
+    if is_mega(f):
+        return _mega_for(_mega_shape(f)) or f
+    return MERGED.get(f, f)
+
+
 def is_mega(form):
     return isinstance(form, str) and form.startswith('mega:')
 
@@ -322,10 +382,9 @@ def register_mega(mid):
     """Make the names, attack and strengths of a mega form (they're built the first time they're needed)."""
     if mid in MEGAS:
         return MEGAS[mid]
-    import zlib
     a, b = mid[5:].split('|')
     fa, fb = FUSIONS[a], FUSIONS[b]
-    shape = list(MEGA_SHAPES)[zlib.crc32(mid.encode()) % len(MEGA_SHAPES)]
+    shape = _mega_shape(mid)
     ea, eb = fa['element'], fb['element']
     elems = (ea, eb) if ea != eb else (ea, 'heavy' if ea != 'heavy' else 'stun')
     na, nb = fa['name'], fb['name']
@@ -357,6 +416,7 @@ def register_mega(mid):
 
 
 def mega_of(a, b):
-    mid = mega_id(a, b)
+    """The mega form two fused forms make: the one for the giant attack their pair leads to."""
+    mid = _mega_for(_mega_shape(mega_id(a, b))) or mega_id(a, b)
     register_mega(mid)
     return mid
