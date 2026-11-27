@@ -42,8 +42,8 @@ class Dive:
         self.length, self.tilt, self.hi = length, tilt, hi
         self.t = 0
         rnd = random.Random()
-        self.bubbles = [(rnd.uniform(0, math.tau), rnd.uniform(0.25, 1.25), rnd.uniform(0.7, 1.5))
-                        for _ in range(44)]
+        self.bubbles = [(rnd.uniform(0, math.tau), rnd.uniform(0.25, 1.25), rnd.uniform(0.6, 1.1))
+                        for _ in range(12)]
 
     @property
     def done(self):
@@ -115,7 +115,7 @@ class Dive:
         for a, z0, size in self.bubbles[:n]:
             z = (z0 - k * 1.5) % 1.25 + 0.06                 # how far off: getting closer all the time
             r = size * hi * 1.4 / z
-            if r > 26 * hi:
+            if r > 16 * hi:
                 continue
             dist = W * 0.07 / z
             x, y = cx + math.cos(a) * dist, cy + math.sin(a) * dist * 0.8

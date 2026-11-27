@@ -593,7 +593,7 @@ class Player(Entity):
         cx, cy = self.rect.center
         moving = bool(move_dir or self.analog or self.dash_t)
         self.moving = moving
-        if moving and not self.in_sky and self.idle_t % 11 == 0 and \
+        if moving and not self.in_sky and self.idle_t % 22 == 0 and \
                 world_of(cx, cy) not in __import__('world').DRY_WORLDS:   # no bubbles on dry land
             game.effects.append(fx.SwimBubble(cx + random.uniform(-3, 3), cy - 6))
         elem = fx.element_of(self.mood)

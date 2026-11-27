@@ -2473,8 +2473,8 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
     def update_bubbles(self):
         dry = self.player is not None and world.world_at(self.player.rect.centerx // TILE,
                                                           self.player.rect.centery // TILE) in world.DRY_WORLDS
-        rate = 0.06 if self.state == 'title' else 0 if dry else (0.03 if self.area == 'overworld' else
-                                                   0 if self.area == 'sky' else 0.012)
+        rate = 0.02 if self.state == 'title' else 0 if dry else (0.012 if self.area == 'overworld' else
+                                                   0 if self.area == 'sky' else 0.006)
         if random.random() < rate:
             h = SCREEN_H if self.state == 'title' else PLAY_H
             self.bubbles.append(Bubble(random.randrange(SCREEN_W), h + 2))
