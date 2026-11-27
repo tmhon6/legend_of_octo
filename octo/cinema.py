@@ -136,6 +136,22 @@ class Sparkles:
 # ======================================================================
 # the opening
 # ======================================================================
+def _spaced(s, px, color, track):
+    """Smooth capitals with extra space between the letters (track: a fraction of the size)."""
+    f = hifi.font(px)
+    if f is None:
+        return hifi.text(s, px, color, outline=None, shadow=False)
+    glyphs = [f.render(ch, True, color) for ch in s]
+    gap = px * track
+    w = sum(g.get_width() for g in glyphs) + gap * (len(glyphs) - 1)
+    out = pygame.Surface((int(w) + 2, max(g.get_height() for g in glyphs)), pygame.SRCALPHA)
+    x = 0.0
+    for g in glyphs:
+        out.blit(g, (int(x), 0))
+        x += g.get_width() + gap
+    return out
+
+
 class Intro3D:
     """About ten seconds: skim a dawn ocean, dive in, Octo swims up out of the deep and the
     logo flies together letter by letter. Any key skips it. Then the game dives on through the
@@ -167,6 +183,8 @@ class Intro3D:
         self.sparkles = Sparkles()
         self.letters = None
         self.landed = set()
+        self.card = None
+        self.press = hifi.text("PRESS ANY KEY", 9 * HI, (150, 175, 220), shadow=False)
         self.sun_cols = []                      # the sun's glittering path on the water (two flickers)
         for v in range(2):
             col = pygame.Surface((90 * HI, H))
@@ -181,7 +199,56 @@ class Intro3D:
             self.sun_cols.append(col)
 
     # ---- pieces --------------------------------------------------------
+    def prepare(self):
+        """Make everything the opening would otherwise make while it plays (in a browser each piece is
+        a visible stall): the logo and its letters, the credit, Octo's 3D figure, the splash. A
+        generator: the game runs it a few milliseconds at a time behind its loading bar."""
+        if self.letters is None:
+            yield from self._logo_steps()
+        if self.card is None:
+            self.card = self._make_card()
+            yield
+        scratch = pygame.Surface((W, H), pygame.SRCALPHA)
+        for t in (0, 1, 2, 3, 30, 150, *range(184, 203), 205, 210, 215, 217, 218, 219, 220, 225,
+                  240, 260, 290, 320):
+            self.draw(scratch, t)               # a throwaway frame: makes what that moment needs
+            yield
+        self.t, self.done = 0, False
+
+    def _make_card(self):
+        """The opening credit, made once: the author's name in clean, well-spaced white capitals over
+        a small "PRESENTS" between two fine rules, on a soft dark glow (no hard outline)."""
+        name = _spaced(AUTHOR.upper(), 18 * HI, (255, 255, 255), 0.16)
+        sub = _spaced("PRESENTS", 9 * HI, (255, 240, 218), 0.55)
+        gap = 5 * HI
+        w = max(name.get_width(), sub.get_width() + 40 * HI)
+        pad = 16 * HI
+        h = name.get_height() + gap + sub.get_height()
+        card = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+        words = pygame.Surface(card.get_size(), pygame.SRCALPHA)
+        nx = pad + (w - name.get_width()) // 2
+        sx, sy = pad + (w - sub.get_width()) // 2, pad + name.get_height() + gap
+        words.blit(name, (nx, pad))
+        words.blit(sub, (sx, sy))
+        ry = sy + sub.get_height() // 2
+        for x0, x1 in ((sx - 26 * HI, sx - 8 * HI), (sx + sub.get_width() + 8 * HI, sx + sub.get_width() + 26 * HI)):
+            pygame.draw.line(words, (255, 238, 214), (x0, ry), (x1, ry), max(1, HI // 2 + 1))
+        glow = words.copy()                      # the glow: the words' shapes, dark and blurred
+        glow.fill((40, 14, 30, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        cw, ch = glow.get_size()
+        for k in (6, 3):
+            small = pygame.transform.smoothscale(glow, (max(1, cw // k), max(1, ch // k)))
+            soft = pygame.transform.smoothscale(small, (cw, ch))
+            soft.set_alpha(175 if k == 6 else 130)
+            card.blit(soft, (0, HI))
+        card.blit(words, (0, 0))
+        return card
+
     def _build_logo(self):
+        for _ in self._logo_steps():
+            pass
+
+    def _logo_steps(self):
         words = [("LEGEND OF", 27 * HI, (240, 248, 255), (130, 180, 240), (40, 70, 150), 38 * HI, 10, 6, 42),
                  ("OCTO", 70 * HI, (255, 244, 150), (250, 140, 40), (150, 60, 10), 64 * HI, 80, 11, 52)]
         self.letters, self.words = [], []
@@ -206,8 +273,8 @@ class Intro3D:
                     'sx': math.cos(a) * rnd.uniform(500, 900) * HI, 'sy': math.sin(a) * rnd.uniform(300, 600) * HI,
                     'sz': rnd.uniform(2200, 3600) * HI, 'spin': rnd.uniform(-540, 540), 'big': px > 40 * HI})
                 n += 1
+                yield
         self.sub = hifi.text("A REVERSIBLE UNDERSEA ADVENTURE", 13 * HI, (205, 232, 255))
-        self.press = hifi.text("PRESS ANY KEY", 9 * HI, (150, 175, 220), shadow=False)
 
     def cues(self, t):
         out = []
@@ -236,8 +303,6 @@ class Intro3D:
         else:
             self._below(hr, t)
         if t > 40 and (t // 30) % 2 and t < self.FLASH:
-            if self.letters is None:
-                self._build_logo()
             hr.blit(self.press, (W - self.press.get_width() - 4 * HI, H - self.press.get_height() - 2 * HI))
 
     def _above(self, hr, t):
@@ -256,12 +321,15 @@ class Intro3D:
         hr.blit(self.sun_cols[(t // 5) % 2], (sx - 45 * HI, horizon + 2), special_flags=pygame.BLEND_RGB_ADD)
         for f_, r, c in ((0.5, 10, (60, 40, 20)), (0.9, 18, (30, 50, 60)), (1.3, 7, (60, 40, 50))):   # lens flare
             hifi.add_glow(hr, c, sx + (W / 2 - sx) * f_ * 2, sy + (H / 2 - sy) * f_ * 2, r * HI)
-        if t < 150:
-            a = clamp(min((t - 20) / 30, (140 - t) / 25))
+        if t < 150:                              # the credit fades in, rises a touch, fades out
+            a = clamp(min((t - 20) / 34, (142 - t) / 30))
             if a > 0:
-                img = hifi.text(AUTHOR.upper() + " PRESENTS", 15 * HI, (255, 255, 255))
-                img.set_alpha(int(255 * a))
-                hr.blit(img, (W / 2 - img.get_width() / 2, H * 0.3))
+                if self.card is None:
+                    self.card = self._make_card()
+                a = a * a * (3 - 2 * a)
+                self.card.set_alpha(int(255 * a))
+                hr.blit(self.card, (W / 2 - self.card.get_width() / 2,
+                                    H * 0.24 - self.card.get_height() / 2 - (t - 20) * 0.05 * HI))
         if t < 30:
             veil(hr, (0, 0, 0), 255 * (1 - t / 30))
         if t > self.SPLASH - 16:

@@ -601,6 +601,24 @@ def play(name):
         _sfx[name].play()
 
 
+def warm():
+    """Play every sound effect once, inaudibly quietly, a few at a time on spare channels. In a browser the
+    first time a sound plays can stall the game for a moment, so this is done behind the loading
+    bar. A generator: one step per handful of sounds."""
+    if not enabled:
+        return
+    chans = [pygame.mixer.Channel(i) for i in range(8, 16)]
+    names = sorted(_sfx)
+    for i in range(0, len(names), len(chans)):
+        for ch, name in zip(chans, names[i:i + len(chans)]):
+            ch.set_volume(0.01)                 # (far too quiet to hear, but not skipped as silent)
+            ch.play(_sfx[name])
+        yield 'frame'                           # (let a frame pass: the browser gets them ready)
+    for ch in chans:
+        ch.stop()
+        ch.set_volume(1.0)
+
+
 def music(track, loops=-1):
     global _current_track
     if not enabled:

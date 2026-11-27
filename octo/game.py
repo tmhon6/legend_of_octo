@@ -260,7 +260,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         if touch_device():
             self.touch.activate()
         self.title_sel = 0
-        self.state = 'intro'
+        self.state = 'loading'                  # a moment behind a loading bar, then the opening
         self.intro = Intro3D()
         self.versus = None
         self.vs_seen = set()
@@ -639,16 +639,19 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             'flags': self.flags, 'frames': self.frames,
             'seen': [''.join('1' if c else '0' for c in row) for row in self.seen],
         }
+        saved = False
         try:
             write_save(json.dumps(data))
             self.record_score()
             self.has_save = True
             self.pause_msg = 'GAME SAVED!'
             sound.play('key')
+            saved = True
         except Exception as e:
             self.pause_msg = 'COULD NOT SAVE'
             print("Save failed:", e)
         self.toast = (self.pause_msg, 100)
+        return saved
 
     def load_game(self):
         try:
@@ -2086,6 +2089,10 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             ev.pos = (ev.pos[0] // HI, ev.pos[1] // HI)     # window pixels -> game pixels
         if ev.type == pygame.QUIT:
             quit_game()
+        if self.state == 'loading':
+            if ev.type == pygame.FINGERDOWN and not self.touch.active:
+                self.touch.activate()
+            return
         if self.state == 'intro' and ev.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
             if ev.type == pygame.FINGERDOWN and not self.touch.active:
                 self.touch.activate()
@@ -2095,6 +2102,13 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         if self.coop_event(ev):
             return
         if self.touch.handle(ev):
+            return
+        if ev.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEMOTION) and self.state == 'pause':
+            for i, r in enumerate(getattr(self, 'pause_rects', [])):
+                if r.collidepoint(ev.pos):
+                    self.pause_sel = i              # (pointing at a button picks it)
+                    if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                        self.pause_press(i)
             return
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and self.state == 'title':
             # clicking a menu item picks it; clicking anywhere else starts the highlighted one
@@ -2135,6 +2149,51 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         self.state = 'title'
         self.t = 60                               # (the dive takes the place of the title's fade-in)
 
+    LOAD_STEPS = 270            # about how many pieces there are to make (for the loading bar)
+
+    def load_some(self, budget):
+        """Before the opening, behind a loading bar: make the opening's pieces and warm up the title
+        screen and the first frames of the game, so nothing stalls once things are moving."""
+        if getattr(self, '_settle', 0):         # all made: a moment for the browser to tidy up too
+            self._settle -= 1
+            if self._settle <= 0:
+                self._warm = False              # (everything's warm: nothing left for the title to do)
+                self.state = 'intro'
+                self.t = 0
+            return
+        job = self.__dict__.get('_load')
+        if job is None:
+            job = self._load = self._load_jobs()
+        t0 = time.perf_counter()
+        try:
+            while time.perf_counter() - t0 < budget:
+                step = next(job)
+                self._load_n = getattr(self, '_load_n', 0) + 1
+                if step == 'frame':             # (this piece needs a frame to go by first)
+                    break
+        except StopIteration:
+            import gc
+            gc.collect()                        # clear away the leftovers now, not during the opening
+            self._load_n = self.LOAD_STEPS      # (the bar shows full while we wait)
+            self._settle = 20
+
+    def _load_jobs(self):
+        yield from sound.warm()                     # every sound effect, played once in silence
+        yield from self.intro.prepare()
+        yield from self._warm_jobs()
+
+    def draw_loading(self, scr):
+        scr.blit(self.title_bg, (0, 0))
+        k = min(1.0, getattr(self, '_load_n', 0) / self.LOAD_STEPS)
+        w = 120
+        x, y = SCREEN_W // 2 - w // 2, SCREEN_H // 2 + 4
+        gfx.text(scr, "LOADING", SCREEN_W // 2, y - 16, (200, 225, 255), center=True)
+        pygame.draw.rect(scr, (16, 34, 80), (x - 2, y - 2, w + 4, 9), border_radius=4)
+        pygame.draw.rect(scr, (120, 205, 255), (x, y, max(3, int(w * k)), 5), border_radius=3)
+        for i in range(5):                      # a few bubbles drifting up
+            by = (SCREEN_H + 10) - ((self.t * (0.6 + i * 0.15) + i * 47) % (SCREEN_H + 20))
+            pygame.draw.circle(scr, (150, 200, 255), (40 + i * 44, int(by)), 2 + i % 2, 1)
+
     def warm_up(self, budget):
         """While the opening and title screen run, do the first game frame's slow one-off work a few
         milliseconds at a time (the level's region map, the light ripples, the shading for 3D balls,
@@ -2155,6 +2214,12 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         import hifi
         import props3d
         yield from self.title_scene.warm()          # the title screen's full-resolution layers
+        self.title_scene._hifi_parts()              # its 3D logo and Octos
+        yield
+        sheet = pygame.Surface((SCREEN_W * HI, SCREEN_H * HI))
+        for mood in ('blue', 'mad'):                # a throwaway title frame in each mood
+            self.title_scene.draw_full(sheet, 60, self.title_menu(), 0, mood, 1.0)
+            yield
         yield from blocks3d.warm()                  # kelp and coral, standing up in 3D
         while not hifi.warm(16):
             yield
@@ -2260,6 +2325,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             elif k in PAUSE_KEYS:
                 self.state = 'pause'
                 self.pause_msg = ''
+                self.pause_sel = 0
                 sound.play('pause')
             elif k in WARP_KEYS:
                 self.open_warp()
@@ -2274,6 +2340,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             elif k in FORM_KEYS:
                 self.player.pick_form(FORM_KEYS[k])
         elif st == 'pause':
+            sel = getattr(self, 'pause_sel', 0)
             if k == pygame.K_r:
                 self.state = 'play'
                 if self.coop:
@@ -2281,13 +2348,20 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                 else:
                     self.coop_join()
                     self.say([coop.NAME + " WAKES UP AND SLIDES OVER TO PLAY!", coop.KEYS_HELP])
+            elif k in (pygame.K_ESCAPE, pygame.K_q):
+                self.pause_press(2)                 # quit (saving first)
+            elif k in (pygame.K_LEFT, pygame.K_a, pygame.K_UP, pygame.K_w):
+                self.pause_sel = (sel - 1) % len(self.PAUSE_BUTTONS)
+                sound.play('text')
+            elif k in (pygame.K_RIGHT, pygame.K_d, pygame.K_DOWN):
+                self.pause_sel = (sel + 1) % len(self.PAUSE_BUTTONS)
+                sound.play('text')
+            elif k in CONFIRM_KEYS or k in ACTION_KEYS:
+                self.pause_press(sel)
             elif k in PAUSE_KEYS:
-                self.state = 'play'
-                sound.play('pause')
+                self.pause_press(0)
             elif k == pygame.K_s or k in SAVE_KEYS:
-                self.save_game()
-            elif k == pygame.K_q:
-                quit_game()
+                self.pause_press(1)
         elif st == 'altar':
             rows = self.altar_rows()
             if k in (pygame.K_UP, pygame.K_w):
@@ -2431,7 +2505,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
     def update(self):
         self.t += 1
         self.touch.check_orientation()
-        cursor = self.state == 'title' and not self.touch.active    # the pointer only shows on the title
+        cursor = self.state in ('title', 'pause') and not self.touch.active    # (to click their buttons)
         if cursor != getattr(self, '_cursor', None):
             self._cursor = cursor
             pygame.mouse.set_visible(cursor)
@@ -2442,8 +2516,10 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         if self.state in ('play', 'dialog', 'pause', 'title', 'win'):
             self.update_bubbles()
         st = self.state
+        if st == 'loading':
+            self.load_some(0.03)
+            return
         if st == 'intro':
-            self.warm_up(0.002)
             if self.intro.done:
                 self.end_intro()
             return
@@ -2872,6 +2948,9 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
     def draw(self):
         scr = self.screen
         st = self.state
+        if st == 'loading':
+            self.draw_loading(scr)
+            return
         if st == 'intro':
             scr.fill((0, 0, 0))
             self.intro.draw(self.hires_layer(clear=False), self.t)
@@ -3642,20 +3721,67 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                  "X / 1-9      CHANGE FORM", "C            INK: LINE/BURST",
                  "V            INK JET (DASH)", "B            BUBBLE BOMB", "T            WARP TO PORTALS",
                  "M / Q        MAP / JOURNAL", "N / H        MUTE / HATS",
-                 "R            " + ("PEBBLE LEAVES" if self.coop else "PEBBLE JOINS (2P)"), "P/ENTER/ESC  RESUME"]
+                 "R            " + ("PEBBLE LEAVES" if self.coop else "PEBBLE JOINS (2P)")]
         for i, l in enumerate(lines):
             gfx.text(scr, l, box.x + 10 if i else SCREEN_W // 2, box.y + 6 + i * 10,
                      (255, 220, 120) if i == 0 else (255, 255, 255), center=(i == 0))
-        y = box.y + 6 + len(lines) * 10 + 3
-        gfx.text(scr, "S/L-SHIFT  SAVE" if WEB else "S/L-SHIFT  SAVE    Q  QUIT", SCREEN_W // 2, y, (160, 230, 160), center=True)
+        y = box.y + 6 + len(lines) * 10 + 1
+        self.draw_pause_buttons(scr, y)
         forms = "  ".join(f"{i + 1}:{gfx.MOOD_NAMES[f]}" for i, f in enumerate(self.player.forms))
         for j, line in enumerate(gfx.wrap("FORMS  " + forms, 36)):
-            gfx.text(scr, line, SCREEN_W // 2, y + 13 + j * 10, (190, 200, 255), center=True)
+            gfx.text(scr, line, SCREEN_W // 2, y + 18 + j * 10, (190, 200, 255), center=True)
         self.draw_bell_row(scr, box.right - 6 - 7 * 9, box.y + 4, small=True)
+        sel = getattr(self, 'pause_sel', 0)
         if getattr(self, 'pause_msg', ''):
             gfx.text(scr, self.pause_msg, SCREEN_W // 2, box.bottom - 11, (255, 220, 120), center=True)
+        elif sel:
+            gfx.text(scr, ("SAVE YOUR GAME", "SAVES, THEN BACK TO THE TITLE")[sel - 1], SCREEN_W // 2,
+                     box.bottom - 11, (255, 220, 120), center=True)
         else:
             gfx.text(scr, self.short_goal(), SCREEN_W // 2, box.bottom - 11, (255, 200, 120), center=True)
+
+    # the pause screen's buttons: (word, key)
+    PAUSE_BUTTONS = (('RESUME', 'P'), ('SAVE', 'S'), ('QUIT', 'ESC'))
+
+    def draw_pause_buttons(self, scr, y):
+        """RESUME, SAVE and QUIT in a row: pick with the arrows and Z or Enter, click or tap them, or
+        press their keys."""
+        sel = getattr(self, 'pause_sel', 0)
+        sizes = [gfx.text_width(f"{key} {word}") + 10 for word, key in self.PAUSE_BUTTONS]
+        gap = 8
+        x = SCREEN_W // 2 - (sum(sizes) + gap * (len(sizes) - 1)) // 2
+        self.pause_rects = []
+        for i, ((word, key), w) in enumerate(zip(self.PAUSE_BUTTONS, sizes)):
+            r = pygame.Rect(x, y, w, 13)
+            self.pause_rects.append(r)
+            on = i == sel
+            pygame.draw.rect(scr, (40, 60, 120) if on else (14, 22, 50), r, border_radius=3)
+            pygame.draw.rect(scr, (255, 220, 120) if on else (90, 110, 170), r, 1, border_radius=3)
+            gfx.text(scr, key, r.x + 5, r.y + 3, (255, 220, 120) if on else (160, 180, 230))
+            gfx.text(scr, word, r.x + 5 + gfx.text_width(key) + 6, r.y + 3, (255, 255, 255) if on else (190, 200, 230))
+            x += w + gap
+
+    def pause_press(self, i):
+        word = self.PAUSE_BUTTONS[i][0]
+        self.pause_sel = i
+        if word == 'RESUME':
+            self.state = 'play'
+            sound.play('pause')
+        elif word == 'SAVE':
+            self.save_game()
+        elif self.save_game():                  # QUIT: only once the game is safely saved
+            self.quit_to_title()
+
+    def quit_to_title(self):
+        """Back to the title screen (CONTINUE picks up from the save just made)."""
+        self.start_dive(50)                     # swim back out of the game
+        self.state = 'title'
+        self.title_sel = 0
+        self.t = 60
+        self.held = []
+        self.pause_msg = ''
+        self.toast = None                       # (CONTINUE on the title says it's saved)
+        sound.music('title')
 
     def draw_mute_icon(self, scr, x, y):
         """A little crossed-out speaker."""

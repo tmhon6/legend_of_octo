@@ -1,10 +1,11 @@
-"""Build the whole website: one playable build per git tag, plus the newest development build,
-and a start page that asks which version to play.
+"""Build the whole website: a playable build of each of the newest few releases (KEEP of them),
+plus a development build when main has changes that aren't released yet, and a start page that
+asks which version to play.
 
-    .venv/bin/python build_site.py      # -> build/site/index.html, build/site/<tag>/, build/site/dev/
+    .venv/bin/python build_site.py      # -> build/site/index.html, build/site/<tag>/ (, build/site/dev/)
 
 To release a version:   git tag -a v1.1.0 -m "What's new"  &&  git push origin v1.1.0
-Each version keeps its own saved game.
+Each version keeps its own saved game. Older tags stay in git; they just aren't on the site.
 """
 import html
 import json
@@ -18,6 +19,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SITE = os.path.join(ROOT, 'build', 'site')
 TAG_RE = re.compile(r'^v\d+(\.\d+)*$')      # only plain version tags like v1.0 or v1.2.3
+KEEP = 3                                    # how many of the newest releases the site offers
 
 
 def git(*args):
@@ -46,7 +48,7 @@ def build(src, out):
 def main():
     shutil.rmtree(SITE, ignore_errors=True)
     os.makedirs(SITE)
-    versions = tags()
+    versions = tags()[:KEEP]
     with tempfile.TemporaryDirectory() as tmp:
         for v in versions:
             wt = os.path.join(tmp, v['tag'])
@@ -55,16 +57,18 @@ def main():
                 build(wt, os.path.join(SITE, v['tag']))
             finally:
                 git('worktree', 'remove', '--force', wt)
-    build(ROOT, os.path.join(SITE, 'dev'))
-    dev = {'tag': 'dev', 'label': git('describe', '--tags', '--always'), 'date': git('log', '-1', '--format=%cs')}
+    dev = None
+    if not versions or git('rev-list', '--count', versions[0]['tag'] + '..HEAD') != '0':
+        build(ROOT, os.path.join(SITE, 'dev'))      # main has unreleased changes: offer those too
+        dev = {'tag': 'dev', 'label': git('describe', '--tags', '--always'), 'date': git('log', '-1', '--format=%cs')}
     write_launcher(versions, dev)
     print("site ready:", SITE)
 
 
 def write_launcher(versions, dev):
     rows = []
-    # the two newest releases get big buttons; everything else goes in a small dropdown
-    for i, v in enumerate(versions[:2]):
+    # one button per version on offer, the newest first
+    for i, v in enumerate(versions):
         badge = '<span class="badge">LATEST</span>' if i == 0 else ''
         note = f'<div class="note">{html.escape(v["note"])}</div>' if v['note'] else ''
         rows.append(f'''<a class="ver{' first' if i == 0 else ''}" href="{v['tag']}/">
@@ -72,14 +76,10 @@ def write_launcher(versions, dev):
           <div class="date">{v['date']}</div>{note}</a>''')
     if not rows:
         rows.append('<div class="empty">No released versions yet.</div>')
-    opts = [f'<option value="{v["tag"]}/">{html.escape(v["tag"])} ({v["date"]})</option>' for v in versions[2:]]
-    opts.append(f'<option value="dev/">Development build ({html.escape(dev["label"])}, may be unfinished)</option>')
-    rows.append('''<div class="older">
-          <select aria-label="Older versions" onchange="if (this.value) location.href = this.value">
-            <option value="">Older versions...</option>
-            ''' + '\n            '.join(opts) + '''
-          </select>
-        </div>''')
+    if dev:
+        rows.append(f'''<a class="ver dev" href="dev/">
+          <div class="name">Development build</div>
+          <div class="date">{html.escape(dev['label'])}, {dev['date']} - may be unfinished</div></a>''')
     page = TEMPLATE.replace('%ROWS%', '\n'.join(rows)).replace('%DATA%', json.dumps(
         [v['tag'] for v in versions]))
     with open(os.path.join(SITE, 'index.html'), 'w') as f:

@@ -35,14 +35,16 @@ The same code also runs in a web browser through [pygbag](https://pypi.org/proje
 
 ### Versions
 
-Every git tag like `v1.0.0` is a version. The web page asks which version to play, and each version
-keeps its own saved game. The title screen shows the version you're running. To release one:
+Every git tag like `v1.0.0` is a version. The web page offers the three newest versions (older
+tags stay in git), and each version keeps its own saved game. The title screen shows the version
+you're running. To release one:
 
     git tag -a v1.1.0 -m "Mini-bosses and touch controls"
     git push origin v1.1.0
     gh workflow run pages.yml        # republish the site so the new version appears
 
-`build_site.py` builds every tagged version, plus the newest development build, into `build/site/`.
+`build_site.py` builds the newest three tagged versions (`KEEP` in the script), plus a development
+build when `main` has changes that aren't released yet, into `build/site/`.
 
 Pushing to `main` on GitHub runs `.github/workflows/pages.yml`, which builds the web version and
 publishes it to GitHub Pages. In the repo, set **Settings → Pages → Source** to **GitHub Actions**.
@@ -61,7 +63,7 @@ In the browser, saves go to the browser's local storage instead of `savegame.jso
 | B                  | Drop a bubble bomb (buy them in the Pearl Shop)     |
 | T                  | Warp to a completed trial portal or Octo's house (and, after the Octo Express milestone, to the towns) |
 | Left Shift         | Save the game                                       |
-| P / Enter / Esc    | Pause. In the pause menu: **S** saves, **Q** quits  |
+| P / Enter / Esc    | Pause. The pause menu has **RESUME**, **SAVE** and **QUIT** buttons: click or tap them, pick with the arrows and Z, or press **P**, **S** or **Esc** (Q works too). Quit saves first, then goes back to the title screen |
 | M                  | World map (game pauses; ←/→ flips between sea and sky) |
 | N                  | Mute / unmute all sound (music and effects)         |
 | H                  | Wardrobe: pick a hat and the ink jet's colour       |
@@ -70,8 +72,8 @@ In the browser, saves go to the browser's local storage instead of `savegame.jso
 | F11                | Fullscreen                                          |
 | F3                 | Show the frame rate                                 |
 
-The mouse pointer only shows on the title screen, where you can click the menu; while you play
-it's hidden.
+The mouse pointer only shows on the title screen and the pause menu, where you can click their
+buttons; while you play it's hidden. On a computer, Esc on the title screen closes the game.
 
 ### Player two: Pebble the snail
 
@@ -191,8 +193,10 @@ resolution (twice in the browser), all in code:
   everything in it. Things behind a building disappear behind it.
 * **Trial portals** are stone rings with a swirling vortex. Step into one and Octo is pulled in:
   the view rushes towards the portal as he spirals into the vortex, then he pops out in the trial.
-* **The opening:** skim a sunset ocean, dive under, and 3D Octo swims up out of the deep as the
-  logo flies together letter by letter. Any key (or a tap) skips it. Then you swim on through the
+* **The opening:** a short loading bar first gets everything ready, so the opening plays smoothly
+  from start to end (in a browser too). "Minu Hong presents" fades in over the sunset in clean,
+  spaced-out capitals; then skim a sunset ocean, dive under, and 3D Octo swims up out of the deep
+  as the logo flies together letter by letter. Any key (or a tap) skips it. Then you swim on through the
   logo into the title screen, with bubbles streaming past, and starting a game dives down from the
   title onto the sea floor, which swings up flat from a 3D tilt.
 * **The title screen** is drawn at full resolution: kelp sways smoothly, fish, sunbeams and marine

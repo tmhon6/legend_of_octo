@@ -279,7 +279,11 @@ class TouchControls:
             g.on_key(pygame.K_ESCAPE)
         elif st in ('name', 'medal', 'cityintro', 'sleep'):
             g.on_key(pygame.K_RETURN)
-        elif st == 'pause':
+        elif st == 'pause':                     # its buttons, or anywhere else to carry on
+            for i, rect in enumerate(getattr(g, 'pause_rects', [])):
+                if rect.collidepoint(x - self.gx, y):
+                    g.pause_press(i)
+                    return
             g.on_key(pygame.K_p)
         elif st in ('gameover', 'win'):
             g.on_key(pygame.K_RETURN)
