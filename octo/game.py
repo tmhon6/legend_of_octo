@@ -233,6 +233,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         problems = [] if WEB else world.validate()     # a developer check: skipped in the browser to load faster
         if problems:
             raise SystemExit("Map errors:\n  " + "\n  ".join(problems))
+        sound.pre_init(touch_device())          # (a browser on a phone needs a bigger sound buffer)
         pygame.init()
         pygame.display.set_caption("Legend of Octo")
         # the real window is HI times bigger than the pixel-art screen: the game is scaled up into

@@ -148,8 +148,18 @@ def init():
         _sfx[k] = pygame.mixer.Sound(buffer=b)
 
 
+def pre_init(phone=False):
+    """Call before pygame.init(). In a browser the sound is mixed in between the game's frames, so
+    its buffer has to last longer than the longest frame, or the sound runs dry for a moment and
+    you hear a crackle. pygame's usual buffer (512 samples, about a hundredth of a second) is far
+    too small for a phone, whose frames take longer. (A bigger buffer only means a sound effect
+    starts a few hundredths of a second later.)"""
+    if WEB:
+        pygame.mixer.pre_init(buffer=4096 if phone else 2048)
+
+
 def _init_web():
-    """Browser build: load the pre-made .ogg files written by build_web.py (making them in the
+    """Browser build: load the pre-made sound files written by build_web.py (making them in the
     browser would take far too long). Tunes are only noted here: they stream when they play."""
     global enabled, _music_channel
     try:
@@ -164,8 +174,12 @@ def _init_web():
             path = os.path.join(AUDIO_DIR, name)
             if kind == 'music':
                 _music_files[key] = path
-            else:
-                _sfx[key] = pygame.mixer.Sound(path)
+                continue
+            snd = pygame.mixer.Sound(path)
+            if snd.get_length() > 0:
+                _sfx[key] = snd
+            else:                               # never play an empty sound: in the browser that
+                print("Sound effect left out (it's empty):", name)      # crashes the whole game
     except Exception as e:
         print("Sound disabled:", e)
         enabled = False
@@ -173,9 +187,18 @@ def _init_web():
     enabled = True
 
 
+SFX_MIN = 0.12      # seconds: shorter sound effects get silence added for the browser (see export_ogg)
+
+
 def export_ogg(out_dir):
     """Used by build_web.py: make every sound effect and tune and write them out as .ogg files
-    (needs ffmpeg). The tunes take about a second each."""
+    (needs ffmpeg). The tunes take about a second each.
+
+    A browser can decode an .ogg of only a hundredth of a second or two as completely empty, and
+    playing an empty sound crashes it - so very short sound effects get a little silence added,
+    then every sound effect is decoded the way a browser does it (48 kHz stereo), and any that
+    still comes out empty is kept as a plain .wav instead."""
+    import shutil
     import tempfile
     import wave
     sys.path.insert(0, HERE)
@@ -183,6 +206,7 @@ def export_ogg(out_dir):
     sfx = {}
     _synth(sfx)
     os.makedirs(out_dir, exist_ok=True)
+    decodes = _decode_check()
 
     def write(tmp, kind, key, buf, channels, rate, q):
         wav = os.path.join(tmp, f'{kind}_{key}.wav')
@@ -191,15 +215,38 @@ def export_ogg(out_dir):
             w.setsampwidth(2)
             w.setframerate(rate)
             w.writeframes(buf)
-        subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-i', wav, '-c:a', 'libvorbis', '-q:a', q,
-                        os.path.join(out_dir, f'{kind}_{key}.ogg')], check=True)
-        os.remove(wav)
-    with tempfile.TemporaryDirectory() as tmp:
-        for key, buf in sfx.items():
-            write(tmp, 'sfx', key, buf, _channels, SR, '5')
-        for key in tunes.NAMES:
-            write(tmp, 'music', key, tunes.render(key, tunes.SR).tobytes(), 1, tunes.SR, '3')
-            print("  tune", key)
+        ogg = os.path.join(out_dir, f'{kind}_{key}.ogg')
+        subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-i', wav, '-c:a', 'libvorbis', '-q:a', q, ogg],
+                       check=True)
+        if kind == 'sfx' and decodes and not decodes(ogg):
+            os.remove(ogg)
+            shutil.move(wav, os.path.join(out_dir, f'{kind}_{key}.wav'))
+            print(f"  sound effect {key}: its .ogg decodes empty, so it's kept as a .wav")
+        else:
+            os.remove(wav)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            for key, buf in sfx.items():
+                short = int(SFX_MIN * SR) * 2 * _channels - len(buf)
+                write(tmp, 'sfx', key, buf + b'\0' * max(0, short), _channels, SR, '5')
+            for key in tunes.NAMES:
+                write(tmp, 'music', key, tunes.render(key, tunes.SR).tobytes(), 1, tunes.SR, '3')
+                print("  tune", key)
+    finally:
+        if decodes:
+            pygame.mixer.quit()
+
+
+def _decode_check():
+    """For export_ogg: a test of whether a sound file decodes to any sound at all, decoding it the
+    way a browser does (None when there's no way to check on this computer)."""
+    os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
+    try:
+        pygame.mixer.init(48000, -16, 2)
+    except pygame.error as e:
+        print("  (can't check the sound effects decode here:", e, ")")
+        return None
+    return lambda path: pygame.mixer.Sound(path).get_length() > 0
 
 
 def _synth(S):
