@@ -2149,6 +2149,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             if prop.kind == 'static' and near.colliderect(prop.rect()):
                 props3d.image(prop.key, prop.builder)
                 yield
+        yield from self._warm_folk()
 
     def start_dive(self, length=50, tilt=False):
         """Dive from the picture on screen now into whatever is drawn next (transition3d)."""
@@ -3008,8 +3009,8 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             fx.shadow(ps, self.player.rect, ox, oy, lift=6 if self.player.in_sky else 0)
         if self.snail is not None and self.ground_height(self.snail) == 0:
             self.draw_snail_2d(ps, ox, oy)
-        for n in self.npcs:
-            if vis.colliderect(n.rect) and n not in raised:
+        for n in self.npcs:                                   # (friendly folk are 3D figures: scene3d)
+            if vis.colliderect(n.rect) and n not in raised and not self.is_folk3d(n):
                 n.draw(ps, ox, oy)
         for e in sorted(self.enemies, key=lambda e: e.y):
             if vis.colliderect(e.rect):

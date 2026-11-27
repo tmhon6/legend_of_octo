@@ -246,7 +246,7 @@ _renders = {}
 def cached(key, model, s, yaw, pitch, tint=None, flash=False, outline=None):
     out = _renders.get(key)
     if out is None:
-        if len(_renders) > 900:
+        if len(_renders) > 1600:
             _renders.clear()
         out = _renders[key] = render(model, s, yaw, pitch, tint, flash, outline)
     return out

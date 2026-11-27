@@ -13,6 +13,7 @@ import random
 import pygame
 
 import attacks3d
+import gfx
 import props3d
 import sound
 import voxel
@@ -20,6 +21,41 @@ import world
 from settings import HI, HUD_H, PLAY_H, PLAY_W, TILE
 
 FACING_YAW = {'down': 0.22, 'up': math.pi + 0.22, 'left': 0.62, 'right': -0.62}
+FOLK = ('Citizen', 'Shelly', 'Hermie', 'LegendStatue')               # the friendlies drawn as 3D figures
+TURTLE_TURN = {'up': 0, 'left': 90, 'down': 180, 'right': -90}      # turtles are drawn from above, head up
+_folk = {}                                                           # turned sprites and their cube models
+
+
+def _figure(key, spr, depth=4.0, ball=True, yaw=0.25):
+    """A small sprite as a cube figure, like Pebble: (render, feet anchor), cached under key."""
+    m = _folk.get(key)
+    if m is None:
+        m = _folk[key] = voxel.VoxelModel(voxel._profile_cells(spr, None, depth=depth, ball=ball))
+    return voxel.cached(key, m, HI, yaw, 0.6)
+
+
+def _turned(img, ang):
+    key = ('turn', id(img), ang)
+    s = _folk.get(key)
+    if s is None:
+        s = _folk[key] = pygame.transform.rotate(img, ang) if ang else img
+    return s
+
+
+def _turtle(img, facing):
+    """A turtle (seen from above, head up in its sprite) turned to face the way it's going."""
+    ang = TURTLE_TURN.get(facing, 0)
+    return _figure(('turtle', id(img), ang), _turned(img, ang))
+
+
+def _plinth():
+    s = _folk.get('plinth_spr')
+    if s is None:
+        s = _folk['plinth_spr'] = pygame.Surface((20, 9), pygame.SRCALPHA)
+        s.fill((90, 80, 110))
+        pygame.draw.rect(s, (200, 190, 220), (1, 0, 18, 7))
+        pygame.draw.line(s, (255, 255, 255), (1, 0), (18, 0))
+    return s
 PORTAL_LEN = 66                  # frames from stepping in to arriving in the trial
 ARRIVE_LEN = 34
 
@@ -104,10 +140,13 @@ class Scene3D:
             h = self.ground_height(sn)
             key = (pyr_base + 1.2) if h > 0 and pyr_base is not None else sn.rect.bottom
             items.append((key, 2, 'snail'))
-        for n in self.npcs:                                   # someone standing up on the pyramid
+        for n in self.npcs:
             if getattr(n, 'hidden', False) or not view.colliderect(n.rect):
                 continue
-            if self.ground_height(n) > 0 and pyr_base is not None:
+            up = self.ground_height(n) > 0 and pyr_base is not None
+            if type(n).__name__ in FOLK:                      # friendly folk: 3D figures, like Octo
+                items.append((pyr_base + 0.5 if up else n.rect.bottom, 4, n))
+            elif up:                                          # anything else standing up on the pyramid
                 items.append((pyr_base + 0.5, 1, n))
         for o in self.shots + self.effects:                  # every shot, ring and spark, in 3D
             if attacks3d.handles(o):
@@ -132,6 +171,8 @@ class Scene3D:
                 self._draw_snail(hr, shake)
             elif kind == 3:
                 attacks3d.draw(self, hr, what, shake)
+            elif kind == 4:
+                self._draw_folk(hr, what, shake)
             else:
                 self._draw_raised(hr, what, shake)
         hr.set_clip(None)
@@ -192,6 +233,98 @@ class Scene3D:
             sx = cx + math.cos(ang) * 11 * HI
             sy = cy + math.sin(ang) * 11 * HI * props3d.KZ
             pygame.draw.circle(hr, (255, 255, 255), (int(sx), int(sy)), max(1, HI // 2 + 1))
+
+    @staticmethod
+    def is_folk3d(n):
+        return type(n).__name__ in FOLK
+
+    def _draw_folk(self, hr, n, shake):
+        """A friendly character as a 3D figure in Octo's own pixel style: the octopus townsfolk are
+        Octo's model in their own colours and hats, the turtles (Old Shelly too) have domed shells
+        and turn to face the way they go, Hermie is a cube figure, and the statue is a golden Octo."""
+        h = self.ground_height(n)
+        kind = type(n).__name__
+        if kind == 'LegendStatue':
+            return self._draw_statue(hr, n, h, shake)
+        icon = None
+        if kind == 'Citizen':
+            bob = 0 if n.moving else (1 if (n.t // 30) % 2 else 0)
+            fx, fy = n.x + 8, n.y + 16 + bob
+            if n.kind == 'turtle':
+                base = n.image()
+                img, (ax, ay) = _turtle(base, n.facing)
+                top = fy - base.get_height()
+            else:
+                frame = (n.t // 14) % 2 if n.moving else (n.t // 40) % 2
+                img, (ax, ay) = voxel.octo_image('cit_' + n.id, frame, FACING_YAW.get(n.facing, 0.22), HI, 0.6,
+                                                 n.hat)
+                if n.small:                                   # little Ollie
+                    img = pygame.transform.smoothscale(img, (int(img.get_width() * 0.75), int(img.get_height() * 0.75)))
+                    ax, ay = ax * 0.75, ay * 0.75
+                top = fy - (12 if n.small else 16)
+            if n.icon:
+                icon = (n.x + 8, top - (14 if n.hat else 8))
+        elif kind == 'Shelly':
+            base = gfx.SPR['turtle'][1 if (n.t % 200) > 190 else 0]
+            fx, fy = n.x + base.get_width() / 2, n.y + base.get_height()
+            img, (ax, ay) = _turtle(base, 'up')
+        else:                                                 # Hermie
+            base = gfx.SPR['hermit'][1 if (n.t % 160) > 150 else 0]
+            bob = 1 if (n.t // 30) % 2 else 0
+            fx, fy = n.x + base.get_width() / 2, n.y + base.get_height() + bob
+            img, (ax, ay) = _figure(('hermit', id(base)), base)
+        x, y = self._hr(fx - props3d.KX * h, fy - props3d.KZ * h, shake)
+        hr.blit(img, (x - ax, y - ay))
+        if icon:                                              # the quest marker over their head
+            tmp = pygame.Surface((16, 18), pygame.SRCALPHA)
+            n._icon(tmp, 8, 9)
+            ix, iy = self._hr(icon[0] - props3d.KX * h, icon[1] - props3d.KZ * h, shake)
+            hr.blit(pygame.transform.scale(tmp, (16 * HI, 18 * HI)), (ix - 8 * HI, iy - 9 * HI))
+
+    def _draw_statue(self, hr, n, h, shake):
+        """The Living Legend's stone plinth, and once it's earned a golden 3D Octo standing on it."""
+        img, (ax, ay) = _figure('plinth', _plinth(), depth=5.0, ball=False, yaw=0.3)
+        x, y = self._hr(n.x + 8 - props3d.KX * h, n.y + 17 - props3d.KZ * h, shake)
+        hr.blit(img, (x - ax, y - ay))
+        if not n.lit:
+            tmp = pygame.Surface((8, 10), pygame.SRCALPHA)
+            gfx.text(tmp, "?", 1, 1, (150, 140, 170))
+            qx, qy = self._hr(n.x + 5, n.y, shake)
+            hr.blit(pygame.transform.scale(tmp, (8 * HI, 10 * HI)), (qx, qy))
+            return
+        key = ('gold', n.hat)
+        if key not in _folk:                                  # a bright, shining gold (as the flat statue was)
+            img, anchor = voxel.octo_image('blue', 0, 0.22, HI, 0.6, n.hat, tint=(255, 220, 120))
+            img = img.copy()
+            img.fill((80, 62, 14), special_flags=pygame.BLEND_RGB_ADD)
+            _folk[key] = (img, anchor)
+        gold, (gx, gy) = _folk[key]
+        x, y = self._hr(n.x + 8, n.y + 10, shake)
+        hr.blit(gold, (x - gx, y - gy))
+        if (n.t // 8) % 6 == 0:                               # a glint
+            sx, sy = self._hr(n.x + 3 + (n.t // 16) % 10, n.y - 4 + (n.t // 7) % 9, shake)
+            w = max(1, HI // 2)
+            pygame.draw.line(hr, (255, 255, 255), (sx - 2 * HI, sy), (sx + 2 * HI, sy), w)
+            pygame.draw.line(hr, (255, 255, 255), (sx, sy - 2 * HI), (sx, sy + 2 * HI), w)
+
+    def _warm_folk(self):
+        """Make everyone's standing pose ahead of time (for the warm-up on the title screen)."""
+        import folk
+        from people import _turtle_frames
+        for nid, d in folk.NPCS.items():
+            if d.get('hidden'):
+                continue
+            if d['kind'] == 'octo':
+                for f in (0, 1):
+                    voxel.octo_image('cit_' + nid, f, FACING_YAW['down'], HI, 0.6, d.get('hat'))
+                    yield
+            else:
+                _turtle(_turtle_frames(tuple(d['shell']), tuple(d['skin']), d.get('small', False))[0], 'down')
+                yield
+        _turtle(gfx.SPR['turtle'][0], 'up')
+        yield
+        _figure(('hermit', id(gfx.SPR['hermit'][0])), gfx.SPR['hermit'][0])
+        yield
 
     def _draw_raised(self, hr, n, shake):
         """An entity standing up on the pyramid: draw its pixel art, lifted to the top."""

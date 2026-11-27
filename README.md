@@ -145,6 +145,11 @@ resolution (twice in the browser), all in code:
   lit cube, and his head is a smoothly shaded ball, with his back drawn from his back sprite. He
   turns smoothly in 3D, sways when he's idle, spins round when he changes form, and wears his hat
   in 3D too, in every form. Pebble the snail is a little 3D snail in the same style.
+* **Friendly characters are 3D too.** Every octopus in Octo City is Octo's own 3D model in their
+  colours, wearing their hat in 3D (the mayor's crown, the chef's hat...), turning to look at you,
+  with their quest marker floating overhead. The turtles of Turtle Town and Old Shelly have domed
+  3D shells and turn to face where they're going, Hermie is 3D in his shop, and the Living Legend
+  statue is a golden 3D Octo on a stone plinth.
 * **Attacks are 3D too.** Ink drops, Pebble's slime, spines, ice shards, wisps, stars, shells,
   orbs, lanterns, mines, bombs, hail, rocks, the spike roll, Octo's slap and every enemy shot are
   their pixel art turned into lit cubes, like Octo. They fly at body height with a shadow on the
