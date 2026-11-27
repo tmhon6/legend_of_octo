@@ -2001,19 +2001,35 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
     # main loop
     # ======================================================================
 
+    CATCH_UP = 3        # the most extra game steps taken between two frames
+
     async def run(self):
+        behind = 0.0                            # how many game steps the game has fallen behind
+        frames = 0
         while True:
             for ev in pygame.event.get():
                 self.handle_event(ev)
             self.update()
             sound.update()                      # (moves the music on from one tune to the next)
+            # The game moves one step per frame. A phone that can't draw 60 frames a second would
+            # play it in slow motion, so instead it takes extra steps between frames and keeps up
+            # with real time: a little less smooth, but the right speed. Only while playing (the
+            # cutscenes time their sounds to every frame).
+            while behind >= 1 and self.state == 'play':
+                behind -= 1
+                self.update()
             self.draw()
             if self.touch.active:
                 self.touch.present(self.display)
             self.present()
             pygame.display.flip()
-            self.clock.tick(FPS)
-            if WEB and self.t % 30 == 0:             # lets a test page read the frame rate
+            ms = self.clock.tick(FPS)
+            if self.state == 'play':
+                behind = max(-1.0, min(self.CATCH_UP, behind + ms * FPS / 1000 - 1))
+            else:
+                behind = 0.0
+            frames += 1
+            if WEB and frames % 30 == 0:             # lets a test page read the frame rate
                 try:
                     import platform
                     platform.window.octo_fps = int(self.clock.get_fps())

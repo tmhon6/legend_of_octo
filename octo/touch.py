@@ -110,6 +110,8 @@ class TouchControls:
         self.stick = None           # joystick base: where the thumb landed (it follows a long drag)
         self.knob = None            # where the thumb is now
         self.vec = None             # joystick push: (x, y), length up to 1
+        self._panel_surf = None     # the panel as it looks with nothing pressed (see present)
+        self._panel_key = None
         self.layout()
 
     # ---- setup -------------------------------------------------------------
@@ -164,6 +166,7 @@ class TouchControls:
                 self.activate()
 
     def layout(self):
+        self._panel_key = None                          # (the kept panel is drawn again)
         names = [n for n, _, _ in PILLS]
         if self.mode == 'sides':
             s, W = self.side, SCREEN_W + 2 * self.side
@@ -317,23 +320,39 @@ class TouchControls:
 
     # ---- drawing -----------------------------------------------------------
     def present(self, disp):
-        """Put the game picture and the controls on the real display."""
+        """Put the game picture and the controls on the real display. The panel - its background and
+        every control at rest - is drawn once and kept (drawing it all again every frame took a
+        phone a tenth of each frame); each frame only adds what's pressed or held."""
         g = self.game
         for k in list(self.lit):
             self.lit[k] -= 1
             if self.lit[k] <= 0:
                 del self.lit[k]
+        playing = g.state not in ('title', 'intro')
         if self.mode in ('panel', 'sides'):
-            self._panel_bg(disp)
-        disp.blit(g.screen, (self.gx, 0))
-        if g.state in ('title', 'intro'):
+            disp.blit(self._panel(disp.get_size(), playing), (0, 0))
+            disp.blit(g.screen, (self.gx, 0))
+            if playing:
+                self._draw_controls(disp, alpha=255, live=True)
             return
-        if self.mode in ('panel', 'sides'):
-            self._draw_controls(disp, alpha=255)
-        else:
+        disp.blit(g.screen, (self.gx, 0))
+        if playing:
             layer = pygame.Surface(disp.get_size(), pygame.SRCALPHA)
             self._draw_controls(layer, alpha=110)
             disp.blit(layer, (0, 0))
+
+    def _panel(self, size, playing):
+        """The panel with nothing pressed, made again only when something on it changes."""
+        key = (size, self.game.state == 'title', playing, bool(self.stick), WEB and is_fullscreen(),
+               __import__('sound').music_on)
+        if key != self._panel_key or self._panel_surf is None:
+            if self._panel_surf is None or self._panel_surf.get_size() != size:
+                self._panel_surf = pygame.Surface(size)
+            self._panel_bg(self._panel_surf)
+            if playing:
+                self._draw_controls(self._panel_surf, alpha=255, live=False)
+            self._panel_key = key
+        return self._panel_surf
 
     def _panel_bg(self, disp):
         w, h = disp.get_size()
@@ -359,24 +378,28 @@ class TouchControls:
             gfx.text(disp, "TURN SIDEWAYS FOR A BIGGER VIEW", SCREEN_W // 2, y0 + self.ph // 2 + 10,
                      (120, 135, 180), center=True)
 
-    def _draw_controls(self, s, alpha):
+    def _draw_controls(self, s, alpha, live=None):
+        """Draw every control as it is now (live=None); or the panel at rest, nothing pressed
+        (live=False); or just what's pressed or held, over that (live=True)."""
         def col(c, lit=False):
             c = tuple(min(255, v + 70) for v in c) if lit else c
             return c + (alpha,)
         # pills
         for (name, label, _), rect in zip(PILLS, self.pill_rects):
+            lit = name in self.lit and live is not False
+            if live and not lit:
+                continue
             if name == 'full':
                 if not WEB:
                     continue
                 label = "EXIT" if is_fullscreen() else "FULL"
-            lit = name in self.lit
             pygame.draw.rect(s, col((50, 60, 100), lit), rect, border_radius=6)
             pygame.draw.rect(s, col((140, 160, 220)), rect, 1, border_radius=6)
             if name == 'mute' and not __import__('sound').music_on:
                 label = "SOUND"
             gfx.text(s, label, rect.centerx, rect.centery - 3, (230, 235, 255), center=True)
         # joystick: under the thumb while held, a faint hint where it usually sits otherwise
-        if self.stick:
+        if self.stick and live is not False:
             bx, by = self.stick
             kx, ky = self.knob
             base = pygame.Surface((STICK_R * 2 + 4, STICK_R * 2 + 4), pygame.SRCALPHA)
@@ -387,7 +410,7 @@ class TouchControls:
             pygame.draw.circle(s, col((40, 44, 70)), (int(kx) + 1, int(ky) + 2), 13)
             pygame.draw.circle(s, col((130, 145, 210)), (int(kx), int(ky)), 13)
             pygame.draw.circle(s, col((255, 255, 255)), (int(kx), int(ky)), 13, 1)
-        else:
+        elif not self.stick and not live:
             dx, dy, r = self.dpad
             hint = pygame.Surface((r * 2 + 4, r * 2 + 4), pygame.SRCALPHA)
             c = r + 2
@@ -400,7 +423,9 @@ class TouchControls:
         # action buttons
         colours = {'atk': (200, 60, 80), 'form': (60, 120, 220), 'jet': (40, 150, 120)}
         for name, (bx, by, br, _, label) in self.buttons.items():
-            lit = name in self.lit
+            lit = name in self.lit and live is not False
+            if live and not lit:
+                continue
             pygame.draw.circle(s, col((0, 0, 0)), (bx + 1, by + 2), br)
             pygame.draw.circle(s, col(colours[name], lit), (bx, by), br)
             pygame.draw.circle(s, col((255, 255, 255)), (bx, by), br, 1)
