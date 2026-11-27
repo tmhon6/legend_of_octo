@@ -1,12 +1,14 @@
-"""Build the whole website: a playable build of each of the newest few releases (KEEP of them),
-plus a development build when main has changes that aren't released yet, and a start page that
-asks which version to play.
+"""Build the whole website: a playable build of every release, plus the development build (main as it
+is now), and a start page whose two big buttons are the latest release and the development build,
+with every older release in a dropdown.
 
-    .venv/bin/python build_site.py      # -> build/site/index.html, build/site/<tag>/ (, build/site/dev/)
+    .venv/bin/python build_site.py      # -> build/site/index.html, build/site/<tag>/, build/site/dev/
 
 To release a version:   git tag -a v1.1.0 -m "What's new"  &&  git push origin v1.1.0
-Each version keeps its own saved game. Older tags stay in git; they just aren't on the site.
+Each version keeps its own saved game. A release never changes, so each one is built once and kept in
+build/versions_cache (the deploy workflow keeps that folder between runs too).
 """
+import hashlib
 import html
 import json
 import os
@@ -18,8 +20,8 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SITE = os.path.join(ROOT, 'build', 'site')
+CACHE = os.path.join(ROOT, 'build', 'versions_cache')
 TAG_RE = re.compile(r'^v\d+(\.\d+)*$')      # only plain version tags like v1.0 or v1.2.3
-KEEP = 3                                    # how many of the newest releases the site offers
 
 
 def git(*args):
@@ -45,41 +47,78 @@ def build(src, out):
     subprocess.run([sys.executable, os.path.join(ROOT, 'build_web.py'), '--src', src, '--out', out], check=True)
 
 
+def stamp(tag):
+    """What a release's build depends on: its own code, and the build script."""
+    with open(os.path.join(ROOT, 'build_web.py'), 'rb') as f:
+        script = hashlib.md5(f.read()).hexdigest()
+    return git('rev-list', '-n', '1', tag) + ' ' + script
+
+
+def build_release(tag, tmp):
+    out = os.path.join(SITE, tag)
+    kept = os.path.join(CACHE, tag)
+    mark = os.path.join(CACHE, tag + '.stamp')
+    want = stamp(tag)
+    if os.path.isdir(kept) and os.path.exists(mark) and open(mark).read() == want:
+        print("already built:", tag)
+        shutil.copytree(kept, out)
+        return
+    wt = os.path.join(tmp, tag)
+    git('worktree', 'add', '--detach', wt, tag)
+    try:
+        build(wt, out)
+    finally:
+        git('worktree', 'remove', '--force', wt)
+    shutil.rmtree(kept, ignore_errors=True)
+    shutil.copytree(out, kept)
+    with open(mark, 'w') as f:
+        f.write(want)
+
+
 def main():
     shutil.rmtree(SITE, ignore_errors=True)
     os.makedirs(SITE)
-    versions = tags()[:KEEP]
+    os.makedirs(CACHE, exist_ok=True)
+    versions = tags()
     with tempfile.TemporaryDirectory() as tmp:
         for v in versions:
-            wt = os.path.join(tmp, v['tag'])
-            git('worktree', 'add', '--detach', wt, v['tag'])
-            try:
-                build(wt, os.path.join(SITE, v['tag']))
-            finally:
-                git('worktree', 'remove', '--force', wt)
-    dev = None
-    if not versions or git('rev-list', '--count', versions[0]['tag'] + '..HEAD') != '0':
-        build(ROOT, os.path.join(SITE, 'dev'))      # main has unreleased changes: offer those too
-        dev = {'tag': 'dev', 'label': git('describe', '--tags', '--always'), 'date': git('log', '-1', '--format=%cs')}
+            build_release(v['tag'], tmp)
+    # the development build: main as it is now (just a copy of the latest release when nothing's new)
+    same = bool(versions) and git('rev-list', '--count', versions[0]['tag'] + '..HEAD') == '0'
+    if same:
+        shutil.copytree(os.path.join(SITE, versions[0]['tag']), os.path.join(SITE, 'dev'))
+    else:
+        build(ROOT, os.path.join(SITE, 'dev'))
+    dev = {'label': git('describe', '--tags', '--always'), 'date': git('log', '-1', '--format=%cs'),
+           'same': versions[0]['tag'] if same else None}
     write_launcher(versions, dev)
     print("site ready:", SITE)
 
 
 def write_launcher(versions, dev):
     rows = []
-    # one button per version on offer, the newest first
-    for i, v in enumerate(versions):
-        badge = '<span class="badge">LATEST</span>' if i == 0 else ''
+    # two big buttons: the latest release and the development build; every older release in a dropdown
+    if versions:
+        v = versions[0]
         note = f'<div class="note">{html.escape(v["note"])}</div>' if v['note'] else ''
-        rows.append(f'''<a class="ver{' first' if i == 0 else ''}" href="{v['tag']}/">
-          <div class="name">{html.escape(v['tag'])} {badge}</div>
+        rows.append(f'''<a class="ver first" href="{v['tag']}/">
+          <div class="name">{html.escape(v['tag'])} <span class="badge">LATEST</span></div>
           <div class="date">{v['date']}</div>{note}</a>''')
-    if not rows:
+    else:
         rows.append('<div class="empty">No released versions yet.</div>')
-    if dev:
-        rows.append(f'''<a class="ver dev" href="dev/">
-          <div class="name">Development build</div>
-          <div class="date">{html.escape(dev['label'])}, {dev['date']} - may be unfinished</div></a>''')
+    what = (f"the same as {html.escape(dev['same'])} right now" if dev['same'] else
+            f"{html.escape(dev['label'])}, {dev['date']}: the newest changes, may be unfinished")
+    rows.append(f'''<a class="ver dev" href="dev/">
+          <div class="name">Development build <span class="badge dev-badge">DEV</span></div>
+          <div class="date">{what}</div></a>''')
+    if len(versions) > 1:
+        opts = [f'<option value="{v["tag"]}/">{html.escape(v["tag"])} ({v["date"]})</option>' for v in versions[1:]]
+        rows.append('''<div class="older">
+          <select aria-label="Older versions" onchange="if (this.value) location.href = this.value">
+            <option value="">Older versions...</option>
+            ''' + '\n            '.join(opts) + '''
+          </select>
+        </div>''')
     page = TEMPLATE.replace('%ROWS%', '\n'.join(rows)).replace('%DATA%', json.dumps(
         [v['tag'] for v in versions]))
     with open(os.path.join(SITE, 'index.html'), 'w') as f:
@@ -124,11 +163,12 @@ TEMPLATE = '''<!doctype html>
            margin-left: 6px; vertical-align: middle; }
   .date { font-size: 13px; color: #9fb0d8; margin-top: 4px; }
   .note { font-size: 13px; margin-top: 6px; color: #d8e2ff; }
-  .dev { opacity: .8; border-style: dashed; }
+  .dev { border-style: dashed; }
+  .dev-badge { background: #9cc8ff; color: #06142e; }
   .empty { color: #9fb0d8; margin-bottom: 10px; }
-  .older { margin-top: 4px; text-align: right; }
-  .older select { font: inherit; font-size: 12px; color: #9fb0d8; background: transparent; border: none;
-                  border-bottom: 1px dashed #5b74b8; padding: 2px 0; cursor: pointer; }
+  .older { margin-top: 4px; }
+  .older select { font: inherit; font-size: 14px; color: #d8e2ff; background: rgba(4, 12, 34, .72); width: 100%;
+                  border: 1px solid #5b74b8; border-radius: 10px; padding: 10px 12px; cursor: pointer; }
   .older select:focus { outline: none; color: #e8eeff; }
   .older option { color: #e8eeff; background: #0b1b40; }
   footer { font-size: 12px; color: #8fa2d0; margin-top: 22px; line-height: 1.6; }

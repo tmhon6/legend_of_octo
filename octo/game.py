@@ -2002,6 +2002,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             for ev in pygame.event.get():
                 self.handle_event(ev)
             self.update()
+            sound.update()                      # (moves the music on from one tune to the next)
             self.draw()
             if self.touch.active:
                 self.touch.present(self.display)
@@ -2013,6 +2014,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                     import platform
                     platform.window.octo_fps = int(self.clock.get_fps())
                     platform.window.octo_state = self.state
+                    platform.window.octo_music = sound.status()
                 except Exception:
                     pass
             await asyncio.sleep(0)      # lets the browser breathe (pygbag); harmless on desktop

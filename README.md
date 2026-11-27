@@ -35,16 +35,19 @@ The same code also runs in a web browser through [pygbag](https://pypi.org/proje
 
 ### Versions
 
-Every git tag like `v1.0.0` is a version. The web page offers the three newest versions (older
-tags stay in git), and each version keeps its own saved game. The title screen shows the version
-you're running. To release one:
+Every git tag like `v1.0.0` is a version, and every version is on the web page: its two big
+buttons are the latest version and the development build (`main` as it is now, the same as the
+latest version when nothing new is waiting), and every older version is in the dropdown below them.
+Each version keeps its own saved game. The title screen shows the version you're running. To
+release one:
 
     git tag -a v1.1.0 -m "Mini-bosses and touch controls"
     git push origin v1.1.0
     gh workflow run pages.yml        # republish the site so the new version appears
 
-`build_site.py` builds the newest three tagged versions (`KEEP` in the script), plus a development
-build when `main` has changes that aren't released yet, into `build/site/`.
+`build_site.py` builds every tagged version plus the development build into `build/site/`. A
+version never changes, so each is built once and kept in `build/versions_cache/` (the deploy keeps
+that folder between runs too), and only new versions take time to build.
 
 Pushing to `main` on GitHub runs `.github/workflows/pages.yml`, which builds the web version and
 publishes it to GitHub Pages. In the repo, set **Settings → Pages → Source** to **GitHub Actions**.
@@ -245,7 +248,12 @@ Each temple is a multi-room dungeon of 9 to 14 rooms, seen one screen at a time:
 * Hearts drop less often.
 * Every region has its own creature: sand eels, snapjaw clams, lionfish, stingrays, anglerfish, bilge
   ghosts, ice squid, cinder slugs, lantern wisps and cloud puffs.
-* Every region, the temples and the boss fights have their own music.
+* Every region, the temples and the boss fights have their own music, and each tune keeps changing
+  as it plays: a light first verse, then the full band with harmony, a counter-line and drum fills,
+  a bridge in a new key on music-box bells that drops down and builds back up with a snare roll,
+  and a big last verse, before it loops round. Calm places get gentle percussion (or none), fights
+  get driving drums, Turtle Town a calypso beat and Octo City a swing, and one tune fades into the
+  next as Octo moves between places.
 * If you fall, you start again at the temple entrance (or your last checkpoint) with three hearts.
 
 Beat Murk to win. Then press Enter for **Deep Tide**, a harder replay of the whole game.
@@ -404,7 +412,8 @@ Saves from before scores existed are scored for the progress they've already mad
 * `temples.py`: builds the six deep temples (room tree, locks and keys, barriers, guardians) from fixed seeds
 * `entities.py`: Player (forms, jet, bombs), enemies and bosses, NPCs, projectiles, pickups, effects
 * `gfx.py`: every sprite, themed tileset and the bitmap font, drawn in code
-* `sound.py`: chiptune synth for SFX and music (cached to `.sound_cache.pkl`)
+* `sound.py`: chiptune synth for the sound effects (cached to `.sound_cache.pkl`), and playing the music with fades from tune to tune
+* `tunes.py`: every tune's notes, and the arranger and synthesiser that turn each into a long piece (drums, harmony, bridge, echo) in plain Python
 * `voxel.py`: Octo (and any sprite) as a pixel-style 3D figure made of little cubes, with cached renders
 * `props3d.py`: the 3D buildings, pyramid, statues, gates and portals, and what stands where
 * `scene3d.py`: the 3D layer of the world (drawn in depth order with Octo) and the portal animation

@@ -1,5 +1,5 @@
-# Builds every tagged version (plus the newest development build) with pygbag, and the start page
-# that asks which version to play, then publishes it all to GitHub Pages.
+# Builds every tagged version (each only once: they're kept in a cache) plus the development build
+# with pygbag, and the start page that asks which version to play, then publishes it all to GitHub Pages.
 name: Deploy web version
 
 on:
@@ -35,6 +35,12 @@ jobs:
           sudo apt-get update || true
           sudo apt-get install -y ffmpeg
           pip install pygame pygbag==0.9.3
+      - name: Keep each version's build between runs (a version never changes)
+        uses: actions/cache@v4
+        with:
+          path: build/versions_cache
+          key: versions-${{ hashFiles('build_web.py', '.github/workflows/pages.yml') }}-${{ github.run_id }}
+          restore-keys: versions-${{ hashFiles('build_web.py', '.github/workflows/pages.yml') }}-
       - name: Build
         run: python build_site.py
       - uses: actions/upload-pages-artifact@v3
