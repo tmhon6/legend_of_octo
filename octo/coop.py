@@ -1,10 +1,11 @@
 """Player two: Pebble, Octo's pet snail.
 
-Pebble joins on the same screen: arrow keys (or a gamepad) to slide about, Right Ctrl / . / 0 on
-the number pad (or button A) to spit slime, / or Right Shift (button B) to tuck into his shell and
-spin. Slime slows what it hits; a spinning shell can't be hurt and bowls enemies over. If Pebble
-loses all his hearts he hides in his shell for a few seconds, then pops back out next to Octo.
-He never leaves the screen: if Octo goes somewhere new, Pebble comes along.
+Pebble joins on the same screen: I J K L (or a gamepad) to slide about, Right Shift (button A) to
+spit slime, / (button B) to tuck into his shell and spin. Octo keeps the arrow keys and W A S D;
+while Pebble plays, J, K, L and Right Shift stop being Octo's spare attack / form / ink keys.
+Slime slows what it hits; a spinning shell can't be hurt and bowls enemies over. If Pebble loses
+all his hearts he hides in his shell for a few seconds, then pops back out next to Octo. He never
+leaves the screen: if Octo goes somewhere new, Pebble comes along.
 
 Coop is mixed into Game.
 """
@@ -18,11 +19,16 @@ import sound
 from entities import Entity, Particle
 from settings import PLAYER_SPEED
 
-P2_DIRS = {pygame.K_UP: 'up', pygame.K_DOWN: 'down', pygame.K_LEFT: 'left', pygame.K_RIGHT: 'right'}
-P2_SPIT = {pygame.K_RCTRL, pygame.K_PERIOD, pygame.K_KP0, pygame.K_KP_ENTER}
-P2_SPIN = {pygame.K_SLASH, pygame.K_RSHIFT, pygame.K_KP_PERIOD}
+# Pebble's keys; Octo keeps the arrow keys and W A S D
+P2_DIRS = {pygame.K_i: 'up', pygame.K_k: 'down', pygame.K_j: 'left', pygame.K_l: 'right'}
+P2_SPIT = {pygame.K_RSHIFT}
+P2_SPIN = {pygame.K_SLASH}
+P2_KEYS = set(P2_DIRS) | P2_SPIT | P2_SPIN
+KEYS_HELP = ("PLAYER TWO: I J K L TO MOVE, RIGHT SHIFT TO SPIT SLIME, / TO SPIN IN HIS SHELL. "
+             "A GAMEPAD WORKS TOO.")
 DIRV = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}
 NAME = "PEBBLE"
+BYE = f"{NAME} WAVES BYE-BYE"
 
 SHELL, SHELL_D, SHELL_L = (236, 146, 72), (160, 82, 40), (255, 214, 150)
 BODY, BODY_D, BODY_L = (186, 214, 104), (112, 150, 64), (226, 244, 168)
@@ -300,17 +306,20 @@ class Coop:
     def coop(self):
         return self.snail is not None
 
-    def coop_join(self, quiet=False):
+    def coop_join(self, quiet=False, toast=None):
         if self.snail is not None or self.player is None:
             return
         p = self.player
         self.snail = Snail(p.x, p.y)
         self.flags['coop'] = True
         self.coop_regroup(force=True)
+        if getattr(self, 'toast', None) and self.toast[0] == BYE:
+            self.toast = None                   # he left a moment ago: don't wave goodbye now he's back
         if not quiet:
             sound.play('item')
             self.burst(self.snail.rect.center, BODY_L, 12)
-            self.toast = (f"{NAME} JOINS! ARROWS + RIGHT CTRL", 180)
+            if toast:
+                self.toast = (toast, 180)
 
     def coop_leave(self):
         if self.snail is None:
@@ -319,7 +328,7 @@ class Coop:
         self.snail = None
         self.flags['coop'] = False
         self.p2_held = []
-        self.toast = (f"{NAME} WAVES BYE-BYE", 100)
+        self.toast = (BYE, 100)
         sound.play('pause')
 
     def coop_event(self, ev):
@@ -338,7 +347,7 @@ class Coop:
         if t == pygame.JOYBUTTONDOWN:
             if self.state == 'play':
                 if self.snail is None and ev.button in (0, 7, 9):
-                    self.coop_join()
+                    self.coop_join(toast=f"{NAME} JOINS! STICK, A SPITS, B SPINS")
                 elif self.snail is not None and ev.button == 0:
                     self.snail.spit(self)
                 elif self.snail is not None and ev.button == 1:
@@ -350,19 +359,15 @@ class Coop:
             return False
         k = ev.key
         if t == pygame.KEYUP:
-            if k in P2_DIRS and self.snail is not None:
-                d = P2_DIRS[k]
-                if d in self.p2_held:
-                    self.p2_held.remove(d)
-                return True
+            if k in P2_DIRS and P2_DIRS[k] in self.p2_held:
+                self.p2_held.remove(P2_DIRS[k])
+            return False            # Octo's side sees every key-up too, so nobody's keys get stuck
+        if self.snail is None or k not in P2_KEYS:
             return False
         if self.state != 'play':
-            return False
-        if self.snail is None:
-            if k in P2_SPIT:
-                self.coop_join()
-                return True
-            return False
+            # J is also Octo's spare attack key: Pebble's keys mustn't skip Octo's text, buy things in a
+            # shop or pick menu rows. Typing a name still gets every letter.
+            return self.state not in ('name', 'title')
         if k in P2_DIRS:
             d = P2_DIRS[k]
             if d in self.p2_held:

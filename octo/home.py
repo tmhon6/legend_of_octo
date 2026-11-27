@@ -19,6 +19,7 @@ import math
 
 import pygame
 
+import coop
 import home3d
 import hifi
 import props3d
@@ -197,8 +198,7 @@ class Home:
                       "(TO PLAY AS PEBBLE, PLAYER TWO NEEDS A KEYBOARD OR A GAMEPAD.)"])
             return
         self.coop_join(quiet=True)
-        self.say(["PEBBLE WAKES UP, STRETCHES HIS EYE-STALKS AND SLIDES OUT OF HIS BASKET!",
-                  "PLAYER TWO: ARROW KEYS TO MOVE, RIGHT CTRL TO SPIT SLIME, / TO SPIN IN HIS SHELL."])
+        self.say(["PEBBLE WAKES UP, STRETCHES HIS EYE-STALKS AND SLIDES OUT OF HIS BASKET!", coop.KEYS_HELP])
 
     # ---- the diary and the trophies -------------------------------------
     def diary_pages(self):

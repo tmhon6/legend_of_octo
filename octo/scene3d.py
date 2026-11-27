@@ -48,6 +48,30 @@ class Scene3D:
     def ground_height(self, ent):
         return props3d.height_at(ent.rect.centerx, ent.rect.bottom - 1)
 
+    def pyramid_in_view(self):
+        x0, y0 = props3d.PYRAMID[:2]
+        return self.view_rect.colliderect((x0 * TILE, y0 * TILE, 128, 128))
+
+    def lift(self, thing):
+        """How high the pyramid holds up a shot or a spark: 0 down on flat ground."""
+        r = getattr(thing, 'rect', None)
+        if isinstance(r, pygame.Rect):
+            return props3d.height_at(r.centerx, r.bottom - 1)
+        x, y = getattr(thing, 'x', None), getattr(thing, 'y', None)
+        return props3d.height_at(x, y) if x is not None and y is not None else 0.0
+
+    def draw_lifted(self, ps, ox, oy, extras):
+        """Shots, sparks and Octo's slap up on the pyramid. The 3D pyramid would cover them in the flat
+        layer, so they're drawn over it instead, raised to the height they're at."""
+        def at(h):
+            return round(ox - props3d.KX * h), round(oy - props3d.KZ * h)
+        if extras:
+            self.player.draw_extras(ps, *at(self.ground_height(self.player)))
+        for thing in self.shots + self.effects:
+            h = self.lift(thing)
+            if h > 0:
+                thing.draw(ps, *at(h))
+
     def _hr(self, wx, wy, shake):
         cx, cy = self.cam
         return (wx - cx + shake[0]) * HI, (wy - cy + shake[1] + HUD_H) * HI

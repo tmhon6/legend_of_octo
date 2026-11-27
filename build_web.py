@@ -78,6 +78,11 @@ window.octoToggleFullscreen = function () {
   };
   document.addEventListener('touchend', once, true);
 })();
+// "/" is Pebble's shell spin; in Firefox it would open the quick-find bar and steal the keyboard
+window.addEventListener('keydown', function (e) {
+  var t = e.target && e.target.tagName;
+  if ((e.key === '/' || e.key === "'") && t !== 'INPUT' && t !== 'TEXTAREA') e.preventDefault();
+}, true);
 </script>
 """
 

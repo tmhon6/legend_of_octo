@@ -2153,9 +2153,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                 elif menu[self.title_sel] == '2 PLAYERS':
                     self.new_game()
                     self.coop_join(quiet=True)
-                    self.dialog['pages'].append(coop.NAME + " THE SNAIL, OCTO'S PET, COMES ALONG! PLAYER TWO: ARROW KEYS "
-                                                "TO MOVE, RIGHT CTRL OR . TO SPIT SLIME, / OR RIGHT SHIFT TO SPIN IN "
-                                                "HIS SHELL. A GAMEPAD WORKS TOO.")
+                    self.dialog['pages'] += [coop.NAME + " THE SNAIL, OCTO'S PET, COMES ALONG!", coop.KEYS_HELP]
                 else:
                     self.new_game()
             elif k == pygame.K_l and save_exists():
@@ -2198,11 +2196,12 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                 self.player.pick_form(FORM_KEYS[k])
         elif st == 'pause':
             if k == pygame.K_r:
+                self.state = 'play'
                 if self.coop:
                     self.coop_leave()
                 else:
                     self.coop_join()
-                self.state = 'play'
+                    self.say([coop.NAME + " WAKES UP AND SLIDES OVER TO PLAY!", coop.KEYS_HELP])
             elif k in PAUSE_KEYS:
                 self.state = 'play'
                 sound.play('pause')
@@ -2815,6 +2814,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         if self.shake:
             sx, sy = random.randint(-2, 2), random.randint(-2, 2)
         scr.blit(self.play_surf, (sx, HUD_H + sy))
+        self.shake_xy = (sx, sy)
         self.draw_hud(scr)
         self.draw_world3d(self.world_layer(), (sx, sy))
         self.draw_hud3d(self.world_layer())
@@ -2957,15 +2957,22 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         for e in sorted(self.enemies, key=lambda e: e.y):
             if vis.colliderect(e.rect):
                 e.draw(ps, ox, oy)
+        # anything up on the pyramid's top is drawn over the 3D layer instead (draw_lifted)
+        up = self.pyramid_in_view()
+        self.lifted_extras = up and p3d and self.state not in ('dying', 'portal') and \
+            self.ground_height(self.player) > 0
         if self.state not in ('dying', 'portal'):
             if p3d:
-                self.player.draw_extras(ps, ox, oy)       # Octo himself is drawn in 3D
+                if not self.lifted_extras:
+                    self.player.draw_extras(ps, ox, oy)       # Octo himself is drawn in 3D
             else:
                 self.player.draw(ps, ox, oy)
         for s in self.shots:
-            s.draw(ps, ox, oy)
+            if not (up and self.lift(s)):
+                s.draw(ps, ox, oy)
         for eff in self.effects:
-            eff.draw(ps, ox, oy)
+            if not (up and self.lift(eff)):
+                eff.draw(ps, ox, oy)
         for b in self.bubbles:
             b.draw(ps)
         theme = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
@@ -2987,6 +2994,9 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
     def draw_world_post(self, ps):
         """Tints, light rays, the vignette and darkness: drawn over the 3D layer as well."""
         ox, oy = -self.cam[0], -self.cam[1]
+        if self.pyramid_in_view():
+            sx, sy = getattr(self, 'shake_xy', (0, 0))
+            self.draw_lifted(ps, ox + sx, oy + sy, getattr(self, 'lifted_extras', False))
         theme = world.THEMES.get(self.region, 'reef') if self.area in ('overworld', 'sky') else None
         tfx = THEME_FX.get(theme)
         if tfx:
@@ -3555,7 +3565,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
     def draw_pause(self, scr):
         box = pygame.Rect(24, HUD_H + 2, SCREEN_W - 48, 172)
         self.draw_box(scr, box)
-        lines = ["PAUSED", "ARROWS/WASD  MOVE", "Z / SPACE    ATTACK / TALK / BUY",
+        lines = ["PAUSED", "ARROWS/WASD  MOVE" + (" (PEBBLE: IJKL)" if self.coop else ""), "Z / SPACE    ATTACK / TALK / BUY",
                  "X / 1-9      CHANGE FORM", "C            INK: LINE/BURST",
                  "V            INK JET (DASH)", "B            BUBBLE BOMB", "T            WARP TO PORTALS",
                  "M / Q        MAP / JOURNAL", "N / H        MUTE / HATS",

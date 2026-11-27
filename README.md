@@ -73,18 +73,21 @@ In the browser, saves go to the browser's local storage instead of `savegame.jso
 ### Player two: Pebble the snail
 
 Octo's pet snail **Pebble** can join on the same screen. Pick **2 PLAYERS** on the title screen,
-or have player two press their spit key during the game (or R in the pause menu).
+press R in the pause menu, wake him in his basket in Octo's house, or press a button on a gamepad.
 
-| Player two          | Keyboard                         | Gamepad  |
-|---------------------|----------------------------------|----------|
-| Move                | Arrow keys                       | Stick / d-pad |
-| Spit slime (slows what it hits) | Right Ctrl, `.` or numpad 0 | A |
-| Shell spin (can't be hurt, bowls enemies over) | `/`, Right Shift or numpad `.` | B |
+| Player two          | Keyboard     | Gamepad  |
+|---------------------|--------------|----------|
+| Move                | I J K L      | Stick / d-pad |
+| Spit slime (slows what it hits) | Right Shift | A |
+| Shell spin (can't be hurt, bowls enemies over) | `/` | B |
 
-With Pebble playing, Octo moves with WASD. Pebble has his own three hearts. If he loses them he
-hides in his shell for a few seconds, then pops back out next to Octo, so only Octo can lose the
-game. He picks up pearls and hearts too, his kills count towards the score, and he always stays on
-screen with Octo, following him through every door, portal and town gate.
+Octo keeps the arrow keys and W A S D. With Pebble playing, Octo changes form with X (Right Shift
+is Pebble's now).
+
+Pebble has his own three hearts. If he loses them he hides in his shell for a few seconds, then
+pops back out next to Octo, so only Octo can lose the game. He picks up pearls and hearts too, his
+kills count towards the score, and he always stays on screen with Octo, following him through every
+door, portal and town gate.
 
 ## Forms
 
