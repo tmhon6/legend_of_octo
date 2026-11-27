@@ -31,6 +31,7 @@ from home import Home, HomeThing
 import coop
 from hud3d import Hud3D
 import attacks3d
+import transition3d
 
 DIR_KEYS = {
     pygame.K_UP: 'up', pygame.K_w: 'up',
@@ -2024,6 +2025,10 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             y0 = int(max(0, min(gh - h, cy - h / 2)))
             part = win.subsurface((x0, y0, w, h)).copy()
             pygame.transform.smoothscale(part, (gw, gh), win.subsurface((gx * HI, 0, gw, gh)))
+        if getattr(self, 'dive', None):                 # changing scene: diving through into the next
+            self.dive.apply(win.subsurface((gx * HI, 0, SCREEN_W * HI, SCREEN_H * HI)))
+            if self.dive.done:
+                self.dive = None
 
     def tint_layer(self, col, alpha):
         """A see-through wash over the play area (per-pixel alpha, so it layers properly)."""
@@ -2107,9 +2112,17 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                 self.held.remove(d)
 
     def end_intro(self):
+        self.start_dive(56)                       # swim on through the logo into the title screen
         self.intro = None
         self.state = 'title'
-        self.t = 0
+        self.t = 60                               # (the dive takes the place of the title's fade-in)
+
+    def start_dive(self, length=50, tilt=False):
+        """Dive from the picture on screen now into whatever is drawn next (transition3d)."""
+        gx = self.touch.gx if self.touch.active else 0
+        area = pygame.Rect(gx * HI, 0, SCREEN_W * HI, SCREEN_H * HI)
+        self.dive = transition3d.Dive(self.window.subsurface(area).copy(), length, tilt, HI)
+        sound.play('whoosh')
 
     def on_key(self, k):
         st = self.state
@@ -2149,6 +2162,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                 self.title_sel = (self.title_sel + 1) % len(menu)
                 sound.play('text')
             elif k in CONFIRM_KEYS or k in ACTION_KEYS:
+                self.start_dive(64, tilt=True)        # dive down from the title onto the sea floor
                 if menu[self.title_sel] == 'CONTINUE':
                     self.load_game()
                 elif menu[self.title_sel] == '2 PLAYERS':
@@ -2157,8 +2171,13 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                     self.dialog['pages'] += [coop.NAME + " THE SNAIL, OCTO'S PET, COMES ALONG!", coop.KEYS_HELP]
                 else:
                     self.new_game()
+                if self.state == 'title':
+                    self.dive = None                   # (the save wouldn't load: we stay put)
             elif k == pygame.K_l and save_exists():
+                self.start_dive(64, tilt=True)
                 self.load_game()
+                if self.state == 'title':
+                    self.dive = None
         elif st == 'play':
             if k in ACTION_KEYS:
                 if self.try_talk():
@@ -2938,6 +2957,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                 pygame.draw.circle(ps, (40, 10, 60), (cx, cy), r + 2)
                 pygame.draw.circle(ps, (200, 60, 230), (cx, cy), r)
                 pygame.draw.circle(ps, (255, 240, 255), (cx, cy), r // 2)
+        self.draw_slime_trail(ps, ox, oy)                 # Pebble's trail lies on the floor under everything
         # soft shadows first, so everything sits on the sea floor
         p3d = self.player_in_3d() and self.state != 'dying'
         raised = [n for n in self.npcs if self.ground_height(n) > 0]      # up on the pyramid: drawn in 3D

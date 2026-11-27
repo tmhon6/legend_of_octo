@@ -65,6 +65,7 @@ class Scene3D:
         """Flat things (score pop-ups, motes) up on the pyramid. The 3D pyramid would cover them in
         the flat layer, so they're drawn over it instead, raised to the height they're at. (Shots and
         sparks are 3D themselves: attacks3d.)"""
+        self.draw_slime_trail(ps, ox, oy, lifted=True)
         for thing in self.shots + self.effects:
             if attacks3d.handles(thing):
                 continue
@@ -236,9 +237,11 @@ class Scene3D:
         fx -= props3d.KX * h
         fy -= props3d.KZ * h
         sx, sy = 1.0, 1.0
+        ghosts = self.__dict__.setdefault('jet_ghosts', [])
         if p.dash_t:
             dx, dy = p.dash_dir
-            sx, sy = (1.25, 0.75) if dx else (0.75, 1.25)
+            sx, sy = (1.18, 0.84) if dx else (0.84, 1.18)
+            ghosts.append([fx, fy, 9])                        # where he was: the jet leaves copies behind
         elif not (p.flip_t or p.attack_t or p.knock_t):
             if getattr(p, 'moving', False) and (p.walk_t // 6) % 2:
                 sx, sy = 1.06, 0.94
@@ -257,16 +260,59 @@ class Scene3D:
             w, hh = max(1, int(img.get_width() * sx)), max(1, int(img.get_height() * sy))
             img = pygame.transform.scale(img, (w, hh))
             ax, ay = ax * sx, ay * sy
+        for g in ghosts:
+            g[2] -= 1
+        ghosts[:] = [g for g in ghosts if g[2] > 0][-9:]
+        if ghosts:
+            self._draw_jet_ghosts(hr, img, ax, ay, ghosts, shake)
+        if p.dash_t:
+            dx, dy = p.dash_dir
+            if dy >= 0:                                       # streaks trailing behind him (north of him)
+                self._draw_jet_streaks(hr, x, y - 8 * HI, dx, dy)
+            if dx:                                            # leaning into the jet
+                cx0, cy0 = x - ax + img.get_width() / 2, y - ay + img.get_height() / 2
+                img = pygame.transform.rotate(img, -11 * dx)       # (turning keeps his middle in place)
+                ax, ay = x - (cx0 - img.get_width() / 2), y - (cy0 - img.get_height() / 2)
         if p.fog_t:
             img = img.copy()
             img.set_alpha(110 if p.fog_t > 50 or (p.fog_t // 4) % 2 else 220)
         hr.blit(img, (x - ax, y - ay))
+        if p.dash_t and p.dash_dir[1] < 0:                    # jetting away: the streaks are in front
+            self._draw_jet_streaks(hr, x, y - 8 * HI, *p.dash_dir)
         if self.arrive_t:                                     # rings bursting out as he lands
             k = 1 - self.arrive_t / ARRIVE_LEN
             col = tuple(world.TRIALS[self.trial['name']].get('color', (255, 255, 255))) if self.trial else (255, 255, 255)
             for i in range(2):
                 r = int((6 + k * 30 + i * 8) * HI)
                 pygame.draw.ellipse(hr, col, (x - r, y - 8 * HI - r * 0.6, r * 2, r * 1.2), max(1, HI))
+
+    def _draw_jet_ghosts(self, hr, img, ax, ay, ghosts, shake):
+        """See-through copies of Octo where he just was, washed in his ink jet colour."""
+        import style
+        p = self.player
+        col = style.dash_rgb(p.dash_col, self.t)
+        tint = img.copy()
+        tint.fill((col[0] // 2, col[1] // 2, col[2] // 2, 0), special_flags=pygame.BLEND_RGBA_ADD)
+        n = len(ghosts) - 1
+        for i, (gx, gy, life) in enumerate(ghosts[:-1]):
+            if (n - i) % 3:                                   # every third spot: three clear copies
+                continue
+            tint.set_alpha(int(16 * life))
+            x, y = self._hr(gx, gy, shake)
+            hr.blit(tint, (x - ax, y - ay))
+
+    def _draw_jet_streaks(self, hr, x, y, dx, dy):
+        """Dashes of rushing water trailing behind Octo as he jets, bright near him and fading away."""
+        import hifi
+        for n, (off, k) in enumerate(((-5, 0.8), (5, 1.0))):
+            L = (10 + 8 * k + ((self.t + n * 2) % 4) * 2) * HI
+            ox, oy = -dy * off * HI, dx * off * HI           # side by side, across the jet
+            a = (x + ox - dx * (8 + n % 2 * 3) * HI, y + oy - dy * (8 + n % 2 * 3) * HI)
+            for i in range(4):
+                f0, f1 = i / 4, (i + 0.65) / 4
+                c = hifi.mix((225, 242, 255), (104, 114, 126), i / 4)
+                pygame.draw.line(hr, c, (a[0] - dx * L * f0, a[1] - dy * L * f0),
+                                 (a[0] - dx * L * f1, a[1] - dy * L * f1), max(1, HI // 2 + 1))
 
     SNAIL_YAW = {'right': -0.35, 'left': 0.35, 'down': 0.25, 'up': math.pi + 0.25}
 

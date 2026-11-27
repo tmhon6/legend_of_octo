@@ -639,8 +639,8 @@ class Player(Entity):
                     break
             if self.dash_t % 2 == 0:
                 cx, cy = self.rect.center
-                game.effects.append(Particle(cx - dx * 6 + random.uniform(-2, 2), cy - dy * 6 + random.uniform(-2, 2),
-                                             -dx * 0.5, -dy * 0.5, (30, 24, 70), 18, size=3))
+                game.effects.append(JetInk(cx - dx * 6 + random.uniform(-2, 2), cy - dy * 6 + random.uniform(-2, 2),
+                                           -dx * 0.5, -dy * 0.5, self.dash_col))
             self.walk_t += 1
             self.anim = (self.walk_t // 3) % 2
             return
@@ -3015,6 +3015,32 @@ class Puff:
         if self.t < 0:
             return
         surf.blit(gfx.SPR['puff'][min(3, self.t // 6)], (round(self.x) + ox, round(self.y) + oy))
+
+
+class JetInk:
+    """A blob of ink squirted out behind Octo as he jets, in his ink jet colour. It drifts back
+    and shrinks away."""
+
+    def __init__(self, x, y, vx, vy, color=0, life=18):
+        self.x, self.y, self.vx, self.vy = x, y, vx, vy
+        self.color, self.life, self.life0 = color, life, life
+        self.dead = False
+
+    def update(self, game):
+        self.x += self.vx
+        self.y += self.vy
+        self.vx *= 0.9
+        self.vy *= 0.9
+        self.life -= 1
+        if self.life <= 0:
+            self.dead = True
+
+    def radius(self):
+        return 1.2 + 2.3 * self.life / self.life0
+
+    def draw(self, surf, ox=0, oy=0):
+        pygame.draw.circle(surf, style.dash_rgb(self.color, self.life), (round(self.x) + ox, round(self.y) + oy),
+                           max(1, round(self.radius())))
 
 
 class Particle:

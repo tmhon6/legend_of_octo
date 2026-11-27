@@ -61,6 +61,21 @@ def _raised(surf, rect, col):
     surf.blit(img, (x, y))
 
 
+def _tube(surf, x, y, w, h, col):
+    """A lit tube lying on its side: bright along the top, dark underneath, round at the ends."""
+    r = h / 2
+    for i in range(h):
+        k = (i + 0.5) / h                                  # 0 at the top, 1 at the bottom
+        if k < 0.3:
+            c = hifi.mix(col, (255, 255, 255), 0.55 - k)
+        else:
+            c = hifi.mix(col, (0, 0, 0), max(0.0, (k - 0.45) * 0.9))
+        inset = r - math.sqrt(max(0.0, r * r - (i + 0.5 - r) ** 2))
+        x0, x1 = x + inset, x + w - 1 - inset
+        if x1 > x0:
+            pygame.draw.line(surf, c, (x0, y + i), (x1, y + i))
+
+
 def _ball(surf, col, x, y, r, gloss=1.0):
     hifi.blit_ball(surf, col, x * HI, y * HI, r * HI, None, gloss)
 
@@ -127,10 +142,13 @@ class Hud3D:
         if gfx.text_width(name) > 84:
             name = name.replace('TRIAL OF ', '').replace(' TEMPLE', '').replace('THE ', '')
         hr.blit(_text(name, 8 * H_, (160, 185, 240)), (55 * H_, 40.5 * H_))
-        if p.dash_cd and not p.dash_t:
+        if p.dash_cd and not p.dash_t:                    # the ink jet recharging: a 3D tube filling up
             w = int(28 * H_ * (1 - p.dash_cd / 40))
-            pygame.draw.rect(hr, (40, 40, 70), (144 * H_, 50 * H_, 28 * H_, 2 * H_), border_radius=H_)
-            pygame.draw.rect(hr, (140, 130, 255), (144 * H_, 50 * H_, max(1, w), 2 * H_), border_radius=H_)
+            groove = pygame.Rect(144 * H_, 50 * H_, 28 * H_, 2 * H_)
+            pygame.draw.rect(hr, (10, 10, 24), groove.inflate(H_, H_), border_radius=H_ + 1)
+            pygame.draw.rect(hr, (34, 34, 62), groove, border_radius=H_)
+            pygame.draw.line(hr, (6, 6, 16), (groove.x + H_, groove.y), (groove.right - H_, groove.y))
+            _tube(hr, groove.x, groove.y, max(2 * H_, w), 2 * H_, (140, 130, 255))
         # the form box, with Octo turning slowly inside it
         from game import FORM_BOX, FORM_LABEL
         _raised(hr, (143, 7, 30, 30), FORM_BOX.get(p.mood, (40, 60, 140)))

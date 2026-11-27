@@ -137,9 +137,10 @@ class Sparkles:
 # the opening
 # ======================================================================
 class Intro3D:
-    """About eleven seconds: skim a dawn ocean, dive in, Octo swims up out of the deep and the
-    logo flies together letter by letter. Any key skips it."""
-    LENGTH = 660
+    """About ten seconds: skim a dawn ocean, dive in, Octo swims up out of the deep and the
+    logo flies together letter by letter. Any key skips it. Then the game dives on through the
+    logo into the title screen (transition3d)."""
+    LENGTH = 600
     DIVE = 150
     SPLASH = 200
     LOGO = 340
@@ -349,12 +350,6 @@ class Intro3D:
             hr.blit(img, (W / 2 - img.get_width() / 2, H - 34 * HI))
         if u < 34:
             veil(hr, (235, 248, 255), 255 * (1 - u / 34))
-        if t > self.FLASH:
-            f = t - self.FLASH
-            if f < 26:
-                veil(hr, (255, 255, 255), 255 - abs(f - 12) * 20)
-            else:
-                veil(hr, (0, 0, 0), (f - 26) * 8)
 
 
 # ======================================================================

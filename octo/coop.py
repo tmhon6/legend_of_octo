@@ -30,6 +30,8 @@ DIRV = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}
 NAME = "PEBBLE"
 BYE = f"{NAME} WAVES BYE-BYE"
 
+TRAIL_LIFE = 260                # how long Pebble's slime trail glistens before it dries up (frames)
+
 SHELL, SHELL_D, SHELL_L = (236, 146, 72), (160, 82, 40), (255, 214, 150)
 BODY, BODY_D, BODY_L = (186, 214, 104), (112, 150, 64), (226, 244, 168)
 INK = (52, 32, 30)
@@ -286,6 +288,24 @@ class Slime(Entity):
         surf.set_at((x + 2, y + 2), (250, 255, 230))
 
 
+_blobs = {}
+
+
+def _trail_blob(level):
+    """A dab of slime on the floor: an even, see-through green with soft corners, so the dabs
+    run together into one smooth trail whichever way Pebble slides."""
+    img = _blobs.get(level)
+    if img is None:
+        a = level / 4
+        img = pygame.Surface((4, 3), pygame.SRCALPHA)
+        for x in range(4):
+            for y in range(3):
+                corner = x in (0, 3) and y != 1
+                img.set_at((x, y), (178, 226, 150, int((50 if corner else 100) * a)))
+        _blobs[level] = img
+    return img
+
+
 # ======================================================================
 # the game side of co-op
 # ======================================================================
@@ -293,6 +313,7 @@ class Coop:
     def coop_setup(self):
         self.snail = None
         self.p2_held = []
+        self.slime_trail = []           # [x, y, frames left]: where Pebble has slid
         self.joys = {}
         try:
             pygame.joystick.init()
@@ -328,6 +349,7 @@ class Coop:
         self.snail = None
         self.flags['coop'] = False
         self.p2_held = []
+        self.slime_trail = []
         self.toast = (BYE, 100)
         sound.play('pause')
 
@@ -404,6 +426,7 @@ class Coop:
             return
         move = self.p2_held[-1] if self.p2_held else None
         s.update(self, move, self._joy_vec())
+        self._lay_slime(s)
         if not s.resting:
             # stay on screen with Octo: pushed along at the edges, or brought back if left behind
             view = self.view_rect.inflate(-8, -8)
@@ -446,6 +469,44 @@ class Coop:
             s.hurt(self, shot.damage, shot.rect.center)
             return True
         return False
+
+    def _lay_slime(self, s):
+        """Pebble leaves a shiny trail wherever he slides (not while he's tucked in his shell)."""
+        tr = self.slime_trail
+        for d in tr:
+            d[2] -= 1
+        if tr and tr[0][2] <= 0:
+            tr[:] = [d for d in tr if d[2] > 0]
+        if s.resting or s.spin_t:
+            return
+        x, y = s.rect.centerx, s.rect.bottom - 2
+        if not tr or abs(tr[-1][0] - x) + abs(tr[-1][1] - y) >= 2:
+            tr.append([x, y, TRAIL_LIFE])
+            if len(tr) > 180:
+                del tr[0]
+
+    def draw_slime_trail(self, ps, ox, oy, lifted=False):
+        """The trail on the sea floor (lifted: just the part up on the pyramid's top, which is drawn
+        over the 3D layer)."""
+        tr = self.slime_trail
+        if not tr:
+            return
+        import props3d
+        up = self.pyramid_in_view()
+        view = self.view_rect.inflate(8, 8)
+        for i, (x, y, life) in enumerate(tr):
+            if not view.collidepoint(x, y):
+                continue
+            h = props3d.height_at(x, y) if up else 0.0
+            if (h > 0) != lifted:
+                continue
+            level = max(1, min(4, life * 4 // 70 + 1))        # fades out in its last second or so
+            bx, by = round(x - props3d.KX * h) + ox, round(y - props3d.KZ * h) + oy
+            ps.blit(_trail_blob(level), (bx - 2, by - 1))
+            if level >= 3 and i % 3 == 0:                      # a wet sheen along the middle
+                ps.set_at((bx, by), (214, 244, 196))
+            if level == 4 and (i * 7 + self.t // 5) % 29 == 0:  # a wet glint catching the light
+                ps.set_at((bx, by - 1), (255, 255, 255))
 
     def draw_snail_2d(self, ps, ox, oy):
         s = self.snail

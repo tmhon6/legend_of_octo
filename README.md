@@ -87,7 +87,8 @@ is Pebble's now).
 Pebble has his own three hearts. If he loses them he hides in his shell for a few seconds, then
 pops back out next to Octo, so only Octo can lose the game. He picks up pearls and hearts too, his
 kills count towards the score, and he always stays on screen with Octo, following him through every
-door, portal and town gate.
+door, portal and town gate. Wherever he slides he leaves a shiny slime trail that dries up after a
+few seconds.
 
 ## Forms
 
@@ -151,6 +152,9 @@ resolution (twice in the browser), all in code:
   are glowing bands round Octo (the far side passes behind him), beams are lit tubes, lightning
   and the whip arc through the water above their reflections, whirlpools are spinning funnels,
   bombs burst into fireballs, and the bubble shield and fog wrap round him in 3D.
+* **The ink jet dash is 3D:** Octo leans into the jet, leaves see-through copies of himself in
+  your jet colour, squirts lit ink blobs behind him and streaks through the water. The jet's
+  recharge bar at the top of the screen is a lit 3D tube.
 * **The top of the screen is 3D:** a raised panel with shiny pearls, a 3D key and bombs, voxel
   hearts that bob (and beat when you're low), a 3D Octo turning in the form box, and smooth
   lettering.
@@ -161,7 +165,9 @@ resolution (twice in the browser), all in code:
 * **Trial portals** are stone rings with a swirling vortex. Step into one and Octo is pulled in:
   the view rushes towards the portal as he spirals into the vortex, then he pops out in the trial.
 * **The opening:** skim a sunset ocean, dive under, and 3D Octo swims up out of the deep as the
-  logo flies together letter by letter. Any key (or a tap) skips it.
+  logo flies together letter by letter. Any key (or a tap) skips it. Then you swim on through the
+  logo into the title screen, with bubbles streaming past, and starting a game dives down from the
+  title onto the sea floor, which swings up flat from a 3D tilt.
 * **The title screen**, **boss entrances** (the versus screen faces 3D Octo, in your form and hat,
   off against a 3D figure of the boss, with **FIGHT!** and **VICTORY!** in 3D letters),
   **town fly-overs**, **milestone medals**, the **leaderboard podium** and the **3D Museum**.
@@ -369,6 +375,7 @@ Saves from before scores existed are scored for the progress they've already mad
 * `props3d.py`: the 3D buildings, pyramid, statues, gates and portals, and what stands where
 * `scene3d.py`: the 3D layer of the world (drawn in depth order with Octo) and the portal animation
 * `attacks3d.py`: every attack in 3D: shots, slaps, rings, beams, bolts, whirlpools, bombs and sparks
+* `transition3d.py`: diving from one scene into the next (the opening into the title, the title into the game)
 * `hifi.py`: the smooth 3D toolkit for the cinematics: shaded sphere impostors, glows and 3D text
 * `cinema.py`: the 3D scenes: the opening, the versus entrance, town fly-overs and the milestone medal
 * `cities.py`, `townart.py`: the two towns' maps (and the room inside Octo's house) and their pixel art

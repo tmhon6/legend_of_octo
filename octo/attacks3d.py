@@ -501,6 +501,12 @@ def _quake(c, o):
     c.glow(o.col, px, py, 6)
 
 
+def _jetink(c, o):
+    import style
+    px, py = c.at(o.x, o.y)
+    c.ball(style.dash_rgb(o.color, o.life), px, py, o.radius())
+
+
 def _particle(c, o):
     c.cube(o.color, *c.at(o.x, o.y), size=max(1, o.size) * (0.8 if o.size > 1 else 1))
 
@@ -664,7 +670,7 @@ DRAW = {
     'Lantern': _lantern, 'Mine': _mine, 'Boulder': _boulder, 'Hail': _hail, 'RainCloud': _cloud,
     'Quake': _quake, 'Particle': _particle, 'Puff': _puff, 'Daze': _daze, 'ZapRing': _zap, 'Nova': _nova,
     'Whirlpool': _whirl, 'Beam': _beam, 'Bolt': _bolt, 'InkWhip': _whip, 'ImpactRing': _impact,
-    'InkCloud': _inkcloud,
+    'InkCloud': _inkcloud, 'JetInk': _jetink,
 }
 
 
@@ -707,8 +713,8 @@ def ground(o):
     if n == 'Daze':
         x, y = o.e.rect.midtop
         return x, y + KZ * 3
-    if n in ('ZapRing', 'Nova', 'ImpactRing', 'Particle'):
-        return o.x, o.y + KZ * (FLY if n in ('ZapRing', 'Nova') else 3)
+    if n in ('ZapRing', 'Nova', 'ImpactRing', 'Particle', 'JetInk'):
+        return o.x, o.y + KZ * (FLY if n in ('ZapRing', 'Nova', 'JetInk') else 3)
     if n == 'EnemyShot' and o.kind == 'ember':
         return o.x + 5, o.y + 9
     r = o.rect
