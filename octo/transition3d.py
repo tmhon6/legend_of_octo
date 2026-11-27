@@ -34,7 +34,11 @@ def _deep(w, h):
 
 class Dive:
     def __init__(self, old, length=50, tilt=False, hi=3):
-        self.old = old                  # the picture we're leaving (the game area of the window)
+        # In the browser (hi 2) the work is done at the pixel art's own size, a quarter of the
+        # pixels, and scaled up once at the end: the ground art loses nothing and it stays smooth.
+        self.q = 2 if hi <= 2 else 1
+        w, h = old.get_size()
+        self.old = old if self.q == 1 else pygame.transform.scale(old, (w // self.q, h // self.q))
         self.length, self.tilt, self.hi = length, tilt, hi
         self.t = 0
         rnd = random.Random()
@@ -49,6 +53,15 @@ class Dive:
         """Draw this frame of the dive over the finished picture in area (a window subsurface)."""
         k = min(1.0, self.t / self.length)
         self.t += 1
+        if self.q == 1:
+            self._frame(area, k)
+        else:
+            W, H = area.get_size()
+            small = pygame.transform.scale(area, (W // self.q, H // self.q))
+            self._frame(small, k)
+            pygame.transform.scale(small, (W, H), area)
+
+    def _frame(self, area, k):
         W, H = area.get_size()
         if self.tilt:
             new = area.copy()
@@ -97,7 +110,7 @@ class Dive:
         W, H = area.get_size()
         cx, cy = W / 2, H / 2
         fade = 1 - k
-        hi = self.hi
+        hi = self.hi / self.q
         n = int(len(self.bubbles) * min(1.0, 1.2 - k))       # fewer and fewer as we arrive
         for a, z0, size in self.bubbles[:n]:
             z = (z0 - k * 1.5) % 1.25 + 0.06                 # how far off: getting closer all the time

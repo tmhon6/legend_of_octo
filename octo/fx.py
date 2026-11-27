@@ -11,22 +11,46 @@ _cache = {}
 
 
 # ---------------------------------------------------------------------------- caustics
-def _caustic_tile(phase):
-    """A 64x64 tile of rippling light, like sunlight through waves on the sea floor."""
-    s = pygame.Surface((64, 64))
-    for y in range(64):
+def _caustic_rows(s, phase, y0, y1):
+    """Rows y0..y1 of a 64x64 tile of rippling light, like sunlight through waves on the sea floor."""
+    for y in range(y0, y1):
         for x in range(64):
             v = (math.sin((x + phase * 3) * 0.29 + math.sin(y * 0.21 + phase) * 1.6) +
                  math.sin((y - phase * 2) * 0.33 + math.sin(x * 0.17 - phase) * 1.4))
             v = max(0.0, v - 1.15) * 30         # only the bright crests show
             s.set_at((x, y), (int(v * 0.8), int(v), int(v * 0.9)))
-    return s
+
+
+_caustic_job = None
+
+
+def _caustic_build():
+    tiles = []
+    for i in range(8):
+        s = pygame.Surface((64, 64))
+        for y0 in range(0, 64, 8):                   # an eighth of a tile at a time
+            _caustic_rows(s, i * math.tau / 8, y0, y0 + 8)
+            yield False
+        tiles.append(s)
+    _cache['caustic'] = tiles
+    yield True
+
+
+def warm_caustics():
+    """Make a little more of the light-ripple tiles (so the title screen can do it in the
+    background). True once they're all ready."""
+    global _caustic_job
+    if 'caustic' in _cache:
+        return True
+    if _caustic_job is None:
+        _caustic_job = _caustic_build()
+    return next(_caustic_job)
 
 
 def caustics(ps, cam, t):
     """Shimmering light patterns drifting over the sea floor."""
-    if 'caustic' not in _cache:
-        _cache['caustic'] = [_caustic_tile(i * math.tau / 8) for i in range(8)]
+    while not warm_caustics():
+        pass
     frames = _cache['caustic']
     tile = frames[(t // 9) % len(frames)]
     ox = -int(cam[0] * 0.9 + t * 0.15) % 64

@@ -700,6 +700,56 @@ def theme_at(tx, ty):
     return THEMES.get(region_at(tx, ty), 'reef')
 
 
+_theme_grid = None           # theme_at for every tile: worked out once, then shared by every Level
+_theme_job = None
+
+
+def _theme_row(y, grid):
+    """theme_at for a whole row at once: the overworld from the painted region grid, temples and
+    towns painted in as rectangles (the first listed wins, as in temple_at and city_at)."""
+    reef = THEMES.get('CORAL REEF', 'reef')
+    if y < TEMPLE_Y:
+        return [THEMES.get(r or 'CORAL REEF', 'reef') for r in grid[y]]
+    row = [reef] * LEVEL_W
+    places = CITIES if y >= CITY_Y else TEMPLES
+    for p in reversed(list(places.values())):
+        x0, y0, x1, y1 = p['rect']
+        if y0 <= y <= y1:
+            a, b = max(0, x0), min(LEVEL_W - 1, x1)
+            if a <= b:
+                row[a:b + 1] = [THEMES.get(p['title'], 'reef')] * (b - a + 1)
+    return row
+
+
+def _theme_build():
+    global _theme_grid
+    grid = _REGION_GRID or _region_grid()
+    rows = []
+    for y in range(LEVEL_H):
+        rows.append(_theme_row(y, grid))
+        if y % 40 == 39:
+            yield False
+    _theme_grid = rows
+    yield True
+
+
+def warm_themes():
+    """Do a slice of working out the theme grid (so the title screen can do it in the background).
+    True once it's ready."""
+    global _theme_job
+    if _theme_grid is not None:
+        return True
+    if _theme_job is None:
+        _theme_job = _theme_build()
+    return next(_theme_job)
+
+
+def theme_grid():
+    while not warm_themes():
+        pass
+    return _theme_grid
+
+
 def floor_for(tx, ty):
     return '=' if area_at(tx, ty) in ('dungeon', 'trial') else '.'
 
@@ -739,7 +789,7 @@ class Level:
         self.ghost_ok = False          # True while Octo is in Spooky form
         self.hover_ok = False          # Cloudy floats over pits, ponds and sky gaps
         self.lava_ok = False           # Magmy walks on lava
-        self.themes = [[theme_at(x, y) for x in range(self.w)] for y in range(self.h)]
+        self.themes = theme_grid()                 # (only ever read, so every Level shares one)
         self.surface = None
         self.chunks = {}
         self.dirty_tiles = set()

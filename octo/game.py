@@ -5,6 +5,7 @@ import math
 import os
 import random
 import sys
+import time
 
 import pygame
 
@@ -2117,6 +2118,38 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         self.state = 'title'
         self.t = 60                               # (the dive takes the place of the title's fade-in)
 
+    def warm_up(self, budget):
+        """While the opening and title screen run, do the first game frame's slow one-off work a few
+        milliseconds at a time (the level's region map, the light ripples, the shading for 3D balls,
+        the buildings near the start), so diving into the game doesn't stall."""
+        job = self.__dict__.get('_warm')
+        if job is False:
+            return
+        if job is None:
+            job = self._warm = self._warm_jobs()
+        t0 = time.perf_counter()
+        try:
+            while time.perf_counter() - t0 < budget:
+                next(job)
+        except StopIteration:
+            self._warm = False
+
+    def _warm_jobs(self):
+        import hifi
+        import props3d
+        while not hifi.warm(16):
+            yield
+        while not fx.warm_caustics():
+            yield
+        while not world.warm_themes():
+            yield
+        sx, sy = world.START
+        near = pygame.Rect(sx * TILE - 220, sy * TILE - 170, 440, 340)
+        for prop in props3d.PROPS:
+            if prop.kind == 'static' and near.colliderect(prop.rect()):
+                props3d.image(prop.key, prop.builder)
+                yield
+
     def start_dive(self, length=50, tilt=False):
         """Dive from the picture on screen now into whatever is drawn next (transition3d)."""
         gx = self.touch.gx if self.touch.active else 0
@@ -2380,9 +2413,12 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             self.update_bubbles()
         st = self.state
         if st == 'intro':
+            self.warm_up(0.002)
             if self.intro.done:
                 self.end_intro()
             return
+        if st == 'title' and not getattr(self, 'dive', None):     # (a dive gets the whole frame)
+            self.warm_up(0.003)
         if st == 'versus':
             self.update_versus()
             return
