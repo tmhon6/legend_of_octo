@@ -5,7 +5,8 @@ streaming past. The new scene comes up out of the deep water behind it; when the
 the sea floor is first seen tilted away in 3D and swings up flat under us.
 
 Used from the opening into the title screen, and from the title screen into the game. A Dive is
-drawn over the finished frame in Game.present().
+drawn over the finished frame in Game.present(). A GeyserRide is drawn the same way, when a geyser
+blasts Octo up to the sky islands (or he drops back down to the sea).
 """
 import math
 import random
@@ -124,3 +125,145 @@ class Dive:
             c = (int(170 + 70 * fade), int(215 + 35 * fade), 255)
             pygame.draw.circle(area, c, (x, y), max(1, r), max(1, int(hi * 0.6)))
             pygame.draw.circle(area, (255, 255, 255), (x - r * 0.35, y - r * 0.35), max(1, r * 0.22))
+
+
+def _grad(key, w, h, top, bottom):
+    """A top-to-bottom gradient (one column worked out, then stretched: quick)."""
+    img = _bg.get((key, w, h))
+    if img is None:
+        strip = pygame.Surface((1, h))
+        for y in range(h):
+            f = y / max(1, h - 1)
+            strip.set_at((0, y), tuple(int(a + (b - a) * f) for a, b in zip(top, bottom)))
+        img = _bg[(key, w, h)] = pygame.transform.scale(strip, (w, h))
+    return img
+
+
+def _cloud(r):
+    """A soft cloud puff (see-through at the edges)."""
+    img = _bg.get(('cloud', r))
+    if img is None:
+        img = pygame.Surface((r * 4, r * 2), pygame.SRCALPHA)
+        for cx, cy, k in ((r * 1.2, r * 1.15, 0.75), (r * 2.0, r * 0.95, 0.95), (r * 2.8, r * 1.2, 0.7)):
+            for i in range(6, 0, -1):
+                rr = r * k * i / 6
+                pygame.draw.circle(img, (255, 255, 255, 42), (cx, cy), rr)
+        _bg[('cloud', r)] = img
+    return img
+
+
+class GeyserRide:
+    """Riding a geyser. Going up: the sea floor drops away as the water blasts Octo upwards past
+    streaming bubbles, he bursts out through the bright surface in a spray of water, clouds rush
+    past, and the sky island comes down to meet him. Going down, the same the other way: falling
+    through the clouds, a splash, and down through the water onto the sea floor."""
+
+    def __init__(self, old, up=True, hi=3, length=84):
+        self.q = 2 if hi <= 2 else 1
+        w, h = old.get_size()
+        self.old = old if self.q == 1 else pygame.transform.scale(old, (w // self.q, h // self.q))
+        self.up, self.length, self.hi = up, length, hi
+        self.t = 0
+        rnd = random.Random()
+        self.streaks = [(rnd.random(), rnd.random(), rnd.uniform(0.5, 1.0)) for _ in range(28)]
+        self.clouds = [(rnd.random(), rnd.random(), rnd.uniform(0.7, 1.3)) for _ in range(8)]
+        self.spray = [(rnd.uniform(-1, 1), rnd.uniform(0.4, 1.0), rnd.uniform(0.6, 1.4)) for _ in range(26)]
+
+    @property
+    def done(self):
+        return self.t >= self.length
+
+    def apply(self, area):
+        k = min(1.0, self.t / self.length)
+        self.t += 1
+        if self.q == 1:
+            self._frame(area, k)
+        else:
+            W, H = area.get_size()
+            small = pygame.transform.scale(area, (W // self.q, H // self.q))
+            self._frame(small, k)
+            pygame.transform.scale(small, (W, H), area)
+
+    def _frame(self, area, k):
+        W, H = area.get_size()
+        d = 1 if self.up else -1                  # which way the world streams past (down when rising)
+        hi = self.hi / self.q
+        water = _grad('water', W, H, (96, 196, 240), (8, 36, 86))
+        sky = _grad('sky', W, H, (84, 156, 236), (206, 232, 255))
+        first, then = (water, sky) if self.up else (sky, water)
+        if k < 0.45:                              # leaving: the old place streams away
+            f = k / 0.45
+            area.blit(first, (0, 0))
+            if self.up:                           # up through the water on the geyser's jet
+                self._streaks(area, f, d, hi, bubbles=True)
+            else:                                 # down through the clouds
+                self._clouds(area, f, d, hi)
+            off = int(H * 1.15 * f * f) * d
+            area.blit(self.old, (0, off))
+            if self.up:
+                self._column(area, hi, 0.4 + 0.6 * f)
+        elif k < 0.6:                             # through the surface
+            g = (k - 0.45) / 0.15
+            y = int(H * g) if self.up else int(H * (1 - g))
+            top, bot = (then, first) if self.up else (first, then)
+            area.blit(top, (0, 0), (0, 0, W, y))
+            area.blit(bot, (0, y), (0, y, W, H - y))
+            pygame.draw.rect(area, (240, 252, 255), (0, y - 3 * hi, W, 6 * hi))
+            self._spray(area, g, y, hi)
+            flash = int(110 * max(0.0, 1 - abs(g - 0.5) * 3))
+            if flash:
+                veil = pygame.Surface((W, H))
+                veil.fill((255, 255, 255))
+                veil.set_alpha(flash)
+                area.blit(veil, (0, 0))
+        else:                                     # arriving: the new place comes to meet us
+            h = (k - 0.6) / 0.4
+            e = 1 - (1 - h) ** 3
+            new = area.copy()
+            area.blit(then, (0, 0))
+            if self.up:
+                self._clouds(area, 1 - e, d, hi)
+            else:
+                self._streaks(area, 1 - e, d, hi, bubbles=True)
+            area.blit(new, (0, int(-H * (1 - e)) * d))
+
+    def _streaks(self, area, speed, d, hi, bubbles):
+        """Bubbles (or wisps of cloud) streaming past, faster and longer the faster we go."""
+        W, H = area.get_size()
+        for x, y, sp in self.streaks:
+            yy = ((y + self.t * 0.02 * sp * (1 + 4 * speed) * d) % 1.0) * H
+            ln = (6 + 34 * speed) * hi * sp
+            xx = x * W
+            c = (200, 236, 255) if bubbles else (255, 255, 255)
+            pygame.draw.line(area, c, (xx, yy), (xx, yy - ln * d), max(1, int(hi * 0.8)))
+            if bubbles:
+                pygame.draw.circle(area, (236, 250, 255), (xx, yy), max(1, hi * 1.2 * sp), max(1, int(hi * 0.5)))
+
+    def _column(self, area, hi, strength):
+        """The geyser's water rushing up the middle of the view."""
+        W, H = area.get_size()
+        band = _bg.get(('column', W, H))
+        if band is None:
+            bw = int(W * 0.24)
+            row = pygame.Surface((bw, 1), pygame.SRCALPHA)
+            for x in range(bw):
+                f = 1 - abs(x - bw / 2) / (bw / 2)
+                row.set_at((x, 0), (230, 248, 255, int(140 * f ** 1.5)))
+            band = _bg[('column', W, H)] = pygame.transform.scale(row, (bw, H))
+        band.set_alpha(int(255 * strength))
+        area.blit(band, ((W - band.get_width()) // 2, 0))
+
+    def _spray(self, area, g, y, hi):
+        W, H = area.get_size()
+        for sx, sp, sz in self.spray:
+            r = g * W * 0.5 * sp
+            px = W / 2 + sx * r
+            py = y - (1 - (sx * sx)) * r * 0.5 * (1 if self.up else -1)
+            pygame.draw.circle(area, (236, 250, 255), (px, py), max(1, hi * 1.6 * sz))
+
+    def _clouds(self, area, speed, d, hi):
+        W, H = area.get_size()
+        for x, y, sc in self.clouds:
+            img = _cloud(max(4, int(14 * hi * sc)))
+            yy = ((y + self.t * 0.012 * sc * (0.2 + 3 * speed) * d) % 1.3 - 0.15) * H
+            area.blit(img, (x * W - img.get_width() / 2, yy - img.get_height() / 2))

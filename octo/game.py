@@ -9,6 +9,7 @@ import time
 
 import pygame
 
+import blocks3d
 import forms
 import fx
 import gfx
@@ -1567,7 +1568,11 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         p = self.player
         tx, ty = p.rect.centerx // TILE, p.rect.centery // TILE
         if self.level.tile(tx, ty) != 'Y':
-            self.geyser_armed = True
+            # off the geyser. After a ride it only works again once you've let go of the keys you
+            # arrived holding (so holding Up doesn't send Octo straight back the way he came)
+            if not getattr(self, 'geyser_hold', False) or not (self.held or self.touch.dir):
+                self.geyser_armed = True
+                self.geyser_hold = False
             return
         if not self.geyser_armed:
             return
@@ -1581,11 +1586,12 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                     sp['inst'] = None
                 self.enemies, self.shots = [], []
                 self.pickups = [i for i in self.pickups if i.life is None]
+                self.start_ride(going_up)               # (the picture of where Octo was, first)
+                self.geyser_hold = True
                 p.x, p.y = tile_to_px(dest[0], dest[1] + 1)
                 p.facing = 'down'
                 p.knock_t = p.attack_t = p.dash_t = 0
                 self.geyser_armed = False
-                self.flash_t = 20
                 sound.play('whoosh')
                 self.update_camera()
                 self.area = self.region = None
@@ -1630,11 +1636,12 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             sp['inst'] = None
         self.enemies, self.shots = [], []
         self.pickups = [i for i in self.pickups if i.life is None]
+        self.start_ride(False)                      # falling through the clouds and splashing down
+        self.geyser_hold = True
         p.x, p.y = tile_to_px(sea[0], sea[1] + 1)
         p.facing = 'down'
         p.invuln = 60
         self.geyser_armed = False
-        self.flash_t = 20
         self.update_camera()
         self.area = self.region = None
         self.update_area()
@@ -2148,6 +2155,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         import hifi
         import props3d
         yield from self.title_scene.warm()          # the title screen's full-resolution layers
+        yield from blocks3d.warm()                  # kelp and coral, standing up in 3D
         while not hifi.warm(16):
             yield
         while not fx.warm_caustics():
@@ -2161,6 +2169,12 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                 props3d.image(prop.key, prop.builder)
                 yield
         yield from self._warm_folk()
+
+    def start_ride(self, up):
+        """Ride a geyser up to the sky islands, or fall back down to the sea (transition3d)."""
+        gx = self.touch.gx if self.touch.active else 0
+        area = pygame.Rect(gx * HI, 0, SCREEN_W * HI, SCREEN_H * HI)
+        self.dive = transition3d.GeyserRide(self.window.subsurface(area).copy(), up, HI)
 
     def start_dive(self, length=50, tilt=False):
         """Dive from the picture on screen now into whatever is drawn next (transition3d)."""
@@ -2671,6 +2685,8 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         if p.in_sky and p.sphere <= 0:
             p.sphere = p.SPHERE_MAX         # e.g. loading a save made up in the sky
         p.analog = self.touch.vec if not self.held else None
+        if isinstance(getattr(self, 'dive', None), transition3d.GeyserRide):
+            move_dir, p.analog = None, None      # Octo holds still while the geyser carries him
         p.update(self, move_dir)
         cam0 = getattr(self, 'cam', None)
         self.update_camera()

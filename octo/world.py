@@ -869,6 +869,13 @@ class Level:
             if (tx, ty) not in _props3d.NOSHADE:
                 surf.blit(_flat_shade(), pos)
             return
+        if ch in 'KC' and _blocks3d.style(self, tx, ty, ch, area_at):
+            # kelp or coral standing up in 3D (blocks3d, drawn by scene3d): just the ground under it
+            area = 'dungeon' if area_at(tx, ty) in ('dungeon', 'trial') else 'overworld'
+            themed = tiles['themes'].get(self.themes[ty][tx], {}) if area == 'overworld' else {}
+            floor = themed.get('.') or tiles[area].get(floor_for(tx, ty)) or tiles['overworld']['.']
+            surf.blit(floor[(tx * 7 + ty * 13) % len(floor)], (tx * TILE - off[0], ty * TILE - off[1]))
+            return
         top = ch == '=' and region_at(tx, ty) == 'OCTO TEMPLE'
         if ch in 'PQH' or top:
             h = self._height(tx, ty)
@@ -876,12 +883,16 @@ class Level:
             rail = (self.tile(tx - 1, ty) != 'H', self.tile(tx + 1, ty) != 'H')
             surf.blit(gfx.pyramid_tile('T' if top else ch, lower, rail), (tx * TILE - off[0], ty * TILE - off[1]))
             return
+        surf.blit(self.tile_image(tiles, tx, ty), (tx * TILE - off[0], ty * TILE - off[1]))
+
+    def tile_image(self, tiles, tx, ty):
+        """A tile's flat picture: its area's (and region's theme's) art, in one of its variants."""
+        ch = self.tiles[ty][tx]
         area = 'dungeon' if area_at(tx, ty) in ('dungeon', 'trial') else 'overworld'
         other = 'overworld' if area == 'dungeon' else 'dungeon'
         themed = tiles['themes'].get(self.themes[ty][tx], {}) if area == 'overworld' else {}
         variants = themed.get(ch) or tiles[area].get(ch) or tiles[other].get(ch) or tiles[area][floor_for(tx, ty)]
-        img = variants[(tx * 7 + ty * 13 + tx * ty) % len(variants)]
-        surf.blit(img, (tx * TILE - off[0], ty * TILE - off[1]))
+        return variants[(tx * 7 + ty * 13 + tx * ty) % len(variants)]
 
     CHUNK = 32          # tiles per side of a cached piece of the map
     MAX_CHUNKS = 16
@@ -1031,4 +1042,5 @@ def _flat_shade():
 
 
 import props3d as _props3d  # noqa: E402  (3D buildings stand on these tiles)
+import blocks3d as _blocks3d  # noqa: E402  (kelp and coral stand up in 3D on these)
 _props3d.build_props(__import__(__name__))

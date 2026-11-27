@@ -167,6 +167,18 @@ resolution (twice in the browser), all in code:
 * **Enemies are 3D too.** Every creature, guardian, mini-boss and boss is its own pixel art turned
   into lit cubes, so crabs, jellies, eels, urchins and the rest stand up off the sea floor, flash
   when they're hit, and pass in front of and behind Octo, Pebble and the buildings.
+* **Kelp and coral stand up off the sea floor**, drawn smooth at full resolution: kelp grows in
+  clumps of fronds with long leaves and little gas floats, swaying gently in the swell (and going
+  see-through when Octo or Pebble is right behind it), and each coral is a branching coral, a lacy
+  sea fan, a brain coral or a cluster of tube sponges, in the colours of its part of the sea. Cut
+  kelp leaves bare sand.
+* **Geysers are alive:** in the sea, water gushes up out of a stone vent and froths at the top,
+  with bubbles streaming up it, spray falling back and rings rippling over the sand; up on a sky
+  island, clouds swirl round far below the hole and mist drifts up out of it. **Riding one** is a
+  trip: the sea floor drops away as the water blasts Octo up past streaming bubbles, he bursts out
+  through the bright surface, clouds rush past and the sky island comes down to meet him (and the
+  other way when he drops back down, or tumbles when his water ball bursts). If you're still
+  holding a direction when you land, the geyser waits until you let go before it works again.
 * **The ink jet dash is 3D:** Octo leans into the jet, leaves see-through copies of himself in
   your jet colour, squirts lit ink blobs behind him and streaks through the water. The jet's
   recharge bar at the top of the screen is a lit 3D tube.

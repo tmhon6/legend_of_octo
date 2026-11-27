@@ -14,6 +14,7 @@ import time
 import pygame
 
 import attacks3d
+import blocks3d
 import gfx
 import props3d
 import sound
@@ -168,6 +169,18 @@ class Scene3D:
         view.height += 120
         items = []
         pyr_base = None
+        blocks3d.new_frame()
+        lv, vr = self.level, self.view_rect                 # kelp and coral standing up off the sea floor
+        for ty in range(max(0, vr.top // TILE), min(lv.h, (vr.bottom + blocks3d.MY) // TILE + 1)):
+            row = lv.tiles[ty]
+            for tx in range(max(0, (vr.left - blocks3d.MX) // TILE), min(lv.w, (vr.right + blocks3d.MX) // TILE + 1)):
+                ch = row[tx]
+                if ch == 'K' or ch == 'C':
+                    st = blocks3d.style(lv, tx, ty, ch, world.area_at)
+                    if st:
+                        items.append((ty * TILE + blocks3d.GROUND, 0.3, (tx, ty, st)))
+                elif ch == 'Y':                                # a geyser: alive, gushing or swirling
+                    items.append((ty * TILE + 10, 0.3, (tx, ty, blocks3d.style(lv, tx, ty, ch, world.area_at))))
         for prop in props3d.PROPS:
             if view.colliderect(prop.rect()):
                 items.append((prop.base, 0, prop))
@@ -217,6 +230,8 @@ class Scene3D:
         for _, kind, what in items:
             if kind == 0:
                 self._draw_prop(hr, what, shake)
+            elif kind == 0.3:
+                self._draw_block(hr, what, shake)
             elif what == 'player':
                 self._draw_player(hr, shake)
             elif what == 'portal_octo':
@@ -291,6 +306,37 @@ class Scene3D:
             sx = cx + math.cos(ang) * 11 * HI
             sy = cy + math.sin(ang) * 11 * HI * props3d.KZ
             pygame.draw.circle(hr, (255, 255, 255), (int(sx), int(sy)), max(1, HI // 2 + 1))
+
+    def _draw_block(self, hr, what, shake):
+        """Kelp or coral, standing up off the sea floor (blocks3d). Until its smooth picture is made
+        (a few are made each frame), the flat tile stands in for it."""
+        tx, ty, st = what
+        if st[0] == 'geyser':
+            x, y = self._hr(tx * TILE + 8, ty * TILE + 9, shake)
+            blocks3d.draw_geyser(hr, x, y, self.t, st[1])
+            return
+        pic = blocks3d.picture(st, self.t, tx, ty)
+        x, y = self._hr(tx * TILE, ty * TILE, shake)
+        if pic is None:
+            img = self.level.tile_image(gfx.TILES, tx, ty)
+            hr.blit(pygame.transform.scale(img, (TILE * HI, TILE * HI)), (x, y))
+            return
+        img, (dx, dy) = pic
+        if st[0] == 'kelp' and self._behind_kelp(tx, ty):
+            img.set_alpha(120)                   # see-through while Octo or Pebble is just behind it
+            hr.blit(img, (x + dx, y + dy))
+            img.set_alpha(None)
+        else:
+            hr.blit(img, (x + dx, y + dy))
+
+    def _behind_kelp(self, tx, ty):
+        """Is Octo (or Pebble) just behind this kelp, where its fronds would hide him?"""
+        x0, y0 = tx * TILE - 4, ty * TILE - 10
+        sn = getattr(self, 'snail', None)
+        for r in (self.player.rect, sn.rect if sn is not None else None):
+            if r is not None and r.right > x0 and r.left < x0 + TILE + 8 and r.bottom > y0 and r.top < y0 + 12:
+                return True
+        return False
 
     def _draw_wares(self, hr, shake):
         """Hermie's counter: each ware, bobbing when Octo is at it, and its price underneath, drawn
