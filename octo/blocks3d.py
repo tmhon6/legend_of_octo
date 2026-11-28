@@ -6,7 +6,9 @@ them. Kelp sways in the swell; each coral is one of four kinds (branching, sea f
 tube sponges) in its tile's colour. Their pictures are made at twice full resolution and
 smoothed down, a few milliseconds' worth per frame (or during the opening: warm()), and kept.
 Geysers are drawn fresh every frame (draw_geyser): water gushing up out of a vent in the sea,
-or clouds swirling far below a hole in a sky island.
+or clouds swirling far below a hole in a sky island. The other worlds' trees, palms, cacti,
+crystals, mushrooms and the rest (and the temples' statues) are pictures made by decor3d, kept
+here with the kelp and coral.
 """
 import math
 import random
@@ -14,6 +16,7 @@ import time
 
 import pygame
 
+import decor3d
 import gfx
 from settings import HI, TILE
 
@@ -47,7 +50,8 @@ def coral_colours(theme):
 
 
 def style(level, tx, ty, ch, area_at):
-    """('kelp', variant) or ('coral', colour, kind) for a kelp or coral tile drawn in 3D, else None."""
+    """How a tile stands up in 3D: ('kelp', variant), ('coral', colour, kind), ('geyser', sky) or
+    ('decor', kind, theme, variant) for the other worlds' things (decor3d); None if it's flat."""
     key = (tx, ty, ch)
     s = _styles.get(key, 0)
     if s != 0:
@@ -56,7 +60,12 @@ def style(level, tx, ty, ch, area_at):
     a = area_at(tx, ty)
     theme = level.themes[ty][tx] if a not in ('dungeon', 'trial') else None
     n = tx * 7 + ty * 13 + tx * ty                       # (as world.Level._blit_tile picks a variant)
-    if ch == 'Y':
+    d = decor3d.kind(theme, ch) if ch in 'CKS' else None
+    if (tx, ty) in decor3d.props3d.FLAT:
+        pass                                             # a 3D model stands here already (a nest, a statue)
+    elif d:
+        s = d + (decor3d.variant(d, tx, ty),)
+    elif ch == 'Y':
         s = ('geyser', bool(theme) and 'Y' in gfx.TILES['themes'].get(theme, {}))     # (True: a sky island's hole)
     elif ch == 'K':
         if theme is None or 'K' not in gfx.TILES['themes'].get(theme, {}):
@@ -267,7 +276,7 @@ def picture(st, t=0, tx=0, ty=0, build=True):
     if pic is None and build:
         now = time.perf_counter()
         if _spent[0] < BUDGET:
-            pic = _pics[key] = _kelp(st[1], key[2]) if st[0] == 'kelp' else _coral(st[1], st[2])
+            pic = _pics[key] = _make(key)
             _spent[0] += time.perf_counter() - now
         elif st[0] == 'kelp':                    # out of time: the nearest sway picture already made
             for d in range(1, KELP_FRAMES):
@@ -275,6 +284,14 @@ def picture(st, t=0, tx=0, ty=0, build=True):
                 if pic:
                     break
     return pic
+
+
+def _make(key):
+    if key[0] == 'kelp':
+        return _kelp(key[1], key[2])
+    if key[0] == 'decor':
+        return decor3d.build(*key[1:])
+    return _coral(key[1], key[2])
 
 
 def new_frame():
@@ -293,6 +310,15 @@ def warm():
             if ('coral', col, kind) not in _pics:
                 _pics[('coral', col, kind)] = _coral(col, kind)
                 yield
+
+
+def warm_decor():
+    """Make every other world's trees, palms, crystals and the rest, one picture at a time."""
+    for what in decor3d.every():
+        key = ('decor',) + what
+        if key not in _pics:
+            _pics[key] = decor3d.build(*what)
+            yield
 
 
 # ---- geysers, drawn fresh every frame --------------------------------------------------------

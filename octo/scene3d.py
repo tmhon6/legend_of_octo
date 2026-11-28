@@ -15,6 +15,7 @@ import pygame
 
 import attacks3d
 import blocks3d
+import decor3d
 import gfx
 import props3d
 import sound
@@ -170,12 +171,12 @@ class Scene3D:
         items = []
         pyr_base = None
         blocks3d.new_frame()
-        lv, vr = self.level, self.view_rect                 # kelp and coral standing up off the sea floor
-        for ty in range(max(0, vr.top // TILE), min(lv.h, (vr.bottom + blocks3d.MY) // TILE + 1)):
+        lv, vr = self.level, self.view_rect                 # kelp, coral, trees, crystals... standing up
+        for ty in range(max(0, vr.top // TILE), min(lv.h, (vr.bottom + decor3d.MY) // TILE + 1)):
             row = lv.tiles[ty]
-            for tx in range(max(0, (vr.left - blocks3d.MX) // TILE), min(lv.w, (vr.right + blocks3d.MX) // TILE + 1)):
+            for tx in range(max(0, (vr.left - decor3d.MX) // TILE), min(lv.w, (vr.right + decor3d.MX) // TILE + 1)):
                 ch = row[tx]
-                if ch == 'K' or ch == 'C':
+                if ch == 'K' or ch == 'C' or ch == 'S':
                     st = blocks3d.style(lv, tx, ty, ch, world.area_at)
                     if st:
                         items.append((ty * TILE + blocks3d.GROUND, 0.3, (tx, ty, st)))
@@ -308,8 +309,9 @@ class Scene3D:
             pygame.draw.circle(hr, (255, 255, 255), (int(sx), int(sy)), max(1, HI // 2 + 1))
 
     def _draw_block(self, hr, what, shake):
-        """Kelp or coral, standing up off the sea floor (blocks3d). Until its smooth picture is made
-        (a few are made each frame), the flat tile stands in for it."""
+        """Kelp or coral standing up off the sea floor, or a tree, palm, crystal, statue... in the
+        other worlds (blocks3d, decor3d). Until its smooth picture is made (a few are made each
+        frame), the flat tile stands in for it. Octo shows through a tall one when he's behind it."""
         tx, ty, st = what
         if st[0] == 'geyser':
             x, y = self._hr(tx * TILE + 8, ty * TILE + 9, shake)
@@ -326,8 +328,23 @@ class Scene3D:
             img.set_alpha(120)                   # see-through while Octo or Pebble is just behind it
             hr.blit(img, (x + dx, y + dy))
             img.set_alpha(None)
+        elif st[0] == 'decor' and st[1] in decor3d.TALL and self._behind_decor(tx, ty, decor3d.TALL[st[1]]):
+            img.set_alpha(140)
+            hr.blit(img, (x + dx, y + dy))
+            img.set_alpha(None)
         else:
             hr.blit(img, (x + dx, y + dy))
+
+    def _behind_decor(self, tx, ty, reach):
+        """Is Octo (or Pebble) behind this tall thing, where it would hide him? (His feet are north of
+        its foot, but not further than it reaches up.)"""
+        base = ty * TILE + decor3d.GROUND
+        x0, x1 = tx * TILE - 3, tx * TILE + TILE + 3
+        sn = getattr(self, 'snail', None)
+        for r in (self.player.rect, sn.rect if sn is not None else None):
+            if r is not None and base - reach < r.bottom <= base and r.right > x0 and r.left < x1:
+                return True
+        return False
 
     def _behind_kelp(self, tx, ty):
         """Is Octo (or Pebble) just behind this kelp, where its fronds would hide him?"""

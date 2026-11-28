@@ -2171,7 +2171,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         self.state = 'title'
         self.t = 60                               # (the dive takes the place of the title's fade-in)
 
-    LOAD_STEPS = 270            # about how many pieces there are to make (for the loading bar)
+    LOAD_STEPS = 334            # about how many pieces there are to make (for the loading bar)
 
     def load_some(self, budget):
         """Before the opening, behind a loading bar: make the opening's pieces and warm up the title
@@ -2256,6 +2256,7 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                 props3d.image(prop.key, prop.builder)
                 yield
         yield from self._warm_folk()
+        yield from blocks3d.warm_decor()            # the other worlds' trees, palms, crystals and the rest
 
     def start_ride(self, up):
         """Ride a geyser up to the sky islands, or fall back down to the sea (transition3d)."""

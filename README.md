@@ -204,6 +204,14 @@ resolution (twice in the browser), all in code:
   see-through when Octo or Pebble is right behind it), and each coral is a branching coral, a lacy
   sea fan, a brain coral or a cluster of tube sponges, in the colours of its part of the sea. Cut
   kelp leaves bare sand.
+* **So do the things in the other worlds:** round, leafy trees (in blossom in Rainbow Reach),
+  palms with drooping fronds and coconuts, flowering bushes, tall ribbed cacti holding up their
+  arms, glowing crystals and ice spikes, big spotted toadstools and little glowing ones, ribcages
+  half buried in the sand (a whale's in Whale Fall), jagged rock spires (with lava glowing in their
+  cracks by the volcano and in the Magma Core), ancient stone heads with glowing eyes, toppled
+  statues, Octo City's jellyfish street lamps and kelp hedges, and stone Octo statues in the
+  temples. They cast soft shadows, a tall one goes see-through when Octo or Pebble is behind it,
+  and a bush you slap away leaves bare ground.
 * **Geysers are alive:** in the sea, water gushes up out of a stone vent and froths at the top,
   with bubbles streaming up it, spray falling back and rings rippling over the sand; up on a sky
   island, clouds swirl round far below the hole and mist drifts up out of it. **Riding one** is a
@@ -444,6 +452,10 @@ Saves from before scores existed are scored for the progress they've already mad
 * `tunes.py`: every tune's notes, and the arranger and synthesiser that turn each into a long piece (drums, harmony, bridge, echo) in plain Python
 * `voxel.py`: Octo (and any sprite) as a pixel-style 3D figure made of little cubes, with cached renders
 * `props3d.py`: the 3D buildings, pyramid, statues, gates and portals, and what stands where
+* `blocks3d.py`: kelp, coral and geysers standing up off the sea floor, and the pictures of everything
+  else that stands on a tile
+* `decor3d.py`: the other worlds' things in 3D: trees, palms, bushes, cacti, crystals, ice, toadstools,
+  bones, rock spires, statues, lamps and hedges
 * `scene3d.py`: the 3D layer of the world (drawn in depth order with Octo) and the portal animation
 * `attacks3d.py`: every attack in 3D: shots, slaps, rings, beams, bolts, whirlpools, bombs and sparks
 * `transition3d.py`: diving from one scene into the next (the opening into the title, the title into the game)

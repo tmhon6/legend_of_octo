@@ -869,8 +869,9 @@ class Level:
             if (tx, ty) not in _props3d.NOSHADE:
                 surf.blit(_flat_shade(), pos)
             return
-        if ch in 'KC' and _blocks3d.style(self, tx, ty, ch, area_at):
-            # kelp or coral standing up in 3D (blocks3d, drawn by scene3d): just the ground under it
+        if ch in 'KCS' and _blocks3d.style(self, tx, ty, ch, area_at):
+            # kelp, coral, a tree, a statue... standing up in 3D (blocks3d, decor3d, drawn by
+            # scene3d): just the ground under it
             area = 'dungeon' if area_at(tx, ty) in ('dungeon', 'trial') else 'overworld'
             themed = tiles['themes'].get(self.themes[ty][tx], {}) if area == 'overworld' else {}
             floor = themed.get('.') or tiles[area].get(floor_for(tx, ty)) or tiles['overworld']['.']
