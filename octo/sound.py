@@ -288,6 +288,12 @@ def _synth(S):
     S['portal'] = _to_sound(seq([midi(n) for n in (60, 67, 72, 79, 84, 91)], 0.05, 'tri', 0.35))
     S['tick'] = _to_sound(tone(1000, 1000, 0.03, 'square', 0.15, duty=0.25))
     S['whoosh'] = _to_sound(mix(noise(0.5, 0.35, curve=0.8, step=3), tone(200, 1400, 0.45, 'sine', 0.3)))
+    # the newer fused attacks, and Corrupted's glitch
+    S['glitch'] = _to_sound(mix(noise(0.3, 0.3, curve=0.6, step=9),
+                                seq([midi(n) for n in (88, 61, 93, 55, 82, 67, 97, 50, 76, 58)], 0.03, 'square', 0.22, 0.25)))
+    S['saw'] = _to_sound(mix(tone(900, 1300, 0.2, 'saw', 0.16), noise(0.2, 0.16, curve=0.8, step=2)))
+    S['sonar'] = _to_sound(tone(1400, 500, 0.24, 'sine', 0.45) + tone(700, 300, 0.12, 'sine', 0.2))
+    S['harpoon'] = _to_sound(tone(180, 700, 0.07, 'tri', 0.45) + tone(700, 520, 0.1, 'square', 0.15, duty=0.25))
     S['pause'] = _to_sound(seq([midi(n) for n in (76, 72)], 0.05, 'square', 0.25, 0.25))
 
 

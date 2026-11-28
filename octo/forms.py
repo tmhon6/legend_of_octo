@@ -2,10 +2,13 @@
 
 Every form has a passive STRENGTH that is on while Octo is in that form.
 
-The Fusion Machine (next to the Pearl Shop) can fuse ANY two base forms. Every pair leads to one of 16
+The Fusion Machine (next to the Pearl Shop) can fuse ANY two base forms. Every pair leads to one of 24
 attack shapes, and there is exactly one fused form for each shape (no copies of the same attack): fusing
 a pair makes the fused form for its shape. A fused form also gets boosted versions of both parents'
 strengths. The Mega Machine works the same way: one mega form for each of its six giant attacks.
+
+One special form isn't a fusion at all: fuse a form with ITSELF and the machine glitches, and Octo
+comes out CORRUPTED.
 """
 import itertools
 
@@ -272,8 +275,85 @@ def _one_per_shape(table):
 
 
 FUSIONS, FOR_SHAPE = _one_per_shape(ALL_PAIRS)
-PAIR = {f['parents']: FOR_SHAPE[f['shape']] for f in ALL_PAIRS.values()}    # any pair -> its shape's form
 MERGED = {fid: FOR_SHAPE[f['shape']] for fid, f in ALL_PAIRS.items()}       # an old save's form -> the one kept
+FIRST_FUSIONS = sorted(FUSIONS)        # the sixteen there were before v2.11 (the mega forms are made from these)
+
+# ---------------------------------------------------------------------------- eight more fused forms
+# Eight more attack shapes, each with a fused form of its own (24 in all, still no two alike). Each new
+# form is made from its own pair of base forms and takes over some of the pairs that made the first
+# sixteen (the tables above stay as they were, so older saves load just the same).
+NEW_SHAPES = {
+    'geyser': ("GEYSER", "GEYSER", "A WATER SPOUT BURSTS UP UNDER EACH OF THE THREE NEAREST ENEMIES"),
+    'harpoon': ("HOOK", "HARPOON", "A HARPOON SPEARS THE FIRST ENEMY IN LINE AND REELS IT IN"),
+    'saw': ("SAW", "SAW", "A SPINNING SAW RICOCHETS OFF THE WALLS, CUTTING THROUGH ENEMIES"),
+    'spray': ("SPRAY", "SPRAY", "A RAPID STREAM OF INK PELLETS SPRAYS AT THE ENEMIES AHEAD"),
+    'sonar': ("SONAR", "SONAR", "WAVES OF SOUND BLAST OUT IN A CONE AHEAD, HITTING EVERY ENEMY IN IT"),
+    'mortar': ("MORTAR", "MORTAR", "A BIG BOMB ARCS OVER WALLS AND BURSTS ON THE ENEMIES WHERE IT LANDS"),
+    'swarm': ("SWARM", "SWARM", "A SCHOOL OF LITTLE FISH SWARMS THE NEAREST ENEMIES, NIBBLING"),
+    'grab': ("GRAB", "TENTACLES", "TENTACLES BURST UP UNDER THE ENEMIES AROUND YOU AND HOLD THEM TIGHT"),
+}
+SHAPES.update(NEW_SHAPES)
+NEW_NAMED = {('bubble', 'sandy'): ('gushy', 'GUSHY', 'geyser', 'push'),
+             ('ghost', 'magnet'): ('hooky', 'HOOKY', 'harpoon', 'drain'),
+             ('stony', 'crysty'): ('spinny', 'SPINNY', 'saw', 'weaken'),
+             ('blue', 'cloudy'): ('squirty', 'SQUIRTY', 'spray', 'slow'),
+             ('mad', 'air'): ('shouty', 'SHOUTY', 'sonar', 'stun'),
+             ('spiky', 'stony'): ('bomby', 'BOMBY', 'mortar', 'burn'),
+             ('wobbly', 'leafy'): ('fishy', 'FISHY', 'swarm', 'poison'),
+             ('mad', 'ice'): ('grabby', 'GRABBY', 'grab', 'freeze')}
+for (_a, _b), (_fid, _name, _shape, _elem) in NEW_NAMED.items():
+    FUSIONS[_fid] = {'parents': (_a, _b), 'name': _name, 'shape': _shape, 'element': _elem,
+                     'attack': f"{ELEMENTS[_elem][0]} {SHAPES[_shape][1]}", 'label': SHAPES[_shape][0],
+                     'desc': f"{SHAPES[_shape][2]}, {ELEMENTS[_elem][1]}."}
+    FOR_SHAPE[_shape] = _fid
+
+
+def _share_pairs():
+    """Which fused form each of the 190 pairs of base forms makes. Every pair keeps the form it made
+    before, except that each new form takes its own pair, and then the new forms take turns picking
+    more from the first sixteen's (the pairs nearest to them: sharing a parent, or leaning to their
+    element) until the first sixteen are down to eight pairs each. The pair a form is named for
+    always makes it."""
+    pair = {f['parents']: FOR_SHAPE[f['shape']] for f in ALL_PAIRS.values()}
+    order = list(pair)
+    namesake = set()
+    for d in FUSIONS.values():
+        a, b = d['parents']
+        namesake.add((a, b) if (a, b) in pair else (b, a))
+    count = {}
+    for f in pair.values():
+        count[f] = count.get(f, 0) + 1
+    new = [v[0] for v in NEW_NAMED.values()]
+    for (a, b), (fid, *_) in NEW_NAMED.items():
+        key = (a, b) if (a, b) in pair else (b, a)
+        count[pair[key]] -= 1
+        pair[key] = fid
+        count[fid] = 1
+    keep = 8
+    took = True
+    while took:
+        took = False
+        for fid in new:
+            d = FUSIONS[fid]
+            best = None
+            for i, key in enumerate(order):
+                old = pair[key]
+                if old in new or count[old] <= keep or key in namesake:
+                    continue
+                score = 2 * len(set(key) & set(d['parents'])) + (d['element'] in (LEANS[key[0]], LEANS[key[1]]))
+                rank = (-score, -count[old], i)
+                if best is None or rank < best[0]:
+                    best = (rank, key)
+            if best:
+                key = best[1]
+                count[pair[key]] -= 1
+                pair[key] = fid
+                count[fid] += 1
+                took = True
+    return pair
+
+
+PAIR = _share_pairs()            # any pair of base forms -> the fused form it makes
 
 
 def fusion_of(a, b):
@@ -349,7 +429,7 @@ def _mega_for(shape):
     """The one mega form of a giant attack: of the pairs of fused forms that make it, the one whose two
     elements have been used least by the others, so the six are as varied as can be."""
     if not _MEGA_FOR:
-        pairs = list(itertools.combinations(sorted(FUSIONS), 2))
+        pairs = list(itertools.combinations(FIRST_FUSIONS, 2))     # (the first sixteen: the six stay the same)
         used = {}
         for sh in MEGA_SHAPES:
             options = [(a, b) for a, b in pairs if _mega_shape(mega_id(a, b)) == sh]
@@ -420,3 +500,17 @@ def mega_of(a, b):
     mid = _mega_for(_mega_shape(mega_id(a, b))) or mega_id(a, b)
     register_mega(mid)
     return mid
+
+
+# ---------------------------------------------------------------------------- the corrupted form
+# A special form, not a fusion: the Fusion Machine makes it when you fuse a form with itself (it
+# glitches). Its glitch wave corrupts enemies; corrupted enemies glitch and hurt, and when one is
+# beaten the corruption jumps to its neighbours.
+CORRUPT = 'corrupt'
+ELEMENTS[CORRUPT] = ("GLITCH", "AND CORRUPTS THEM", (220, 70, 255))
+NAMES[CORRUPT] = 'CORRUPTED'
+STRENGTHS[CORRUPT] = ("GLITCHY", "+1 DAMAGE, ONE HIT IN THREE GLITCHES RIGHT THROUGH YOU, AND ENEMIES THAT "
+                      "TOUCH YOU GET CORRUPTED.", {'power': 1, 'dodge': 0.33, 'thorns': 1})
+ATTACKS[CORRUPT] = "GLITCH WAVE"
+CORRUPT_DESC = ("A JAGGED WAVE OF STATIC SPREADS OUT AROUND YOU AND CORRUPTS EVERY ENEMY IT TOUCHES. CORRUPTED "
+                "ENEMIES GLITCH AND HURT, AND WHEN ONE IS BEATEN THE CORRUPTION JUMPS TO ITS NEIGHBOURS.")

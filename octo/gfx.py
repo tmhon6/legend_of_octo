@@ -160,6 +160,23 @@ OCTO_PAL.update({
     'magmy': _pal((50, 10, 0), (60, 40, 40), (110, 80, 70), (30, 20, 20), (255, 150, 30),
                   (255, 200, 60), (255, 110, 30), (255, 140, 40)),
 })
+# the special form you get when the Fusion Machine glitches: dark violet, glowing red eyes, and
+# magenta and cyan glitches (its tentacle tips, mouth and a scan line across its head)
+OCTO_PAL['corrupt'] = _pal((12, 0, 24), (58, 28, 92), (116, 74, 176), (32, 14, 54), (255, 50, 210),
+                           (255, 40, 80), (60, 240, 255), (255, 70, 220))
+# some of the eight newer fused forms, coloured by hand (the rest are blended from their parents)
+OCTO_PAL.update({
+    'gushy': _pal((10, 60, 80), (80, 200, 230), (200, 245, 255), (40, 140, 180), (240, 250, 255),
+                  (10, 30, 50), (255, 160, 200)),
+    'hooky': _pal((10, 30, 50), (50, 110, 150), (130, 190, 220), (30, 70, 110), (255, 110, 160),
+                  (0, 10, 30), (180, 220, 255)),
+    'shouty': _pal((70, 10, 10), (230, 70, 60), (255, 170, 150), (160, 40, 40), (255, 250, 150),
+                   (40, 0, 0), (255, 120, 90), (255, 220, 200)),
+    'fishy': _pal((10, 60, 40), (90, 210, 150), (190, 250, 210), (50, 150, 100), (150, 230, 80),
+                  (0, 40, 20), (255, 160, 120)),
+    'grabby': _pal((60, 10, 60), (190, 80, 180), (240, 170, 235), (130, 40, 130), (190, 235, 255),
+                   (30, 0, 30), (255, 150, 220), (255, 220, 250)),
+})
 
 
 class _FusedPalettes(dict):
@@ -228,14 +245,37 @@ OCTO_LEGS = [
 ]
 
 
+def _scan_line(rows, shift=0):
+    """Corrupted: a glitchy scan line across the head, cyan and magenta."""
+    for xx in range(2, 14):
+        if rows[4][xx] in 'BH':
+            rows[4][xx] = 'c' if (xx + shift) % 3 else 'P'
+
+
 def _octo_face(rows, mood, facing):
     if facing == 'up':
         # back of the head: a little extra highlight
         rows[3][6] = 'H'
         rows[4][5] = 'H'
+        if mood == 'corrupt':
+            _scan_line(rows)
         return
     shift = {'down': 0, 'left': -2, 'right': 2}[facing]
     eyes = [4 + shift, 10 + shift]
+    if mood == 'corrupt':                # one glowing red eye, one broken one, a jagged grin
+        x0, x1 = eyes
+        for yy in (6, 7):
+            rows[yy][x0] = rows[yy][x0 + 1] = 'e'
+        rows[6][x1 + 1] = rows[7][x1] = 'e'
+        rows[6][x1] = 'c'
+        mx = 7 + shift
+        for i, yy in enumerate((9, 8, 9, 8)):
+            if 1 <= mx - 1 + i <= 14:
+                rows[yy][mx - 1 + i] = 'm'
+        _scan_line(rows, shift)
+        return
+    if mood == 'hooky':                  # Spooky's hollow eyes
+        mood = 'ghost'
     if mood == 'ghost':
         # hollow white eyes and a little 'o' mouth
         for x0 in eyes:
@@ -255,7 +295,7 @@ def _octo_face(rows, mood, facing):
         mood = 'mad' if {'mad', 'spiky', 'stony'} & {a, b} else 'ghost' if 'ghost' in (a, b) else 'blue'
         if mood == 'ghost':
             return _octo_face(rows, 'ghost', facing)
-    if mood in ('spiky', 'prickly', 'quaky', 'stony', 'magnet'):
+    if mood in ('spiky', 'prickly', 'quaky', 'stony', 'magnet', 'shouty', 'grabby', 'bomby'):
         mood = 'mad'
     for i, x0 in enumerate(eyes):
         if mood != 'mad':

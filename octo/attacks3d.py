@@ -793,6 +793,190 @@ def _boss_aura(c, o):
         c.glow(_light(col, 0.55), px, py, 6 + sw * 9)
 
 
+# ======================================================================
+# the eight newer fused attacks, and Corrupted's glitch wave
+# ======================================================================
+GLITCH = ((255, 50, 220), (60, 240, 255), (255, 255, 255))
+
+
+def _geyser(c, o):
+    """Water bubbling up under an enemy, then a spout bursting up out of the floor."""
+    if o.t < 0:
+        return
+    x, y = o.x, o.y
+    if o.t < o.WAIT:
+        k = o.t / o.WAIT
+        px, py = c.at(x, y)
+        _put_ring(c, px, py, (5 + 7 * k) * HI, max(1, HI // 2 + 1), (220, 245, 255), 120 + 100 * k)
+        for i in range(3):
+            f = (k * 1.5 + i / 3) % 1
+            bx, by = c.at(x + math.sin(i * 2.1 + o.t * 0.4) * 4, y, f * 12)
+            img = hifi.bubble(max(2, int((1.2 + 0.6 * (i % 2)) * HI)))
+            c.hr.blit(img, (round(bx - img.get_width() / 2), round(by - img.get_height() / 2)))
+        return
+    k = min(1.0, (o.t - o.WAIT) / o.BURST)
+    top = 34 * math.sin(k * math.pi) ** 0.6
+    c.shadow(x, y, 14, fly=0, a=70)
+    for i in range(10):
+        f = i / 9
+        w = (4.6 - 1.8 * f) * (0.9 + 0.15 * math.sin(o.t * 0.7 + i))
+        px, py = c.at(x + math.sin(o.t * 0.35 + i * 0.9) * 0.9 * f, y, top * f)
+        c.ball((150, 210, 250), px, py, w, alpha=200)
+    for i in range(5):                                       # froth on top
+        a = i / 5 * TAU + o.t * 0.25
+        px, py = c.at(x + math.cos(a) * 3.2, y + math.sin(a) * 1.4, top + 1.5)
+        c.ball((245, 252, 255), px, py, 2.0)
+    if isinstance(o.elem, str) and o.elem in forms.ELEMENTS:
+        c.glow(o.col, *c.at(x, y, top * 0.6), 9)
+
+
+def _harpoon_spr(d):
+    s = _canvas(11, 5)
+    pygame.draw.line(s, (120, 90, 60), (0, 2), (7, 2))
+    pygame.draw.polygon(s, (220, 224, 236), [(6, 0), (10, 2), (6, 4)])
+    s.set_at((5, 0), (170, 176, 196))
+    s.set_at((5, 4), (170, 176, 196))
+    return pygame.transform.rotate(s, -d * 360 / 16)
+
+
+def _harpoon(c, o):
+    """The harpoon and its line back to Octo (slack while it's coming back)."""
+    ox, oy = o.owner.rect.center
+    x, y = o.rect.center
+    a, b = c.at(ox, oy), c.at(x, y)
+    sag = 5 * HI if o.back else 0
+    pts = [(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f + sag * 4 * f * (1 - f)) for f in (0, 0.25, 0.5, 0.75, 1)]
+    c.lines((70, 52, 36), pts, 1.0)
+    c.lines((176, 146, 104), [(px, py - HI * 0.4) for px, py in pts], 0.4)
+    c.shadow(x, y, 6, a=50)
+    d = _dir(x - ox, y - oy)
+    c.put(art(('harpoon', d), lambda: _harpoon_spr(d), 2.0, ball=False), *b)
+    if isinstance(o.elem, str) and o.elem in forms.ELEMENTS:
+        c.glow(o.col, b[0], b[1], 5)
+
+
+def _saw_spr(step, col):
+    s = _canvas(13, 13)
+    pts = []
+    for i in range(24):
+        a = step / 6 * (TAU / 12) + i / 24 * TAU
+        r = 6 if i % 2 == 0 else 4.6
+        pts.append((6 + math.cos(a) * r, 6 + math.sin(a) * r))
+    pygame.draw.polygon(s, (120, 126, 146), pts)
+    pygame.draw.polygon(s, (60, 64, 80), pts, 1)
+    pygame.draw.circle(s, (206, 212, 230), (6, 6), 4)
+    pygame.draw.circle(s, col, (6, 6), 2)
+    s.set_at((4, 4), (255, 255, 255))
+    return s
+
+
+def _saw(c, o):
+    x, y = o.rect.center
+    c.shadow(x, y, 10, a=60)
+    step = (o.t // 2) % 6
+    col = _q(o.col)
+    c.put(art(('saw', step, col), lambda: _saw_spr(step, col), 2.0, ball=False, yaw=0.2), *c.at(x, y))
+
+
+def _spray(c, o):
+    if not o.live:
+        return
+    x, y = o.rect.center
+    c.shadow(x, y, 4, a=40)
+    px, py = c.at(x, y)
+    c.glow(o.col, px, py, 5)
+    c.ball(o.col, px, py, 2.6)
+    c.ball((255, 255, 255), px - 0.8 * HI, py - 0.8 * HI, 0.8)
+
+
+def _sonar(c, o):
+    """Arcs of sound sweeping out in a cone, thinning as they go."""
+    for r in o.radii():
+        k = r / o.REACH
+        pts = [c.at(o.x + math.cos(o.ang + a) * r, o.y + math.sin(o.ang + a) * r)
+               for a in (-o.HALF + i * o.HALF / 6 for i in range(13))]
+        w = max(0.5, 2.2 * (1 - k))
+        c.lines(_dark(o.col, 0.7), pts, w + 0.8)
+        c.lines(_light(o.col, 0.5), pts, w)
+
+
+def _mortar(c, o):
+    """The bomb up in its arc, its shadow on the floor, and a red ring where it will land."""
+    k = min(1.0, o.t / o.FLIGHT)
+    tx, ty = c.at(o.x1, o.y1)
+    _put_ring(c, tx, ty, o.RADIUS * HI * (0.4 + 0.6 * k), max(1, HI), (255, 70, 50), 150 + 80 * k, 60 * k)
+    c.shadow(o.x, o.y, 6 + 6 * (1 - o.z / o.HIGH), fly=0, a=70)
+    px, py = c.at(o.x, o.y, o.z)
+    lit = (o.t // 3) % 2
+    c.put(art(('bomb', lit), lambda: gfx.SPR['items']['bomb_lit' if lit else 'bomb'], 3.4), px, py)
+    if lit:
+        c.glow((255, 120, 60), px, py - 5 * HI, 6)
+
+
+def _fish_spr(col, f):
+    s = _canvas(8, 5)
+    dark = _dark(col, 0.6)
+    pygame.draw.ellipse(s, dark, (1, 0, 7, 5))
+    pygame.draw.ellipse(s, col, (2, 1, 5, 3))
+    for p in ((0, 0), (0, 4), (1, 1), (1, 3), (1, 2)):               # the tail
+        s.set_at(p, dark)
+    s.set_at((6, 2), (20, 20, 30))                                   # an eye
+    s.set_at((4, 1), _light(col, 0.6))
+    return s if f > 0 else pygame.transform.flip(s, True, False)
+
+
+def _fish(c, o):
+    x, y = o.rect.center
+    c.shadow(x, y, 5, a=40)
+    f = 1 if o.vx >= 0 else -1
+    col = _q(o.col)
+    c.put(art(('fish', col, f), lambda: _fish_spr(col, f), 2.2, yaw=0.25 * f), *c.at(x, y))
+
+
+def _grab(c, o):
+    """A tentacle out of the floor beside the enemy, up its side and curling over the top of it."""
+    k = o.height()
+    if k <= 0:
+        return
+    body = (200, 90, 190)
+    n = 10
+    tip = None
+    for i in range(n + 1):
+        f = i / n
+        px = o.x + o.side * 7 * math.cos(f * 2.2)
+        z = 15 * k * math.sin(f * 1.9)
+        r = (3.0 - 1.8 * f) * (0.6 + 0.4 * k)
+        X, Y = c.at(px, o.y, z)
+        c.ball(_lerp_c(_dark(body, 0.75), _light(body, 0.25), f), X, Y, r)
+        if i % 2 and i < n:                                     # suckers
+            c.ball((255, 214, 240), X - o.side * r * 0.4 * HI, Y + r * 0.3 * HI, max(0.5, r * 0.35))
+        tip = (X, Y)
+    if tip and isinstance(o.elem, str) and o.elem in forms.ELEMENTS:
+        c.glow(o.col, tip[0], tip[1], 5)
+
+
+def _lerp_c(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def _glitchwave(c, o):
+    """A jagged square of static: little cubes of magenta, cyan and white, with gaps, jumping about."""
+    rnd = random.Random(o.t * 13 + int(o.x) * 7)
+    r = o.r
+    n = max(8, int(8 * r / 5))
+    for i in range(n):
+        u = i / n * 4
+        side, f = int(u), u - int(u)
+        px, py = ((-r + 2 * r * f, -r), (r, -r + 2 * r * f), (r - 2 * r * f, r), (-r, r - 2 * r * f))[side]
+        if rnd.random() < 0.25:
+            continue
+        X, Y = c.at(o.x + px + rnd.uniform(-2, 2), o.y + py + rnd.uniform(-2, 2))
+        c.cube(GLITCH[rnd.randrange(3)], X, Y, 1 if rnd.random() < 0.7 else 1.5)
+    for _ in range(3):                                          # and a few bars of static
+        X, Y = c.at(o.x + rnd.uniform(-r, r), o.y + rnd.uniform(-r, r))
+        pygame.draw.line(c.hr, GLITCH[rnd.randrange(2)], (X - 3 * HI, Y), (X + 3 * HI, Y), max(1, HI // 2))
+
+
 DRAW = {
     'Ink': _ink, 'Slime': _slime, 'IceShard': _shard, 'Spine': _spine, 'Wisp': _wisp, 'TrapBubble': _trap,
     'EnemyShot': _enemy_shot, 'Bomb': _bomb, 'Seeker': _seeker, 'Boomerang': _boomerang, 'Orb': _orb,
@@ -802,6 +986,9 @@ DRAW = {
     'InkCloud': _inkcloud, 'JetInk': _jetink,
     'BossOrb': _boss_orb, 'Warn': _warn, 'Strike': _strike, 'Shock': _shock, 'BossAura': _boss_aura,
 }
+DRAW.update({'GeyserSpout': _geyser, 'Harpoon': _harpoon, 'SawBlade': _saw, 'SprayDrop': _spray,
+             'SonarBlast': _sonar, 'MortarShell': _mortar, 'SwarmFish': _fish, 'GrabTentacle': _grab,
+             'GlitchWave': _glitchwave})
 FLOOR = ('Warn', 'Shock', 'BossAura')           # drawn on the floor, under everything standing there
 
 
@@ -835,8 +1022,12 @@ def ground(o):
         return o.owner.rect.centerx, o.owner.rect.bottom + 0.5
     if n == 'RainCloud':
         return o.x + 12, o.owner.rect.bottom + 0.5
-    if n in ('Hail', 'InkCloud'):
+    if n in ('Hail', 'InkCloud', 'GeyserSpout', 'MortarShell'):
         return o.x, o.y
+    if n == 'GrabTentacle':                       # (just in front of the enemy it wraps round)
+        return o.x, o.y + 1
+    if n in ('SonarBlast', 'GlitchWave'):
+        return o.x, o.y + KZ * FLY
     if n == 'Puff':
         return o.x + 8, o.y + 14
     if n in ('Bomb', 'Mine', 'Boulder', 'Quake', 'Whirlpool'):

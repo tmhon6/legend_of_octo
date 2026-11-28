@@ -45,6 +45,39 @@ def _turned(img, ang):
     return s
 
 
+_tints = {}
+
+
+def _tinted(img, col):
+    """A see-through copy of a figure all in one colour (the glitch's colour fringes), kept."""
+    key = (id(img), col)
+    v = _tints.get(key)
+    if v is None or v[0] is not img:
+        t = img.copy()
+        t.fill(col + (255,), special_flags=pygame.BLEND_RGBA_MULT)
+        t.set_alpha(120)
+        if len(_tints) > 300:
+            _tints.clear()
+        v = _tints[key] = (img, t)
+    return v[1]
+
+
+def glitch_blit(hr, img, x, y, t, seed=0):
+    """Draw a figure corrupted (Corrupted Octo, and the enemies he corrupts): magenta and cyan
+    copies split off either side, and now and then a slice of it jumps sideways."""
+    k = (t + seed) % 23
+    off = HI * (2 if k % 5 == 0 else 1)
+    hr.blit(_tinted(img, (255, 50, 220)), (x - off, y))
+    hr.blit(_tinted(img, (60, 240, 255)), (x + off, y))
+    hr.blit(img, (x, y))
+    if k < 4:
+        w, h = img.get_size()
+        rnd = random.Random((t // 2) * 31 + seed)
+        sh = max(HI, int(h * rnd.uniform(0.1, 0.3)))
+        sy = rnd.randint(0, max(0, h - sh))
+        hr.blit(img, (x + rnd.choice((-1, 1)) * HI * rnd.randint(2, 4), y + sy), area=pygame.Rect(0, sy, w, sh))
+
+
 def _turtle(img, facing):
     """A turtle (seen from above, head up in its sprite) turned to face the way it's going."""
     ang = TURTLE_TURN.get(facing, 0)
@@ -443,7 +476,10 @@ class Scene3D:
                     img = img.copy()
                     img.set_alpha(a)
                 x, y = self._hr(wx + src.get_width() / 2, wy + src.get_height(), shake)
-                hr.blit(img, (x - ax, y - ay))
+                if getattr(e, 'corrupt', 0):                  # corrupted: it glitches
+                    glitch_blit(hr, img, x - ax, y - ay, self.t, id(e) % 97)
+                else:
+                    hr.blit(img, (x - ax, y - ay))
             else:                                             # glow, or not built yet: drawn flat
                 big = pygame.transform.scale(src, (src.get_width() * HI, src.get_height() * HI))
                 if a is not None and a < 255:
@@ -583,7 +619,10 @@ class Scene3D:
         if p.fog_t:
             img = img.copy()
             img.set_alpha(110 if p.fog_t > 50 or (p.fog_t // 4) % 2 else 220)
-        hr.blit(img, (x - ax, y - ay))
+        if p.mood == 'corrupt' and not p.fog_t:
+            glitch_blit(hr, img, x - ax, y - ay, self.t)
+        else:
+            hr.blit(img, (x - ax, y - ay))
         if p.dash_t and p.dash_dir[1] < 0:                    # jetting away: the streaks are in front
             self._draw_jet_streaks(hr, x, y - 8 * HI, *p.dash_dir)
         if self.arrive_t:                                     # rings bursting out as he lands

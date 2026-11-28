@@ -26,7 +26,8 @@ SLAP_AIM_RANGE = 32      # px between centres: about the slap's real reach
 # attacks that STRONG forms (and fused forms) power up
 PLAYER_HIT_KINDS = {'ink', 'slap', 'zap', 'ice', 'wisp', 'spike', 'glow', 'bubble', 'bomb', 'thorns',
                     'hail', 'whip', 'roll', 'quake', 'lantern', 'whirl', 'trap', 'chain', 'nova', 'shell',
-                    'star', 'mine', 'boulder', 'beam', 'orb', 'rain'}
+                    'star', 'mine', 'boulder', 'beam', 'orb', 'rain',
+                    'geyser', 'harpoon', 'saw', 'spray', 'sonar', 'mortar', 'swarm', 'grab', 'glitch'}
 INK_AIM_RANGE = 200      # px: ink homes its launch angle on enemies this close (on screen)
 
 
@@ -189,6 +190,14 @@ class Player(Entity):
             sound.play('whoosh')
             return
         if self.shoot_cd:
+            return
+        if self.mood == forms.CORRUPT:
+            # Corrupted's glitch wave: a square of static spreads out and corrupts every enemy it passes
+            game.shots.append(GlitchWave(cx, cy))
+            game.glitch_t = max(getattr(game, 'glitch_t', 0), 8)
+            self.shoot_cd = 55
+            self.attack_t = 10
+            sound.play('glitch')
             return
         if self.mood in forms.FUSIONS or self.mood in forms.OWN_SHAPE:
             self.fusion_attack(game, cx, cy)
@@ -405,6 +414,77 @@ class Player(Entity):
             game.shots.append(Boulder(cx, cy, dx, dy, elem))
             self.shoot_cd = 50
             sound.play('shut')
+        elif shape == 'geyser':
+            seen = [e for e in game.enemies if e.active and game.view_rect.colliderect(e.rect)]
+            seen.sort(key=lambda e: math.hypot(e.rect.centerx - cx, e.rect.centery - cy))
+            for i, e in enumerate(seen[:3]):
+                game.shots.append(GeyserSpout(e, e.rect.centerx, e.rect.bottom - 2, delay=i * 5, elem=elem))
+            if not seen:
+                dx, dy = DIRS[self.facing]
+                game.shots.append(GeyserSpout(None, cx + dx * 34, cy + 6 + dy * 34, elem=elem))
+            self.shoot_cd = 60
+            sound.play('bubble')
+        elif shape == 'harpoon':
+            if any(isinstance(s, Harpoon) for s in game.shots):
+                sound.play('nope')
+                return
+            dx, dy = self.aim(game, cx, cy, 160)
+            game.shots.append(Harpoon(self, dx, dy, elem))
+            self.shoot_cd = 30
+            sound.play('harpoon')
+        elif shape == 'saw':
+            if sum(isinstance(s, SawBlade) for s in game.shots) >= 2:
+                sound.play('nope')
+                return
+            dx, dy = self.aim(game, cx, cy)
+            if abs(dx) < 0.05 or abs(dy) < 0.05:          # straight along: tilt it, so it ricochets about
+                a = math.atan2(dy, dx) + 0.4
+                dx, dy = math.cos(a), math.sin(a)
+            game.shots.append(SawBlade(cx, cy, dx, dy, elem))
+            self.shoot_cd = 30
+            sound.play('saw')
+        elif shape == 'spray':
+            dx, dy = self.aim(game, cx, cy)
+            base = math.atan2(dy, dx)
+            for i in range(10):
+                game.shots.append(SprayDrop(self, base + (-0.14, 0.0, 0.14, 0.07, -0.07)[i % 5], i * 3, i, elem))
+            self.shoot_cd = 50
+            sound.play('ink')
+        elif shape == 'sonar':
+            dx, dy = self.aim(game, cx, cy, 120)
+            game.shots.append(SonarBlast(cx, cy, math.atan2(dy, dx), elem))
+            self.shoot_cd = 50
+            sound.play('sonar')
+        elif shape == 'mortar':
+            target = game.nearest_enemy((cx, cy), 170)
+            if target:
+                tx, ty = target.rect.center
+            else:
+                dx, dy = DIRS[self.facing]
+                tx, ty = cx + dx * 70, cy + dy * 70
+            game.shots.append(MortarShell(cx, cy, tx, ty, elem))
+            self.shoot_cd = 55
+            sound.play('shoot')
+        elif shape == 'swarm':
+            if any(isinstance(s, SwarmFish) for s in game.shots):
+                sound.play('nope')
+                return
+            for i in range(6):
+                game.shots.append(SwarmFish(self, i, elem))
+            self.shoot_cd = 60
+            sound.play('bubble')
+        elif shape == 'grab':
+            near = [e for e in game.enemies if e.active and math.hypot(e.rect.centerx - cx, e.rect.centery - cy) < 84]
+            near.sort(key=lambda e: math.hypot(e.rect.centerx - cx, e.rect.centery - cy))
+            for i, e in enumerate(near[:5]):
+                game.shots.append(GrabTentacle(e, e.rect.centerx, e.rect.bottom, delay=i * 3, elem=elem))
+            if not near:                                    # nobody near: three burst up round Octo anyway
+                for i in range(3):
+                    a = i / 3 * math.tau + 0.5
+                    game.shots.append(GrabTentacle(None, cx + math.cos(a) * 20, cy + 6 + math.sin(a) * 14,
+                                                   delay=i * 3, elem=elem))
+            self.shoot_cd = 60
+            sound.play('slap')
 
     def mega_cast(self, game, shape, elems, cx, cy):
         """The six mega attacks (from the secret Mega Machine). elems is a pair of elements."""
@@ -554,6 +634,11 @@ class Player(Entity):
             return
         if self.stat('dodge', 0) and random.random() < self.stat('dodge', 0):
             self.invuln = 30                      # Sandy side-steps the hit
+            if self.mood == forms.CORRUPT:        # Corrupted glitches right through it
+                game.toast = ("GLITCHED!", 40)
+                game.glitch_t = max(getattr(game, 'glitch_t', 0), 6)
+                game.burst(self.rect.center, (255, 50, 220), 6)
+                return
             game.toast = ("DODGED!", 40)
             game.burst(self.rect.center, (240, 220, 160), 6)
             return
@@ -922,6 +1007,15 @@ class Enemy(Entity):
                 game.effects.append(Particle(self.rect.centerx, self.rect.top, 0, -0.5, (150, 230, 80), 16))
                 if self.dead:
                     return
+        if getattr(self, 'corrupt', 0):            # Corrupted: it glitches, and now and then that hurts
+            self.corrupt -= 1
+            if self.corrupt % 40 == 0:
+                self.hurt_t = 0
+                self.hit(game, 1, 'corrupt', (self.rect.centerx, self.rect.bottom))
+                game.effects.append(Particle(self.rect.centerx + random.uniform(-4, 4), self.rect.top, 0, -0.4,
+                                             random.choice(GLITCH_COLS), 14))
+                if self.dead:
+                    return
         if getattr(self, 'weak', 0):
             self.weak -= 1
         if getattr(self, 'slow', 0):
@@ -1025,6 +1119,8 @@ class Enemy(Entity):
         sound.play('die')
         game.effects.append(Puff(self.x, self.y))
         game.drop_loot(self.rect.center)
+        if getattr(self, 'corrupt', 0):            # the corruption jumps to its neighbours
+            game.shots.append(GlitchWave(*self.rect.center, max_r=48, dmg=0))
 
     def image(self):
         frames = gfx.SPR[self.sprite]
@@ -3587,6 +3683,8 @@ def _element_effect(game, e, elem, src):
     elif elem == 'loot' and random.random() < 0.4:
         it = Pickup(cx - 4, cy - 4, 'pearl', life=420)
         game.pickups.append(it)
+    elif elem == 'corrupt' and not e.dead:
+        corrupt(e)
     elif elem == 'spark':
         best = None
         for o in game.enemies:
@@ -4262,6 +4360,473 @@ class Boulder(Entity):
         pygame.draw.circle(surf, (190, 176, 150), (cx - 3, cy - 3), 2)
         if self.elem in forms.ELEMENTS:
             pygame.draw.circle(surf, forms.ELEMENTS[self.elem][2], (cx, cy), 8, 1)
+
+
+# ===========================================================================
+# The eight newer fused attacks, and Corrupted's glitch wave
+# ===========================================================================
+GLITCH_COLS = ((255, 50, 220), (60, 240, 255), (255, 255, 255))
+
+
+def corrupt(e, frames=240):
+    """Corrupt an enemy: it glitches, and every so often the glitch hurts it (Enemy.update), and
+    when it's beaten the corruption spreads (Enemy.die)."""
+    if e.active:
+        e.corrupt = max(getattr(e, 'corrupt', 0), frames)
+
+
+class GeyserSpout(Entity):
+    """Geyser: water bubbles up under an enemy (following it about), then a spout bursts up out of
+    the sea floor beneath it."""
+    WAIT, BURST = 16, 20
+
+    def __init__(self, target, x, y, delay=0, elem=None):
+        super().__init__(x, y)
+        self.target = target
+        self.t = -delay
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (170, 225, 255)))[2]
+
+    @property
+    def rect(self):
+        return pygame.Rect(round(self.x) - 11, round(self.y) - 14, 22, 20)
+
+    def update(self, game):
+        self.t += 1
+        e = self.target
+        if 0 <= self.t < self.WAIT and e is not None and e.active:
+            self.x, self.y = e.rect.centerx, e.rect.bottom - 2
+        if self.t == self.WAIT:
+            sound.play('whoosh')
+            for o in list(game.enemies):
+                if o.active and self.rect.colliderect(o.rect):
+                    strike(game, o, 2, 'geyser', (self.x, self.y + 8), self.elem)
+            for i in range(10):
+                a = i / 10 * math.tau
+                game.effects.append(Particle(self.x, self.y - 6, math.cos(a) * 1.4, math.sin(a) * 0.7 - 1.2,
+                                             (220, 245, 255), 20, grav=0.08))
+        if self.t > self.WAIT + self.BURST:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        if self.t < 0:
+            return
+        x, y = round(self.x) + ox, round(self.y) + oy
+        if self.t < self.WAIT:
+            r = 3 + self.t * 0.4
+            pygame.draw.ellipse(surf, (200, 240, 255), (x - r, y - r * 0.5, r * 2, r), 1)
+            return
+        k = min(1.0, (self.t - self.WAIT) / self.BURST)
+        h = int(28 * math.sin(k * math.pi))
+        pygame.draw.rect(surf, (150, 210, 250), (x - 3, y - h, 6, h))
+        pygame.draw.circle(surf, (240, 250, 255), (x, y - h), 4)
+
+
+class Harpoon(Entity):
+    """Harpoon: flies straight out on its line, spears the first enemy it meets and reels it in to
+    Octo, dazed (a boss is too heavy: the harpoon just bites and comes back)."""
+    hb = (0, 0, 6, 6)
+    who = 'shot'
+    REACH, SPEED = 150, 5.0
+
+    def __init__(self, owner, dx, dy, elem=None):
+        cx, cy = owner.rect.center
+        super().__init__(cx - 3 + dx * 6, cy - 3 + dy * 6)
+        self.owner = owner
+        self.dx, self.dy = dx, dy
+        self.t = 0
+        self.caught = None
+        self.back = False
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (230, 230, 240)))[2]
+
+    def update(self, game):
+        self.t += 1
+        ox, oy = self.owner.rect.center
+        cx, cy = self.rect.center
+        if self.t > 120:
+            self.dead = True
+            return
+        if self.caught is not None:
+            e = self.caught
+            if not e.active:
+                self.caught, self.back = None, True
+                return
+            ex, ey = e.rect.center
+            d = math.hypot(ox - ex, oy - ey) or 1
+            if d < 22 or self.t > 90:
+                e.frozen = max(e.frozen, 45)               # it lands at Octo's feet, dazed
+                game.effects.append(Daze(e))
+                self.dead = True
+                return
+            moved = False
+            for _ in range(4):
+                moved = bool(e.move((ox - ex) / d, (oy - ey) / d, game.level)) or moved
+            e.frozen = max(e.frozen, 2)
+            self.x, self.y = e.rect.centerx - 3, e.rect.centery - 3
+            if not moved:                                  # stuck behind something: let it go
+                self.caught, self.back = None, True
+            return
+        if self.back:
+            d = math.hypot(ox - cx, oy - cy)
+            if d < 8:
+                self.dead = True
+                return
+            self.x += (ox - cx) / d * 6.5
+            self.y += (oy - cy) / d * 6.5
+            return
+        self.x += self.dx * self.SPEED
+        self.y += self.dy * self.SPEED
+        if game.level.blocked(self.rect, 'shot') or math.hypot(cx - ox, cy - oy) > self.REACH:
+            self.back = True
+            return
+        for e in list(game.enemies):
+            if e.active and self.rect.inflate(4, 4).colliderect(e.rect):
+                strike(game, e, 2, 'harpoon', self.rect.center, self.elem)
+                if e.active and not getattr(e, 'boss', False):
+                    self.caught = e
+                else:
+                    self.back = True
+                return
+
+    def draw(self, surf, ox=0, oy=0):
+        px, py = self.owner.rect.center
+        cx, cy = self.rect.center
+        pygame.draw.line(surf, (90, 70, 50), (px + ox, py + oy), (cx + ox, cy + oy))
+        pygame.draw.circle(surf, (230, 230, 240), (cx + ox, cy + oy), 2)
+
+
+class SawBlade(Entity):
+    """Saw: a spinning saw blade that ricochets off the walls, cutting every enemy it passes (each
+    one again after a moment)."""
+    hb = (0, 0, 10, 10)
+    who = 'shot'
+    BOUNCES, LIFE = 4, 150
+
+    def __init__(self, cx, cy, dx, dy, elem=None):
+        super().__init__(cx - 5 + dx * 8, cy - 5 + dy * 8)
+        self.vx, self.vy = dx * 3.4, dy * 3.4
+        self.t = 0
+        self.bounces = 0
+        self.cool = {}
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (220, 226, 240)))[2]
+
+    def update(self, game):
+        self.t += 1
+        wall = False
+        self.x += self.vx
+        if game.level.blocked(self.rect, 'shot'):
+            self.x -= self.vx
+            self.vx = -self.vx
+            wall = True
+        self.y += self.vy
+        if game.level.blocked(self.rect, 'shot'):
+            self.y -= self.vy
+            self.vy = -self.vy
+            wall = True
+        if wall:
+            self.bounces += 1
+            sound.play('tink')
+            game.spark(self.rect.center)
+        if self.bounces > self.BOUNCES or self.t > self.LIFE:
+            self.dead = True
+            return
+        for e in list(game.enemies):
+            if e.active and self.cool.get(e, 0) <= self.t and self.rect.inflate(2, 2).colliderect(e.rect):
+                self.cool[e] = self.t + 20
+                strike(game, e, 2, 'saw', self.rect.center, self.elem)
+
+    def draw(self, surf, ox=0, oy=0):
+        cx, cy = self.rect.centerx + ox, self.rect.centery + oy
+        a = self.t * 0.7
+        pygame.draw.circle(surf, (150, 156, 176), (cx, cy), 5)
+        for i in range(6):
+            b = a + i / 6 * math.tau
+            surf.set_at((int(cx + math.cos(b) * 6), int(cy + math.sin(b) * 6)), (240, 244, 255))
+        pygame.draw.circle(surf, self.col, (cx, cy), 2)
+
+
+class SprayDrop(Entity):
+    """Spray: one pellet of a rapid stream of ink, squirted from wherever Octo is when its turn comes."""
+    hb = (0, 0, 4, 4)
+    who = 'shot'
+
+    def __init__(self, owner, ang, wait, i=0, elem=None):
+        super().__init__(-100, -100)
+        self.owner, self.ang, self.wait, self.i = owner, ang, wait, i
+        self.life = 32
+        self.live = False
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (90, 70, 200)))[2]
+
+    def update(self, game):
+        if not self.live:
+            self.wait -= 1
+            if self.wait > 0:
+                return
+            cx, cy = self.owner.rect.center
+            self.x, self.y = cx - 2 + math.cos(self.ang) * 9, cy - 2 + math.sin(self.ang) * 9
+            self.live = True
+            if self.i % 3 == 2:
+                sound.play('shoot')
+        self.x += math.cos(self.ang) * 4.8
+        self.y += math.sin(self.ang) * 4.8
+        self.life -= 1
+        if self.life <= 0 or game.level.blocked(self.rect, 'shot'):
+            self.dead = True
+            return
+        for e in list(game.enemies):
+            if e.active and self.rect.inflate(4, 4).colliderect(e.rect):
+                strike(game, e, 2, 'spray', self.rect.center, self.elem)
+                self.dead = True
+                return
+
+    def draw(self, surf, ox=0, oy=0):
+        if not self.live:
+            return
+        cx, cy = self.rect.centerx + ox, self.rect.centery + oy
+        pygame.draw.circle(surf, self.col, (cx, cy), 2)
+        surf.set_at((cx - 1, cy - 1), (255, 255, 255))
+
+
+class SonarBlast:
+    """Sonar: three waves of sound sweep out in a cone ahead of Octo. Each enemy in the cone is hit
+    once, by the first wave to reach it."""
+    HALF, REACH, SPEED, GAP = 0.6, 104, 4.4, 20
+
+    def __init__(self, x, y, ang, elem=None):
+        self.x, self.y, self.ang = x, y, ang
+        self.t = 0
+        self.hit = set()
+        self.dead = False
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (170, 230, 255)))[2]
+
+    def radii(self):
+        return [r for r in (self.t * self.SPEED - i * self.GAP for i in range(3)) if 8 <= r <= self.REACH]
+
+    def update(self, game):
+        self.t += 1
+        rs = self.radii()
+        for e in list(game.enemies):
+            if not e.active or e in self.hit:
+                continue
+            ex, ey = e.rect.center
+            d = math.hypot(ex - self.x, ey - self.y)
+            rel = (math.atan2(ey - self.y, ex - self.x) - self.ang + math.pi) % math.tau - math.pi
+            if abs(rel) < self.HALF + 8 / max(d, 8) and any(abs(d - r) < 9 for r in rs):
+                self.hit.add(e)
+                strike(game, e, 2, 'sonar', (self.x, self.y), self.elem)
+        if self.t * self.SPEED - 2 * self.GAP > self.REACH:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        for r in self.radii():
+            pts = [(self.x + ox + math.cos(self.ang + a) * r, self.y + oy + math.sin(self.ang + a) * r)
+                   for a in (-self.HALF + i * self.HALF / 4 for i in range(9))]
+            pygame.draw.lines(surf, self.col, False, pts, 2)
+
+
+class MortarShell:
+    """Mortar: a big fizzing bomb lobbed high over walls; it bursts on whatever is where it lands
+    (a red ring on the floor shows where), cracking rock like a bomb."""
+    FLIGHT, RADIUS, HIGH = 34, 30, 44
+
+    def __init__(self, x0, y0, x1, y1, elem=None):
+        self.x0, self.y0, self.x1, self.y1 = x0, y0, x1, y1
+        self.x, self.y, self.z = x0, y0, 0.0
+        self.t = 0
+        self.dead = False
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (255, 170, 80)))[2]
+
+    @property
+    def rect(self):
+        return pygame.Rect(round(self.x) - 5, round(self.y - self.z) - 5, 10, 10)
+
+    def update(self, game):
+        self.t += 1
+        k = self.t / self.FLIGHT
+        self.x = self.x0 + (self.x1 - self.x0) * k
+        self.y = self.y0 + (self.y1 - self.y0) * k
+        self.z = self.HIGH * 4 * k * (1 - k)
+        if self.t < self.FLIGHT:
+            return
+        self.dead = True
+        sound.play('boom')
+        game.shake = max(game.shake, 6)
+        game.blast_tiles(self.x1, self.y1, 18)
+        for e in list(game.enemies):
+            if e.active and math.hypot(e.rect.centerx - self.x1, e.rect.centery - self.y1) < self.RADIUS:
+                strike(game, e, 3, 'mortar', (self.x1, self.y1), self.elem)
+        game.effects.append(fx.ImpactRing(self.x1, self.y1, big=True, col=self.col))
+        for i in range(14):
+            a = i / 14 * math.tau
+            game.effects.append(Particle(self.x1, self.y1, math.cos(a) * 2.2, math.sin(a) * 2.2, self.col, 20, size=2))
+
+    def draw(self, surf, ox=0, oy=0):
+        tx, ty = round(self.x1) + ox, round(self.y1) + oy
+        pygame.draw.circle(surf, (255, 80, 60), (tx, ty), max(2, int(self.RADIUS * min(1, self.t / self.FLIGHT))), 1)
+        x, y = round(self.x) + ox, round(self.y) + oy
+        pygame.draw.ellipse(surf, (0, 0, 20), (x - 4, y - 2, 8, 4))
+        pygame.draw.circle(surf, (40, 40, 50), (x, round(y - self.z)), 5)
+        pygame.draw.circle(surf, self.col, (x + 2, round(y - self.z) - 5), 1)
+
+
+class SwarmFish(Entity):
+    """Swarm: one of a school of little fish that dart round the nearest enemies, nibbling them (the
+    school spreads out: no more than three go after one enemy if there are others)."""
+    hb = (0, 0, 5, 4)
+    who = 'shot'
+    LIFE = 210
+
+    def __init__(self, owner, i, elem=None):
+        cx, cy = owner.rect.center
+        super().__init__(cx - 2, cy - 2)
+        self.owner, self.i = owner, i
+        a = i / 6 * math.tau
+        self.vx, self.vy = math.cos(a) * 2.4, math.sin(a) * 2.4
+        self.life = self.LIFE
+        self.target = None
+        self.bite = 12 + i * 3
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (255, 160, 80)))[2]
+
+    def update(self, game):
+        self.life -= 1
+        if self.life <= 0:
+            self.dead = True
+            return
+        if self.bite:
+            self.bite -= 1
+        cx, cy = self.rect.center
+        if self.target is not None and not self.target.active:
+            self.target = None
+        if self.target is None and self.life % 6 == self.i % 6:
+            self.target = self._pick(game, cx, cy)
+        if self.target is not None:
+            tx, ty = self.target.rect.center
+            a = self.life * 0.16 + self.i * 1.05
+            gx, gy = tx + math.cos(a) * 8, ty + math.sin(a) * 6
+        else:
+            ox, oy = self.owner.rect.center
+            a = self.life * 0.09 + self.i * 1.05
+            gx, gy = ox + math.cos(a) * 16, oy + math.sin(a) * 11
+        dx, dy = gx - cx, gy - cy
+        d = math.hypot(dx, dy) or 1
+        self.vx += (dx / d * 2.8 - self.vx) * 0.2
+        self.vy += (dy / d * 2.8 - self.vy) * 0.2
+        self.x += self.vx
+        self.y += self.vy
+        e = self.target
+        if e is not None and not self.bite and self.rect.inflate(6, 6).colliderect(e.rect):
+            self.bite = 26
+            strike(game, e, 1, 'swarm', self.rect.center, self.elem)
+
+    def _pick(self, game, cx, cy):
+        busy = {}
+        for s in game.shots:
+            if isinstance(s, SwarmFish) and s.target is not None:
+                busy[s.target] = busy.get(s.target, 0) + 1
+        best = None
+        for e in game.enemies:
+            if e.active and game.view_rect.colliderect(e.rect):
+                d = math.hypot(e.rect.centerx - cx, e.rect.centery - cy) + (60 if busy.get(e, 0) >= 3 else 0)
+                if d < 220 and (best is None or d < best[0]):
+                    best = (d, e)
+        return best[1] if best else None
+
+    def draw(self, surf, ox=0, oy=0):
+        cx, cy = self.rect.centerx + ox, self.rect.centery + oy
+        f = 1 if self.vx >= 0 else -1
+        pygame.draw.ellipse(surf, self.col, (cx - 3, cy - 2, 6, 4))
+        pygame.draw.polygon(surf, self.col, [(cx - 3 * f, cy), (cx - 5 * f, cy - 2), (cx - 5 * f, cy + 2)])
+        surf.set_at((cx + f, cy - 1), (20, 20, 30))
+
+
+class GrabTentacle:
+    """Tentacles: a tentacle bursts up out of the sea floor beside an enemy, wraps round it and holds
+    it tight for a moment (a boss only for a blink)."""
+    RISE, HOLD, SINK = 9, 50, 8
+
+    def __init__(self, target, x, y, delay=0, elem=None):
+        self.target = target
+        self.x, self.y = x, y
+        self.t = -delay
+        self.dead = False
+        self.side = random.choice((-1, 1))
+        self.elem = elem
+        self.col = forms.ELEMENTS.get(elem, (0, 0, (255, 200, 240)))[2]
+
+    @property
+    def rect(self):
+        return pygame.Rect(round(self.x) - 8, round(self.y) - 14, 16, 16)
+
+    def height(self):
+        """How far up it is (0 to 1): rising, holding, then sinking back down."""
+        if self.t < 0:
+            return 0.0
+        if self.t <= self.RISE:
+            return self.t / self.RISE
+        return max(0.0, min(1.0, 1 - (self.t - self.RISE - self.HOLD) / self.SINK))
+
+    def update(self, game):
+        self.t += 1
+        e = self.target
+        if e is not None and not e.active:
+            self.target = e = None
+        if e is not None and self.t <= self.RISE:
+            self.x, self.y = e.rect.centerx, e.rect.bottom
+        if self.t == self.RISE:
+            sound.play('slap')
+            for o in ([e] if e is not None else [o for o in game.enemies if o.active and self.rect.colliderect(o.rect)]):
+                strike(game, o, 2, 'grab', (self.x, self.y + 6), self.elem)
+                if o.active:
+                    o.frozen = max(o.frozen, 18 if getattr(o, 'boss', False) else self.HOLD)
+        if self.t > self.RISE + self.HOLD + self.SINK:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        h = int(16 * self.height())
+        x, y = round(self.x) + ox, round(self.y) + oy
+        for i in range(0, h, 2):
+            pygame.draw.circle(surf, (200, 90, 190), (x + self.side * (5 - i // 3), y - i), max(1, 3 - i // 6))
+
+
+class GlitchWave:
+    """Corrupted Octo's glitch wave: a jagged square of static spreads out and corrupts every enemy
+    it passes. A small one (no damage) carries the corruption on when a corrupted enemy is beaten."""
+
+    def __init__(self, cx, cy, max_r=88, dmg=2):
+        self.x, self.y = cx, cy
+        self.r = 4.0
+        self.max_r, self.dmg = max_r, dmg
+        self.hit = set()
+        self.t = 0
+        self.dead = False
+
+    def update(self, game):
+        self.t += 1
+        self.r += 3.6
+        for e in list(game.enemies):
+            if e.active and e not in self.hit:
+                ex, ey = e.rect.center
+                if max(abs(ex - self.x), abs(ey - self.y)) < self.r + 6:      # a square wave
+                    self.hit.add(e)
+                    if self.dmg:
+                        strike(game, e, self.dmg, 'glitch', (self.x, self.y), 'corrupt')
+                    else:
+                        corrupt(e)
+        if self.r > self.max_r:
+            self.dead = True
+
+    def draw(self, surf, ox=0, oy=0):
+        rnd = random.Random(self.t * 7 + int(self.x))
+        r = int(self.r)
+        x, y = round(self.x) + ox, round(self.y) + oy
+        for col, dx in ((GLITCH_COLS[0], -1), (GLITCH_COLS[1], 1)):
+            pygame.draw.rect(surf, col, (x - r + dx + rnd.randint(-1, 1), y - r + rnd.randint(-1, 1), 2 * r, 2 * r), 1)
 
 
 # ===========================================================================

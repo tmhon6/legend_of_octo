@@ -162,6 +162,7 @@ class AuraMote:
         'loot': ((255, 220, 90), (0, -0.25), 'spark'),
         'spark': ((255, 255, 130), (0, 0), 'zig'),
         'pull': ((230, 80, 80), (0, 0), 'dot'),
+        'corrupt': ((255, 50, 220), (0, 0), 'glitch'),
     }
 
     def __init__(self, x, y, elem):
@@ -194,6 +195,12 @@ class AuraMote:
         elif self.kind == 'heart':
             for dx, dy in ((0, 0), (1, 0), (-1, -1), (2, -1), (0, 1), (1, 1)):
                 surf.set_at((x + dx, y + dy), c)
+        elif self.kind == 'glitch':                # Corrupted: little bars of static that jump about
+            if self.t % 3 == 0:
+                self.gx = random.randint(-2, 2)
+            gx = x + getattr(self, 'gx', 0)
+            pygame.draw.line(surf, c, (gx - 1, y), (gx + 1, y))
+            surf.set_at((gx + 2, y), (60, 240, 255))
         elif self.kind == 'zig':
             pygame.draw.line(surf, c, (x - 2, y - 2), (x, y))
             pygame.draw.line(surf, c, (x, y), (x + 1, y - 3))
@@ -209,4 +216,5 @@ def element_of(mood):
         return forms.register_mega(mood)['elements'][0]
     if mood in forms.FUSIONS:
         return forms.FUSIONS[mood]['element']
-    return {'magnet': 'pull', 'starry': 'loot', 'wobbly': 'stun', 'stony': 'heavy', 'clammy': None}.get(mood)
+    return {'magnet': 'pull', 'starry': 'loot', 'wobbly': 'stun', 'stony': 'heavy', 'clammy': None,
+            'corrupt': 'corrupt'}.get(mood)

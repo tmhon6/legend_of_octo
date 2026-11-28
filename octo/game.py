@@ -20,7 +20,7 @@ import cinema
 from cinema import Intro3D, VersusCut
 from touch import TouchControls, touch_device
 from entities import (CATALOGUE, max_bombs, Altar, DIRS, ENEMY_TYPES, FusionMachine, MegaMachine, MiniBoss, Patroller, Thief, make_enemy, HERMIE_TALK, MAX_BOMBS, SHELLY_TALK, SHOP_WARES, Bubble,
-                      EnemyShot, Hermie, Jelly, Particle, Pickup, Player, Puff, Shelly, Urchin)
+                      EnemyShot, Hermie, Jelly, Particle, Pickup, Player, Puff, Shelly, Urchin, corrupt)
 from settings import SAVE_SLOT, FPS, HI, HUD_H, PLAY_H, PLAY_W, SCREEN_H, SCREEN_W, TILE
 from world import ARENAS, Level
 import temples
@@ -200,6 +200,13 @@ for _f, _d in forms.FUSIONS.items():
     FORM_INFO[_f] = [f"THE MACHINE WHIRS AND BUBBLES... YOU MADE {_d['name']} OCTO!",
                      f"{_d['attack']}: {_d['desc']}",
                      f"STRENGTH - {forms.STRENGTHS[_f][0]}: {forms.STRENGTHS[_f][1]}"]
+# the special Corrupted form (the Fusion Machine makes it when you fuse a form with itself)
+FORM_COLORS[forms.CORRUPT] = (200, 60, 255)
+FORM_BOX[forms.CORRUPT] = (40, 10, 60)
+FORM_LABEL[forms.CORRUPT] = 'GLITCH'
+FORM_INFO[forms.CORRUPT] = ["THE MACHINE SPUTTERS... SPARKS FLY... ERR0R... ERR0R... YOU CAME OUT CORRUPTED OCTO!",
+                            f"{forms.ATTACKS[forms.CORRUPT]}: {forms.CORRUPT_DESC}",
+                            f"STRENGTH - {forms.STRENGTHS[forms.CORRUPT][0]}: {forms.STRENGTHS[forms.CORRUPT][1]}"]
 CLAM_HP = 12
 
 
@@ -909,8 +916,11 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                 self.fuse_a = cur
                 sound.play('text')
             elif cur == self.fuse_a:
-                self.fuse_a = None
-                sound.play('text')
+                if forms.CORRUPT in self.player.forms:
+                    self.fuse_a = None
+                    sound.play('text')
+                else:
+                    self.fuse_self(cur)               # the same form twice: the machine glitches...
             else:
                 self.fuse(self.fuse_a, cur)
         elif k in FUSE_KEYS_CLOSE:
@@ -949,6 +959,24 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             self.burst(p.rect.center, FORM_COLORS[f], 18)
             self.say(FORM_INFO[f])
 
+    def fuse_self(self, a):
+        """Fusing a form with ITSELF: the machine glitches, and Octo comes out Corrupted."""
+        p = self.player
+        if p.pearls < forms.FUSION_COST:
+            self.fuse_msg = f"FUSING COSTS {forms.FUSION_COST} PEARLS. YOU HAVE {p.pearls}."
+            sound.play('nope')
+            return
+        p.pearls -= forms.FUSION_COST
+        p.forms.append(forms.CORRUPT)
+        self.fuse_a = None
+        p.next_mood = forms.CORRUPT
+        p.flip_t = 14
+        self.state = 'play'
+        self.glitch_t = 70
+        sound.play('glitch')
+        self.burst(p.rect.center, (255, 50, 220), 24)
+        self.say(FORM_INFO[forms.CORRUPT])
+
     def draw_fuse(self, scr):
         base = self.fuse_base()
         p = self.player
@@ -978,6 +1006,10 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         elif self.fuse_a is None:
             lines = ["PICK THE FIRST FORM WITH Z."]
             colr = (200, 210, 240)
+        elif cur == self.fuse_a and forms.CORRUPT not in p.forms:
+            lines = [f"{forms.NAMES[cur]}+{forms.NAMES[cur]} > ???"] + \
+                gfx.wrap("FUSE IT WITH ITSELF?! THE MACHINE RATTLES... Z: TRY IT  ESC: PUT IT BACK", 38)
+            colr = (255, 150, 235)
         elif cur == self.fuse_a:
             lines = ["NOW PICK A DIFFERENT SECOND FORM."]
             colr = (200, 210, 240)
@@ -1011,7 +1043,8 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
         return [f for f in self.player.forms if f in forms.FUSIONS]
 
     def mega_awake(self):
-        return len(self.fusions_made()) >= len(forms.FUSIONS)
+        # once it has woken it stays awake (there are more fusions now than when some saves woke it)
+        return bool(self.flags.get('mega_woke')) or len(self.fusions_made()) >= len(forms.FUSIONS)
 
     def talk_mega(self):
         made = len(self.fusions_made())
@@ -2072,6 +2105,24 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
             self.dive.apply(win.subsurface((gx * HI, 0, SCREEN_W * HI, SCREEN_H * HI)))
             if self.dive.done:
                 self.dive = None
+        if getattr(self, 'glitch_t', 0):                # Corrupted: the picture tears and flickers
+            self.glitch_t -= 1
+            self.glitch_screen(win.subsurface((gx * HI, 0, SCREEN_W * HI, SCREEN_H * HI)))
+
+    def glitch_screen(self, surf):
+        """Tear the picture: bands of it slide sideways, with streaks of magenta and cyan."""
+        t = self.glitch_t
+        rnd = random.Random(self.t // 2)
+        w, h = surf.get_size()
+        for _ in range(2 + min(6, t // 8)):
+            bh = rnd.randint(2, 12) * HI
+            y = rnd.randint(0, h - bh)
+            band = surf.subsurface((0, y, w, bh)).copy()
+            surf.blit(band, (rnd.randint(-10, 10) * HI, y))
+        for _ in range(1 + (t > 20)):
+            y = rnd.randint(0, h - HI)
+            surf.fill(rnd.choice(((120, 20, 110), (20, 110, 120))), (rnd.randint(0, w // 2), y, rnd.randint(w // 8, w // 2), HI),
+                      special_flags=pygame.BLEND_RGB_ADD)
 
     def tint_layer(self, col, alpha):
         """A see-through wash over the play area (per-pixel alpha, so it layers properly)."""
@@ -2830,6 +2881,8 @@ class Game(TownLife, Scene3D, Coop, Hud3D, Home):
                 thorns = p.stat('thorns', 0)
                 if thorns and not e.hurt_t:
                     e.hit(self, thorns, 'thorns', p.rect.center)
+                    if p.mood == forms.CORRUPT:           # Corrupted's touch corrupts
+                        corrupt(e)
                 if not (p.stat('stingproof', 0) and isinstance(e, (Jelly, Urchin))):
                     p.hurt(self, e.damage, e.rect.center)
         for s in self.shots:

@@ -135,15 +135,44 @@ thief chases, defending a giant clam, and sentry races. Some are in the dark or 
 
 ### The Fusion Machine
 
-Next to Hermie's Pearl Shop. For 25 pearls it fuses **any two** base forms. There are **16 fused
+Next to Hermie's Pearl Shop. For 25 pearls it fuses **any two** base forms. There are **24 fused
 forms**, one for each attack shape - hail, whip, roll, quake, lantern, whirlpool, trap, chain bolt,
-nova, boomerang, seeker stars, mines, boulder, beam, orbs and rain - so no two of them share an
-attack, and between them they use all 12 elements. Every pair of forms leads to one of them, with
-boosted versions of its parents' strengths. If a pair leads to one you've already made, the machine
-tells you before you pay. Press **F** (or the FORMS button) to pick any form from a list.
+nova, boomerang, seeker stars, mines, boulder, beam, orbs, rain, geyser, harpoon, saw, spray, sonar,
+mortar, swarm and tentacles - so no two of them share an attack, and between them they use all 12
+elements. Every pair of forms leads to one of them, with boosted versions of its parents'
+strengths. If a pair leads to one you've already made, the machine tells you before you pay. Press
+**F** (or the FORMS button) to pick any form from a list.
+
+The eight newest, and the pair each one is named for:
+
+| Fused form | From | Z does |
+|------------|------|--------|
+| Gushy | Bubbly + Sandy | Gust Geyser: a water spout bursts up under each of the three nearest enemies and blasts them away |
+| Hooky | Spooky + Magnety | Leech Harpoon: spears the first enemy in line and reels it in, dazed, healing you a little |
+| Spinny | Stony + Crysty | Crack Saw: a spinning saw ricochets off the walls, cutting through enemies and cracking their armor |
+| Squirty | Happy + Cloudy | Sludge Spray: a rapid stream of ink pellets that slows enemies down |
+| Shouty | Grumpy + Airy | Dazzle Sonar: waves of sound blast out in a cone ahead, dazing every enemy in it |
+| Bomby | Spiky + Stony | Ember Mortar: a big bomb arcs over walls (a red ring shows where it'll land) and sets enemies burning |
+| Fishy | Wobbly + Leafy | Venom Swarm: a school of little fish swarms the nearest enemies, nibbling and poisoning them |
+| Grabby | Grumpy + Chilly | Frost Tentacles: tentacles burst up under the enemies around you, hold them tight and freeze them |
+
+Each of them took over some of the pairs that made the first sixteen (the Sandy pairs make Gushy
+now, the Leafy pairs Fishy, and so on), but the pair a form is named for still makes it, and forms
+you've already made stay yours.
 
 (Saves from before v2.5.0, when every pair made its own fused form, still load: copies of the same
 attack fold into the one that's kept.)
+
+### Corrupted: the special form
+
+Try fusing a form with **itself** at the Fusion Machine (pick it, then pick it again). The machine
+sputters, the screen tears, and Octo comes out **Corrupted**: dark violet, with one glowing red eye
+and one broken one, a jagged grin and a scan line of static across his head, and magenta and cyan
+copies of him flickering at his edges. Its **Glitch Wave** spreads a jagged square of static round
+him that corrupts every enemy it touches: corrupted enemies glitch and get hurt every few seconds,
+and when one is beaten the corruption jumps to its neighbours. Its strength, **Glitchy**, gives +1
+damage, lets one hit in three glitch straight through him, and corrupts enemies that touch him. It
+costs 25 pearls, and the machine only does it once.
 
 ### Mini-bosses
 
@@ -195,7 +224,10 @@ resolution (twice in the browser), all in code:
   sea floor, and pass in front of and behind Octo, Pebble and the buildings. Zap rings and novas
   are glowing bands round Octo (the far side passes behind him), beams are lit tubes, lightning
   and the whip arc through the water above their reflections, whirlpools are spinning funnels,
-  bombs burst into fireballs, and the bubble shield and fog wrap round him in 3D.
+  bombs burst into fireballs, and the bubble shield and fog wrap round him in 3D. Geysers spout up
+  out of the floor, harpoons fly out on their line, saw blades spin, mortar bombs arc overhead
+  towards a ring on the floor, little fish dart about, tentacles curl up round enemies, and
+  Corrupted's glitch wave is a square of flickering static.
 * **Enemies are 3D too.** Every creature, guardian, mini-boss and boss is its own pixel art turned
   into lit cubes, so crabs, jellies, eels, urchins and the rest stand up off the sea floor, flash
   when they're hit, and pass in front of and behind Octo, Pebble and the buildings.
@@ -321,7 +353,8 @@ orbs, rain) and five new elements (venom, sludge, gust, dizzy, crack).
 
 ### The secret Mega Machine
 
-Make **all 16 fused forms** and an old machine wakes deep in the **Ancient Ruins** of the Underdeep.
+Make **all 24 fused forms** and an old machine wakes deep in the **Ancient Ruins** of the Underdeep
+(if it woke for you back when there were 16, it stays awake).
 It fuses two *fused* forms into a **mega form**, for 100 pearls. There are six mega forms, one for
 each huge attack (Supernova, Tsunami, Meteor Storm, Black Hole, Prism Storm, Titan Slam), each
 carrying two elements, plus the strengths of both parents, pushed further.
